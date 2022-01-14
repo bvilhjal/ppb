@@ -1,2 +1,2 @@
 # ppb
-Privacy preserving benchmark
+PPB
