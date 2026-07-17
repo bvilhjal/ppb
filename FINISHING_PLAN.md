@@ -17,6 +17,16 @@ release will rescue the published result as a reproducible research artifact.
 A larger blind benchmark will proceed only if its data, ownership, and user
 demand pass explicit viability gates.
 
+**Implementation approach (decided 2026-07-17): reimplement from theory.** The
+evaluator is rebuilt from the method described in the preprint rather than ported
+from the historical notebook or the successor package. Reimplementing from the
+published equations upgrades the golden-result check from a repackaging into a
+genuine independent replication, and yields a clean installable package instead
+of inheriting the dated legacy stack. The legacy code and datasets are retained
+strictly as a **reference oracle** for differential testing — used to confirm the
+new implementation reproduces the published numbers, never copied. The estimator,
+conventions, and tolerances are specified in `docs/METHOD.md`.
+
 ## Current state (2026-07-17)
 
 Starting coordinates, so the timeline below is read against reality rather than
@@ -144,8 +154,8 @@ The larger project is complete at v1.0 when:
 | Phase | Work | Exit criterion | Estimate |
 |---|---|---|---:|
 | 0. Viability and ownership | Confirm maintainers, choose upstream revival or a controlled fork, locate data backups, audit data rights, and interview likely users | Named owners, writable canonical repository, data-rights inventory, and a recorded go/no-go decision | 1 week |
-| 1. Historical recovery | Recover the legacy datasets, recreate the historical environment, and reproduce one published result | One checksummed dataset and one exact command produce an agreed golden result | 1-2 weeks |
-| 2. v0.1 core | Extract the evaluator, define schemas, add packaging, CLI, tests, CI, documentation, and durable data hosting | A clean machine completes the synthetic and real-data examples; `v0.1.0` is tagged | 2-3 weeks |
+| 1. Historical recovery (as oracle) | Recover the legacy datasets and generate reference outputs from the historical code to serve as a test oracle; reproduce one published result | One checksummed dataset and one agreed golden result, reproduced by the new implementation | 1-2 weeks |
+| 2. v0.1 core | Reimplement the evaluator from theory (`docs/METHOD.md`), define schemas, add packaging, CLI, tests, CI, documentation, and durable data hosting | A clean machine completes the synthetic and real-data examples; `v0.1.0` is tagged | 2-3 weeks |
 | 3. Scientific validation (parallel research track) | Test LD source and size, ancestry mismatch, sample overlap, data defects, uncertainty, and binary outcomes; compare with established summary-statistic evaluators | Predefined accuracy and interval-coverage thresholds pass; operating boundaries are documented | 6-8 weeks |
 | 4. Blind beta | Publish development data, keep final test cross-products hidden, validate submissions, rate-limit evaluation, and generate a versioned leaderboard | Two outside teams submit successfully and 3-5 baselines reproduce | 4-6 weeks |
 | 5. v1.0 release | Add independent cohorts and ancestry tracks, complete governance and data review, publish a DOI release, and update the paper | External acceptance criteria pass and public correction/versioning policies exist | 3-4 weeks |
