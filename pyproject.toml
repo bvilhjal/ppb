@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ppb"
+version = "0.0.1.dev0"
+description = "Privacy-preserving benchmark for polygenic prediction: summary-statistic evaluation of polygenic scores"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Bjarni J. Vilhjalmsson" },
+]
+dependencies = [
+    "numpy>=1.24",
+    "numba>=0.59",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
