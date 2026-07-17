@@ -10,7 +10,17 @@ See ``docs/METHOD.md`` for the full specification.
 """
 
 from .estimator import mse, r2
-from .ld_backend import DenseLD, LDBackend, LowRankLD
+from .ld_backend import (
+    BlockDiagonalLD,
+    DenseLD,
+    LDBackend,
+    LowRankLD,
+    lowrank_ld,
+)
 
-__all__ = ["r2", "mse", "DenseLD", "LowRankLD", "LDBackend"]
+__all__ = [
+    "r2", "mse",
+    "DenseLD", "LowRankLD", "BlockDiagonalLD", "LDBackend",
+    "lowrank_ld",
+]
 __version__ = "0.0.1.dev0"

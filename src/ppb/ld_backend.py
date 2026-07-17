@@ -69,3 +69,80 @@ class LowRankLD(LDBackend):
     def quad(self, w) -> float:
         w = self._check(w)
         return float(lowrank_quad_par(self.U, w))
+
+
+class BlockDiagonalLD(LDBackend):
+    """Block-diagonal LD: ``w^T D w = sum_b w[idx_b]^T D_b w[idx_b]``.
+
+    ``blocks`` is a sequence of ``(backend, idx)`` pairs, where ``backend`` is any
+    :class:`LDBackend` over the block and ``idx`` are that block's variant
+    positions in the global length-``m`` vector. This mirrors ldpred3's
+    recombination-aware block LD: off-block covariance is taken to be zero, and
+    each block may independently be dense (D8) or low-rank (LR8).
+    """
+
+    def __init__(self, blocks):
+        self.blocks = []
+        seen = np.zeros(0, dtype=bool)
+        m = 0
+        for backend, idx in blocks:
+            idx = np.ascontiguousarray(np.asarray(idx, dtype=np.intp))
+            if idx.ndim != 1 or idx.size == 0:
+                raise ValueError("each block idx must be a non-empty 1-D array")
+            if idx.size != backend.m:
+                raise ValueError(
+                    f"block backend has m={backend.m} but idx has {idx.size} entries")
+            if idx.min() < 0:
+                raise ValueError("block idx has negative positions")
+            top = int(idx.max()) + 1
+            if top > seen.size:
+                seen = np.concatenate([seen, np.zeros(top - seen.size, dtype=bool)])
+            if seen[idx].any():
+                raise ValueError("blocks overlap: a variant appears in two blocks")
+            seen[idx] = True
+            m = max(m, top)
+            self.blocks.append((backend, idx))
+        if not self.blocks:
+            raise ValueError("BlockDiagonalLD needs at least one block")
+        self.m = m
+
+    def quad(self, w) -> float:
+        w = self._check(w)
+        total = 0.0
+        for backend, idx in self.blocks:
+            total += backend.quad(np.ascontiguousarray(w[idx]))
+        return total
+
+
+def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
+    """Eigen-truncate a dense correlation block into a :class:`LowRankLD`.
+
+    Keeps the fewest top eigenvectors explaining ``variance`` of the spectrum
+    (capped at ``max_rank``), folds ``sqrt(eigenvalue)`` into ``U``, and
+    row-normalizes so the reconstruction ``U U^T`` has unit diagonal -- the
+    LR8 / SBayesRC-style construction (mirrors ``ldpred3.ld_repr.lowrank_ld``).
+    ``variance=1.0`` keeps full rank and reproduces ``corr`` exactly.
+    """
+    corr = np.ascontiguousarray(np.asarray(corr, dtype=np.float64))
+    if corr.ndim != 2 or corr.shape[0] != corr.shape[1] or corr.shape[0] == 0:
+        raise ValueError("corr must be a non-empty square matrix")
+    if not np.isfinite(corr).all():
+        raise ValueError("corr must be finite")
+    variance = float(variance)
+    if not 0.0 < variance <= 1.0:
+        raise ValueError("variance must be in (0, 1]")
+    m = corr.shape[0]
+    evals, evecs = np.linalg.eigh(corr)
+    evals = np.maximum(evals[::-1], 0.0)
+    evecs = evecs[:, ::-1]
+    total = float(evals.sum())
+    if total <= 0.0:
+        r = 1
+    else:
+        r = int(np.searchsorted(np.cumsum(evals), variance * total) + 1)
+    r = max(1, min(r, m))
+    if max_rank is not None:
+        r = min(r, int(max_rank))
+    U = evecs[:, :r] * np.sqrt(np.maximum(evals[:r], min_eig))
+    d = np.sqrt(np.clip((U * U).sum(axis=1), 1e-12, None))
+    return LowRankLD(U / d[:, None])
