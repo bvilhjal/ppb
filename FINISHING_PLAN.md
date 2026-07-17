@@ -27,6 +27,20 @@ strictly as a **reference oracle** for differential testing — used to confirm 
 new implementation reproduces the published numbers, never copied. The estimator,
 conventions, and tolerances are specified in `docs/METHOD.md`.
 
+**Stack and LD handling (decided 2026-07-17).** The evaluator is a Python package
+named `ppb`, using `numpy`/`scipy` for the core and **`numba`** for the
+performance kernels. The estimator only needs `w^T z` and `w^T D w`, so `D` is
+never materialised densely. For the LD matrix, PPB reuses the compact block
+representation from the local **`ldpred3`** project — **D8** (packed int8 dense
+blocks) and **LR8** (int8 low-rank `R ~= U U^T` factors for large blocks) — and
+numba sweep kernels mirroring ldpred3's `_lr8_sweep_all` / `_d8_sweep_all`. The
+low-rank factor is PSD by construction, so `w^T D w >= 0` holds without clamping.
+The reproduction of published numbers still uses the paper's original cM-banding
+as the oracle, with the LR8/D8 path validated to agree within a declared
+tolerance (see `docs/METHOD.md`). A real Python toolchain with numpy/numba (the
+one ldpred3 already uses) must be located and pinned before tests can run; the
+`python` on PATH is only the Microsoft Store stub.
+
 ## Current state (2026-07-17)
 
 Starting coordinates, so the timeline below is read against reality rather than
@@ -134,6 +148,8 @@ The larger project is complete at v1.0 when:
 
 - Continuous-trait PPB evaluation on the original European/HapMap3-style scope.
 - Exact target-cross-product evaluation and approximate external-LD evaluation.
+- A numba-backed evaluator computing `w^T z` and `w^T D w` over a compact block
+  LD store (ldpred3 D8/LR8 int8 representation), never a dense `M`-by-`M` matrix.
 - Variant, allele, build, order, duplicate, and missingness validation.
 - A small public fixture and at least one recovered real benchmark trait.
 - A machine-readable input and result schema.

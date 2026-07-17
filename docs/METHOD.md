@@ -62,6 +62,56 @@ weight vector `w`.
 The banding scheme (window in cM, or block definition) is a versioned parameter
 of the benchmark and must be recorded with every result.
 
+### LD representation (decided: reuse ldpred3's LR8 / D8, with numba)
+
+Instead of a raw cM-banded dense matrix, PPB reuses the compact block LD
+representation already implemented in the local `ldpred3` project (Privé is a PPB
+co-author; ldpred3 is the working successor of the LDpred/bigsnpr lineage). The
+whole estimator only ever needs two reductions over `D`:
+
+    numerator   = w^T z            (a plain dot product)
+    denominator = w^T D w          (a quadratic form)
+
+so `D` never needs to be materialised densely. `D` is stored **block-diagonal**
+(recombination-aware blocks, `optimal_ld_blocks`, Privé 2022) and each block uses
+one of two int8 representations from `ldpred3/ld_repr.py`:
+
+- **D8** — `PackedSymmetricInt8LD`: a dense int8 upper-triangle for small blocks
+  (`round(corr * 127)`, dequantised by `/127`), memory-mapped, never expanded.
+- **LR8** — `LowRankLD`: for large blocks (>= ~1500), an int8 low-rank factor with
+  `R ~= U U^T`, `U` shape `(m, r)`, rows unit-norm so the LD diagonal is 1.
+
+The block quadratic form is then, per block `b`:
+
+- D8 block:  `w_b^T D_b w_b`  over the packed int8 triangle;
+- LR8 block: `s = U_b^T w_b` (length `r`), then `w_b^T D_b w_b = s^T s = ||s||^2`.
+
+Total `w^T D w = sum_b (block quadratic form)`. This is O(sum k_b * r_b) time and
+int8 (~1 byte/entry) memory — the efficiency win.
+
+**PSD by construction (correctness bonus).** A low-rank `R = U U^T` is positive
+semi-definite, so `w^T D w = ||U^T w||^2 >= 0` always. A block-diagonal of PSD
+blocks is PSD. This *removes* the negative-denominator failure that a raw
+cM-banded truncation (non-PSD) would introduce, so no ad-hoc clamping is needed
+on the production path. Finite-reference-panel noise in large blocks is handled by
+size-aware spectral shrinkage toward the identity (`shrink_ld_blocks`,
+Marchenko-Pastur `alpha = min(max_shrink, intensity * k / n_ref)`).
+
+**Kernels: numba.** The block sweeps for `w^T D w` are implemented with numba
+`@njit(parallel=True)` kernels, mirroring ldpred3's `_lr8_sweep_all` /
+`_d8_sweep_all` in `ldpred3/_kernels.py`, so PPB reuses the same tested,
+size-aware int8/LR8 machinery rather than reimplementing LD storage.
+
+**Oracle vs. production banding — a deliberate deviation to validate.** The
+preprint's published numbers use a plain cM-window banded `D` (non-PSD, and the
+source of its documented small overestimation). The PPB production evaluator will
+instead use the block-diagonal LR8/D8 representation. These are not identical
+approximations, so the golden-result reproduction must (a) first match the
+paper's banding to reproduce its numbers as the oracle check, then (b) show the
+LR8/D8 path agrees within a declared tolerance and document any systematic
+difference. Do not silently substitute the LR8 path for the paper's banding when
+claiming to reproduce a published value.
+
 ## 3. LD reference regimes
 
 Three references for `D`, with their expected behavior (target of the Figure S1
