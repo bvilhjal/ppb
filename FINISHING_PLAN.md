@@ -37,9 +37,18 @@ numba sweep kernels mirroring ldpred3's `_lr8_sweep_all` / `_d8_sweep_all`. The
 low-rank factor is PSD by construction, so `w^T D w >= 0` holds without clamping.
 The reproduction of published numbers still uses the paper's original cM-banding
 as the oracle, with the LR8/D8 path validated to agree within a declared
-tolerance (see `docs/METHOD.md`). A real Python toolchain with numpy/numba (the
-one ldpred3 already uses) must be located and pinned before tests can run; the
-`python` on PATH is only the Microsoft Store stub.
+tolerance (see `docs/METHOD.md`). Toolchain: a dedicated `ppb` conda env on
+**Python 3.14** (`miniconda3/envs/ppb`; Python 3.14.6, numpy 2.4.6, numba 0.66.0,
+pytest 9.1.1, OpenBLAS). The `ldpred3` env (Python 3.11) is kept as the reference
+oracle. Verified on this env: a parallel numba kernel computing the LR8 quadratic
+form `||U^T w||^2` matches the dense reference exactly.
+
+Gotcha worth recording: `conda create python=3.14` from conda-forge resolves to
+the **free-threaded** build (`*_cp314t`), under which MKL/numpy `@` matmul
+hard-crashes the process (exit 127). Pin the standard interpreter explicitly with
+a build glob `python=3.14.*=*cp314` (no trailing `t`). Numba kernels must also
+avoid `@`/`np.dot` inside `njit` (that path needs a scipy BLAS the env lacks); use
+explicit scalar-loop reductions, as ldpred3's kernels do.
 
 ## Current state (2026-07-17)
 
