@@ -1,5 +1,7 @@
 # PPB — Privacy-preserving Benchmark for Polygenic Prediction
 
+[![CI](https://github.com/bvilhjal/ppb/actions/workflows/ci.yml/badge.svg)](https://github.com/bvilhjal/ppb/actions/workflows/ci.yml)
+
 PPB evaluates the predictive accuracy of linear polygenic scores (PGS) from
 **summary-level information only** — LD and GWAS summary statistics — without
 individual-level test records. Given PGS weights `w`, target marginal summary
