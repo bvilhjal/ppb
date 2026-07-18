@@ -39,7 +39,8 @@ def _cmd_evaluate(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ppb", description="Privacy-preserving polygenic-score benchmark.")
+        prog="ppb",
+        description="Summary-statistics-based cross-ancestry polygenic-score portability benchmark.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     ev = sub.add_parser(

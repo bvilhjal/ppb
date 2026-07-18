@@ -49,9 +49,11 @@ Prediction is `p = X w`. With standardized `y` (var 1):
         = ( (1/N) w^T X^T y )^2 / ( (1/N) w^T X^T X w * 1 )
         = (w^T z)^2 / (w^T D w).
 
-The privacy-preserving claim rests on this identity: a method developer needs
-only `D` and `z` (both summary-level), never individual `X` or `y`, to evaluate a
-weight vector `w`.
+The summary-statistics-based (individual-level-data-free) property rests on this
+identity: a method developer needs only `D` and `z` (both summary-level), never
+individual `X` or `y`, to evaluate a weight vector `w`. ("Privacy-preserving" here
+means individual-level-data-free, not differential privacy or immunity to
+membership inference — see `LIMITATIONS.md`.)
 
 ## 2. Exact vs. banded LD
 
@@ -69,12 +71,15 @@ weight vector `w`.
 The banding scheme (window in cM, or block definition) is a versioned parameter
 of the benchmark and must be recorded with every result.
 
-### LD representation (decided: reuse ldpred3's LR8 / D8, with numba)
+### LD representation (int8 block LD, reimplemented independently, with numba)
 
-Instead of a raw cM-banded dense matrix, PPB reuses the compact block LD
-representation already implemented in the local `ldpred3` project (Privé is a PPB
-co-author; ldpred3 is the working successor of the LDpred/bigsnpr lineage). The
-whole estimator only ever needs two reductions over `D`:
+Instead of a raw cM-banded dense matrix, PPB uses the same compact int8 block-LD
+scheme as the local `ldpred3` project (Privé, a co-author of the source preprint,
+develops ldpred3, the working successor of the LDpred/bigsnpr lineage), but
+**reimplemented independently from the published scheme** — `ppb/ld_backend.py` is
+original MIT-licensed code, not ported from ldpred3 (which cannot even be imported
+into the Python 3.14 env). The whole estimator only ever needs two reductions over
+`D`:
 
     numerator   = w^T z            (a plain dot product)
     denominator = w^T D w          (a quadratic form)
@@ -104,9 +109,9 @@ on the production path. Finite-reference-panel noise in large blocks is handled 
 size-aware spectral shrinkage toward the identity (`shrink_ld_blocks`,
 Marchenko-Pastur `alpha = min(max_shrink, intensity * k / n_ref)`).
 
-**Kernels: numba.** The block sweeps for `w^T D w` are implemented with numba
-`@njit(parallel=True)` kernels, mirroring ldpred3's `_lr8_sweep_all` /
-`_d8_sweep_all` in `ldpred3/_kernels.py`.
+**Kernels: numba.** The block sweeps for `w^T D w` are implemented as original
+numba `@njit(parallel=True)` kernels in `ppb/_kernels.py` (the same scalar-loop
+int8 sweep pattern ldpred3 uses, written independently — no code copied).
 
 **Implemented in `ppb/ld_backend.py`:** `DenseLDInt8` (D8, `round(corr*127)`,
 diagonal dequantises to exactly 1) and `LowRankLDInt8` (LR8, int8 factor with a
@@ -179,10 +184,12 @@ standardized `y` and predictor `p = X w`:
 - **Banded-LD (synthetic data):** reproduce the *sign and rough magnitude* of the
   published window-size biases (e.g. 4 cM near-zero deviation; 2 cM small positive
   deviation) rather than an exact number.
-- **Golden result (real data):** one named published value — the natural
-  candidate is Supplementary Figure S1 (LD-reference simulation) — reproduced
-  within a tolerance declared before the run. Absolute-number reproduction of
-  Figure 2 / Table 2 depends on recovering the real UK Biobank-derived datasets.
+- **Golden result (real data):** the paper's absolute numbers on the 8 real
+  traits (Figure 2 / Table 2), reproduced within a tolerance declared before the
+  run; this depends on recovering the real UK Biobank-derived datasets (Gate B)
+  and is the outstanding anchor. Supplementary Figure S1 (an LD-reference
+  *simulation*) is reproduced qualitatively on synthetic data
+  (`experiments/figure_s1.py`) and is not the real-data anchor.
 
 ## 7. Reference benchmark facts (for the eventual real-data comparison)
 

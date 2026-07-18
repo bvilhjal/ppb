@@ -18,7 +18,8 @@ the validation anchor.
 
 - **Measures, does not predict.** Given target-ancestry data it measures realized
   portability; it cannot forecast portability from discovery-ancestry data alone
-  (substituting discovery sumstats overstates R² — +58% at r_g=0.8 in simulation).
+  (substituting discovery-ancestry data — `z_A` and `D_A` — estimates R²_A and
+  overstates R²_B by +58% at r_g=0.8 in simulation).
   See [`docs/CROSS_ANCESTRY.md`](docs/CROSS_ANCESTRY.md).
 - **Foundation.** Built on the within-ancestry summary-statistic evaluator of
   Witteveen et al., *Publicly Available Privacy-preserving Benchmarks for Polygenic
@@ -96,6 +97,7 @@ pytest -q
 
 ## License
 
-Code: MIT (see [`LICENSE`](LICENSE)). The foundational method and legacy datasets
-are CC-BY per the source preprint; data terms are tracked separately from the code
-license.
+Code: MIT (see [`LICENSE`](LICENSE)). The source preprint manuscript is CC-BY. The
+legacy benchmark datasets are UK Biobank-derived; their redistribution is governed
+by UK Biobank data-access terms, **not** the preprint's CC-BY — verify before
+re-hosting.

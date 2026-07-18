@@ -54,13 +54,15 @@ utility, causality, or individual privacy.
 - **Trait-specific discrepancy.** The paper reports Major Depression R² is
   overestimated (~+4.5%), hypothesised to stem from assortative mating — a
   modelling limitation, not a bug.
-- **Scope.** v0.1 targets continuous-trait evaluation on the original
-  European / HapMap3-style variant set. Binary-trait calibration, multi-ancestry
-  tracks, and admixed cohorts are out of scope for v0.1. Note the estimator
-  *itself* is ancestry-agnostic: given target-ancestry summary statistics and a
-  matched LD reference it measures cross-ancestry (portability) R² — see
-  [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md); it cannot *predict* portability from
-  discovery-ancestry data alone.
+- **Scope.** v0.1 is the **simulation-validated** cross-ancestry portability
+  estimator plus the within-ancestry Witteveen anchor (continuous traits). The
+  estimator is ancestry-agnostic — given target-ancestry summary statistics and a
+  matched LD reference it measures cross-ancestry (portability) R² (see
+  [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md)) — but this is **validated in simulation
+  only, not yet run on real cross-ancestry data**, and it cannot *predict*
+  portability from discovery-ancestry data alone. Real non-European / admixed
+  target cohorts, binary-trait calibration, and local-ancestry handling are v1.0
+  work (see `FINISHING_PLAN.md`).
 
 ## Reproduction status
 

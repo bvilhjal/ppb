@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ppb"
 version = "0.0.1.dev0"
-description = "Privacy-preserving benchmark for polygenic prediction: summary-statistic evaluation of polygenic scores"
+description = "Cross-ancestry polygenic-score portability benchmark: summary-statistics-based (individual-level-data-free) R^2 measurement"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

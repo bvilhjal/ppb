@@ -1,12 +1,14 @@
-"""PPB: privacy-preserving benchmark for polygenic prediction.
+"""PPB: summary-statistics-based cross-ancestry polygenic-score portability benchmark.
 
-Summary-statistic evaluation of polygenic scores. Given PGS weights ``w``, target
-marginal summary statistics ``z``, and an LD backend for ``D``, the predictive
-accuracy is estimated without individual-level data as
+Given PGS weights ``w``, target-ancestry marginal summary statistics ``z`` and an
+LD backend for ``D``, the predictive accuracy (in the target ancestry) is
+estimated without individual-level data as
 
     R^2 = (w^T z)^2 / (w^T D w).
 
-See ``docs/METHOD.md`` for the full specification.
+The estimator is ancestry-agnostic in form; supplying target-ancestry ``z`` and
+``D`` measures cross-ancestry portability. See ``docs/METHOD.md`` and
+``docs/CROSS_ANCESTRY.md``.
 """
 
 from .covariates import adjust, principal_components, residualize

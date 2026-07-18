@@ -1,7 +1,11 @@
 # Experiments
 
-Reproduction drivers for results in Witteveen et al. (2022). These are not part
-of the installable `ppb` package; run them from the repo root with the `ppb`
+Validated demonstrations, each encoded as a test. Some reproduce within-ancestry
+results from Witteveen et al. (2022) — `figure_s1.py`, `benchmark_methods.py`,
+`pc_adjustment.py`, `per_variant_n.py`; `pumas_agreement.py` demonstrates PUMAS
+(Zhao et al. 2021); and **`cross_ancestry.py` is this project's new cross-ancestry
+portability method, which is NOT from that European-only paper.** These are not
+part of the installable `ppb` package; run them from the repo root with the `ppb`
 env's Python.
 
 ## `figure_s1.py` — LD-reference experiment (Supplementary Figure S1)

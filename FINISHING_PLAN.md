@@ -112,8 +112,10 @@ continuation of the within-ancestry method **and** a new cross-ancestry extensio
 neither claims to replace the original or to attribute the cross-ancestry
 direction to the original authors. The project will:
 
-- preserve the original repositories, history, licence, copyright, and citations,
-  keeping code licence (MIT) and paper/data licence (CC-BY) correctly attached;
+- preserve the original repositories, history, licences, copyright, and citations,
+  keeping code (MIT), the preprint manuscript (CC-BY), and the UK-Biobank-derived
+  datasets (governed by UK Biobank access terms, *not* CC-BY) correctly
+  distinguished;
 - credit Witteveen and the original collaborators for the method, benchmark,
   software, and datasets they created, and clearly mark the cross-ancestry
   portability work as new to this project;
