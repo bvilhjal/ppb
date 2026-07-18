@@ -71,7 +71,41 @@ Observed (m=400, n=2500, h²=0.5, 20 reps × 3 architectures):
 | lr8@0.99     |  0.976  |  0.974   |    −0.20    |
 | lr8@0.95     |  0.976  |  0.975   |    −1.91    |
 
-Method ranking (mean R², individual-level vs PPB-exact) — correctly preserved:
+Method ranking (mean R², individual-level vs PPB-exact) — correctly preserved (see
+below).
+
+## `pc_adjustment.py` — principal-component adjustment removes structure confounding
+
+The paper residualizes the phenotype on sex, age, and 10 PCs before forming
+summary statistics. This experiment shows why it matters. Two subpopulations
+(Balding-Nichols fst) with a phenotype driven **only by ancestry** (no genetics)
+are spuriously "predicted" by a polygenic score built on the structured data —
+classic stratification. Residualizing genotypes and phenotype on the top PCs
+(`ppb.adjust`, mirroring `pldsc`'s covariate projection) before forming `z` and
+`D` removes it.
+
+Run:
+
+```bash
+python experiments/pc_adjustment.py --n-reps 10
+```
+
+Observed (mean over replicates):
+
+| scenario            | R² unadjusted | R² PC-adjusted |
+|---------------------|--------------:|---------------:|
+| null + confound     |      ~0.09    |     ~0.0003    |
+| genetic, no confound|      ~0.11    |     ~0.08      |
+
+PC adjustment drives the stratification-induced spurious R² to ~0 while
+preserving genuine genetic prediction — encoded in `tests/test_covariates.py`.
+The per-draw spurious R² is noisy (a 2-population axis is low-rank), so the
+result is averaged over replicates.
+
+---
+
+Method ranking from `benchmark_methods.py` (mean R², individual-level vs
+PPB-exact) — correctly preserved:
 
 | method   | individual-level | PPB |
 |----------|-----------------:|----:|

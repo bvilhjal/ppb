@@ -134,7 +134,11 @@ hyper-parameter selection only, not for estimating final performance.
 - Genotype standardization: per-variant mean 0, variance 1 (allele-frequency
   based). Confirm exact scaling and how monomorphic/low-MAF variants are handled.
 - Phenotype: residuals after adjusting for sex, age, and 10 principal components,
-  then standardized (per the Privé et al. setup the paper follows).
+  then standardized (per the Privé et al. setup the paper follows). Implemented in
+  `ppb/covariates.py` (`residualize`/`adjust`, mirroring `pldsc`'s covariate
+  projection `X~ = P_C X`; `principal_components` derives the PCs). Forming `z` and
+  `D` from the PC-adjusted genotypes/phenotype removes population-structure
+  confounding from the estimated R² (see `experiments/pc_adjustment.py`).
 - Allele alignment: `w` and `z` must be harmonized to the same effect allele; a
   sign convention and a variant-key (build, chr:pos:a1:a2) must be fixed.
   Implemented in `ppb/harmonize.py` (`VariantTable`, `harmonize_to`) as a

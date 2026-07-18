@@ -56,7 +56,7 @@ _D = (7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
 
 def _norm_ppf(p):
     """Standard-normal quantile Phi^{-1}(p), vectorized, no scipy (Acklam)."""
-    p = np.asarray(p, dtype=np.float64)
+    p = np.clip(np.asarray(p, dtype=np.float64), 1e-12, 1.0 - 1e-12)
     x = np.zeros_like(p)
     lo, hi = p < 0.02425, p > 1 - 0.02425
     mid = ~(lo | hi)
@@ -73,14 +73,8 @@ def _norm_ppf(p):
     return x
 
 
-def simulate_diploid_genotypes(n, block_sizes, maf, rho, rng):
-    """Simulate standardized diploid genotypes (0/1/2 dosages) with block LD.
-
-    ldpred3-inspired latent model: per block, two Gaussian haplotypes with AR(1)
-    correlation ``rho`` are thresholded at the MAF-implied quantile and summed,
-    giving realistic 0/1/2 dosages with allele frequency ``maf`` and within-block
-    LD. Returns the standardized genotype matrix (columns mean 0, variance 1).
-    """
+def _diploid_dosages(n, block_sizes, maf, rho, rng):
+    """Raw 0/1/2 dosages (n x m) with block AR(1) LD and per-variant ``maf``."""
     block_sizes = list(block_sizes)
     m = int(sum(block_sizes))
     maf = np.asarray(maf, dtype=np.float64)
@@ -98,9 +92,56 @@ def simulate_diploid_genotypes(n, block_sizes, maf, rho, rng):
             hap += (rng.standard_normal((n, k)) @ L.T > block_thr)
         G[:, col:col + k] = hap
         col += k
+    return G
+
+
+def _standardize_cols(G):
     sd = G.std(axis=0)
-    sd[sd == 0] = 1.0
+    sd = np.where(sd == 0.0, 1.0, sd)
     return (G - G.mean(axis=0)) / sd
+
+
+def simulate_diploid_genotypes(n, block_sizes, maf, rho, rng):
+    """Simulate standardized diploid genotypes (0/1/2 dosages) with block LD.
+
+    ldpred3-inspired latent model: per block, two Gaussian haplotypes with AR(1)
+    correlation ``rho`` are thresholded at the MAF-implied quantile and summed,
+    giving realistic 0/1/2 dosages with allele frequency ``maf`` and within-block
+    LD. Returns the standardized genotype matrix (columns mean 0, variance 1).
+    """
+    return _standardize_cols(_diploid_dosages(n, block_sizes, maf, rho, rng))
+
+
+def bn_freqs(rng, m, fst):
+    """Balding-Nichols allele frequencies for two populations ``fst`` apart.
+
+    Frequencies are clipped away from 0/1 so every variant stays polymorphic.
+    """
+    anc = rng.uniform(0.1, 0.9, size=m)
+    a = anc * (1 - fst) / fst
+    b = (1 - anc) * (1 - fst) / fst
+    return (np.clip(rng.beta(a, b), 1e-3, 1 - 1e-3),
+            np.clip(rng.beta(a, b), 1e-3, 1 - 1e-3))
+
+
+def simulate_structured_genotypes(n, block_sizes, fst, rho, rng, prop_pop1=0.5):
+    """Two subpopulations (Balding-Nichols ``fst``) with block LD.
+
+    Each individual is assigned to population 0 or 1 and its variants drawn at
+    that population's allele frequencies. Because the frequencies differ, the
+    leading principal component of the returned genotypes is the ancestry axis --
+    a controllable source of population structure. Returns ``(X, labels)`` with
+    ``X`` standardized over all individuals and ``labels`` the 0/1 assignment.
+    """
+    m = int(sum(block_sizes))
+    f1, f2 = bn_freqs(rng, m, fst)
+    labels = (rng.random(n) < prop_pop1).astype(int)
+    G = np.zeros((n, m), dtype=np.float64)
+    for pop, freq in ((0, f1), (1, f2)):
+        idx = np.where(labels == pop)[0]
+        if idx.size:
+            G[idx] = _diploid_dosages(idx.size, block_sizes, freq, rho, rng)
+    return _standardize_cols(G), labels
 
 
 def draw_effects(m: int, n_causal: int, rng: np.random.Generator) -> np.ndarray:

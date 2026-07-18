@@ -9,6 +9,7 @@ accuracy is estimated without individual-level data as
 See ``docs/METHOD.md`` for the full specification.
 """
 
+from .covariates import adjust, principal_components, residualize
 from .estimator import mse, r2
 from .evaluate import EvaluationResult, evaluate
 from .harmonize import HarmonizeReport, VariantTable, harmonize_to
@@ -32,5 +33,6 @@ __all__ = [
     "VariantTable", "harmonize_to", "HarmonizeReport",
     "evaluate", "EvaluationResult",
     "read_weights", "read_bundle", "write_bundle",
+    "residualize", "adjust", "principal_components",
 ]
 __version__ = "0.0.1.dev0"

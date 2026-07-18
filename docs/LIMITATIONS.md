@@ -65,3 +65,11 @@ utility, causality, or individual privacy.
 Genotypes and phenotype are standardized (mean 0, variance 1); with standardized
 `y`, `var_y = 1`. Weights and summary statistics must be harmonized to the LD
 reference's variants and effect-allele orientation (`ppb.harmonize`).
+
+Population structure is controlled by residualizing genotypes and phenotype on
+fixed covariates (sex, age, principal components) before forming `z` and `D`
+(`ppb.covariates`). Adjustment removes the ancestry-aligned component of
+prediction — spurious stratification *and* any genetic prediction mediated
+through structure — so PC-adjusted R² is a conservative, within-structure
+estimate. Choosing the number of PCs is left to the user; too few leaves residual
+confounding, too many can absorb real signal.
