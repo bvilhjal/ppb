@@ -10,6 +10,28 @@ qualifications folded in) and demonstrated against individual-level truth in
 `experiments/cross_ancestry.py` / `tests/test_cross_ancestry.py`. **Status:
 validated in simulation; not yet run on real cross-ancestry data.**
 
+## Background: from Witteveen et al. to cross-ancestry transferability
+
+The idea originates with **Witteveen et al. (2022)** (bioRxiv, doi:10.1101/
+2022.10.10.510645; senior author Vilhjalmsson). Their contribution: the
+out-of-sample predictive R² of a linear polygenic score can be computed from
+**summary-level data alone** — an LD matrix `D` and marginal GWAS summary
+statistics `z` — via `R² = (wᵀz)²/(wᵀDw)`, with no individual-level test
+genotypes or phenotypes. They released this as a **within-ancestry (European)**
+benchmark so that competing PGS methods could be compared on a shared target
+without anyone sharing individual-level data. That work must be cited as the
+foundation of everything below.
+
+This project starts from that idea and makes one observation: the estimator is
+**ancestry-agnostic in form** — the identity holds in *any* population whose
+moments `(z, D)` are supplied. Supplying the **target ancestry's** summary
+statistics `z_B` and LD `D_B` therefore turns the same estimator into a
+measurement of **cross-ancestry transferability**: the realized predictive
+accuracy in a target ancestry B of a PGS trained in any ancestry. That reframing
+— from a within-ancestry benchmark into a summary-statistics-based probe of PRS
+portability across ancestries — is this project's new contribution, and is *not*
+part of the European-only original.
+
 ## The estimator
 
 The PPB identity is ancestry-agnostic in *form*. For a fixed PGS `w` (trained in
