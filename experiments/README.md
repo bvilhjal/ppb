@@ -46,3 +46,42 @@ This is the **qualitative** reproduction on a simplified Gaussian genotype model
 behavior without individual-level data. Reproducing the paper's **absolute**
 numbers (its Figure 2 / Table 2) additionally requires recovering the real
 UK Biobank-derived benchmark datasets — see `FINISHING_PLAN.md`, Gate B.
+
+## `benchmark_methods.py` — method benchmark (Figure 1 / Table 1 style)
+
+Simulates realistic **diploid 0/1/2 genotypes** (ldpred3-inspired: latent AR(1)
+haplotypes thresholded at MAF quantiles), runs four PGS methods across
+polygenicity levels, and checks that PPB's summary-statistic R^2 (independent LD
+reference; exact or LR8-approximated) agrees with the individual-level R^2.
+
+Methods: `causal` (oracle true effects), `marginal` (GWAS betas), `pT`
+(p-value-thresholded), `inf` (LDpred-infinitesimal / ridge).
+
+Run:
+
+```bash
+python experiments/benchmark_methods.py --n-reps 20
+```
+
+Observed (m=400, n=2500, h²=0.5, 20 reps × 3 architectures):
+
+| LD reference | Pearson | Spearman | mean % bias |
+|--------------|--------:|---------:|------------:|
+| exact        |  0.975  |  0.974   |    +0.19    |
+| lr8@0.99     |  0.976  |  0.974   |    −0.20    |
+| lr8@0.95     |  0.976  |  0.975   |    −1.91    |
+
+Method ranking (mean R², individual-level vs PPB-exact) — correctly preserved:
+
+| method   | individual-level | PPB |
+|----------|-----------------:|----:|
+| causal   | 0.501 | 0.501 |
+| inf      | 0.425 | 0.425 |
+| pT       | 0.337 | 0.338 |
+| marginal | 0.328 | 0.329 |
+
+So PPB estimates each method's accuracy to ~0.001 and ranks them correctly
+(oracle > LDpred-inf > p+T ≈ marginal) — the benchmark's core utility, achieved
+without individual-level data. LR8 at 99% variance retention is near-exact; more
+aggressive compression (95%) introduces a small, expected bias. Encoded as
+assertions in `tests/test_benchmark.py`.

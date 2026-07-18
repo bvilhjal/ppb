@@ -42,6 +42,67 @@ def sample_genotypes(Sigma: np.ndarray, n: int, rng: np.random.Generator) -> np.
     return X / X.std(axis=0)
 
 
+# Acklam's rational approximation of the standard-normal quantile (inverse CDF),
+# accurate to ~1e-9 -- so the simulator needs no scipy.
+_A = (-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+      1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00)
+_B = (-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+      6.680131188771972e+01, -1.328068155288572e+01)
+_C = (-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+      -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00)
+_D = (7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+      3.754408661907416e+00)
+
+
+def _norm_ppf(p):
+    """Standard-normal quantile Phi^{-1}(p), vectorized, no scipy (Acklam)."""
+    p = np.asarray(p, dtype=np.float64)
+    x = np.zeros_like(p)
+    lo, hi = p < 0.02425, p > 1 - 0.02425
+    mid = ~(lo | hi)
+    q = np.sqrt(-2 * np.log(p[lo]))
+    x[lo] = ((((((_C[0] * q + _C[1]) * q + _C[2]) * q + _C[3]) * q + _C[4]) * q + _C[5])
+             / ((((_D[0] * q + _D[1]) * q + _D[2]) * q + _D[3]) * q + 1))
+    q = np.sqrt(-2 * np.log(1 - p[hi]))
+    x[hi] = -((((((_C[0] * q + _C[1]) * q + _C[2]) * q + _C[3]) * q + _C[4]) * q + _C[5])
+              / ((((_D[0] * q + _D[1]) * q + _D[2]) * q + _D[3]) * q + 1))
+    q = p[mid] - 0.5
+    r = q * q
+    x[mid] = (((((_A[0] * r + _A[1]) * r + _A[2]) * r + _A[3]) * r + _A[4]) * r + _A[5]) * q \
+        / (((((_B[0] * r + _B[1]) * r + _B[2]) * r + _B[3]) * r + _B[4]) * r + 1)
+    return x
+
+
+def simulate_diploid_genotypes(n, block_sizes, maf, rho, rng):
+    """Simulate standardized diploid genotypes (0/1/2 dosages) with block LD.
+
+    ldpred3-inspired latent model: per block, two Gaussian haplotypes with AR(1)
+    correlation ``rho`` are thresholded at the MAF-implied quantile and summed,
+    giving realistic 0/1/2 dosages with allele frequency ``maf`` and within-block
+    LD. Returns the standardized genotype matrix (columns mean 0, variance 1).
+    """
+    block_sizes = list(block_sizes)
+    m = int(sum(block_sizes))
+    maf = np.asarray(maf, dtype=np.float64)
+    if maf.shape != (m,):
+        raise ValueError(f"maf must have length m={m}; got {maf.shape}")
+    thr = _norm_ppf(1.0 - maf)                        # P(z > thr) = maf per variant
+    G = np.zeros((n, m), dtype=np.float64)
+    col = 0
+    for k in block_sizes:
+        d = np.arange(k)
+        L = np.linalg.cholesky(rho ** np.abs(d[:, None] - d[None, :]) + 1e-8 * np.eye(k))
+        block_thr = thr[col:col + k]
+        hap = np.zeros((n, k))
+        for _ in range(2):                            # two haplotypes -> 0/1/2
+            hap += (rng.standard_normal((n, k)) @ L.T > block_thr)
+        G[:, col:col + k] = hap
+        col += k
+    sd = G.std(axis=0)
+    sd[sd == 0] = 1.0
+    return (G - G.mean(axis=0)) / sd
+
+
 def draw_effects(m: int, n_causal: int, rng: np.random.Generator) -> np.ndarray:
     """Sparse standard-normal causal effect vector with ``n_causal`` nonzeros."""
     beta = np.zeros(m)
