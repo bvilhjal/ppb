@@ -14,7 +14,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from ._kernels import dense_quad, lowrank_quad_par
+from ._kernels import (
+    dense_quad,
+    dense_quad_int8,
+    lowrank_quad_int8,
+    lowrank_quad_par,
+)
+
+_Q8 = 127.0  # int8 quantisation: correlations in [-1, 1] <-> [-127, 127]
 
 
 class LDBackend:
@@ -112,6 +119,85 @@ class BlockDiagonalLD(LDBackend):
         for backend, idx in self.blocks:
             total += backend.quad(np.ascontiguousarray(w[idx]))
         return total
+
+
+def _clip_int8(a):
+    """Round to int8, mapping the forbidden -128 to -127 (as ldpred3 does)."""
+    q = np.rint(a).astype(np.int64)
+    q = np.clip(q, -127, 127)
+    return q.astype(np.int8)
+
+
+class LowRankLDInt8(LDBackend):
+    """int8-quantised low-rank LD (LR8): ``R ~= U U^T`` with ``U`` stored as int8.
+
+    ``U8`` (m x r) holds ``round(U / scale)`` and ``scale`` the global step, so
+    ``U ~= U8 * scale``. Per-row scales restore the exact unit LD diagonal that
+    quantisation perturbs. ~4x smaller than a float32 factor, ~8x vs float64, and
+    still PSD, so ``quad(w) = ||U^T w||^2 >= 0``.
+    """
+
+    def __init__(self, U8, scale, m=None):
+        U8 = np.ascontiguousarray(np.asarray(U8, dtype=np.int8))
+        if U8.ndim != 2:
+            raise ValueError(f"U8 must be 2-D (m, r); got {U8.shape}")
+        if np.any(U8 == -128):
+            raise ValueError("int8 factor must not contain -128")
+        if not np.isfinite(scale) or scale <= 0:
+            raise ValueError("scale must be finite and > 0")
+        self.U8 = U8
+        self.scale = float(scale)
+        self.m = U8.shape[0]
+        self.rank = U8.shape[1]
+        row_norm = np.sqrt((np.asarray(U8, np.float64) * self.scale) ** 2 @ np.ones(self.rank))
+        row_norm[row_norm == 0.0] = 1.0
+        self.rowscale = np.ascontiguousarray(1.0 / row_norm)   # -> unit-norm rows
+
+    @property
+    def nbytes(self) -> int:
+        return int(self.U8.nbytes)
+
+    def quad(self, w) -> float:
+        w = self._check(w)
+        rw = np.ascontiguousarray(self.rowscale * w)
+        return float(lowrank_quad_int8(self.U8, rw) * self.scale * self.scale)
+
+
+class DenseLDInt8(LDBackend):
+    """int8-quantised dense LD (D8): ``D8[i, j] = round(corr * 127)``.
+
+    ``quad(w) = (1/127) sum_ij D8[i, j] w[i] w[j]``. The diagonal (127) dequantises
+    to exactly 1. ~8x smaller than float64.
+    """
+
+    def __init__(self, D8):
+        D8 = np.ascontiguousarray(np.asarray(D8, dtype=np.int8))
+        if D8.ndim != 2 or D8.shape[0] != D8.shape[1]:
+            raise ValueError(f"D8 must be square; got {D8.shape}")
+        if np.any(D8 == -128):
+            raise ValueError("int8 LD must not contain -128")
+        self.D8 = D8
+        self.m = D8.shape[0]
+
+    @classmethod
+    def from_dense(cls, D) -> "DenseLDInt8":
+        D = np.asarray(D, dtype=np.float64)
+        return cls(_clip_int8(np.clip(D, -1.0, 1.0) * _Q8))
+
+    @property
+    def nbytes(self) -> int:
+        return int(self.D8.nbytes)
+
+    def quad(self, w) -> float:
+        w = self._check(w)
+        return float(dense_quad_int8(self.D8, w) / _Q8)
+
+
+def quantize_lowrank(low: LowRankLD) -> LowRankLDInt8:
+    """Quantise a float :class:`LowRankLD` factor to int8 (LR8 storage)."""
+    U = low.U
+    scale = float(np.abs(U).max()) or 1.0
+    return LowRankLDInt8(_clip_int8(U / scale * _Q8), scale=scale / _Q8)
 
 
 def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:

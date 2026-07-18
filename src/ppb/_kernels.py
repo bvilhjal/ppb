@@ -66,3 +66,39 @@ def dense_quad(D, w):
             row_acc += D[i, j] * w[j]
         total += wi * row_acc
     return total
+
+
+@njit(parallel=True, cache=True)
+def lowrank_quad_int8(U8, rw):
+    """``sum_j (sum_i U8[i, j] * rw[i])^2`` for int8 factor ``U8``.
+
+    The caller folds the global quantisation ``scale^2`` in afterwards and passes
+    ``rw = rowscale * w`` (rowscale restoring each row's unit norm).
+    """
+    m, r = U8.shape
+    partial = np.zeros(r)
+    for j in prange(r):
+        s = 0.0
+        for i in range(m):
+            s += U8[i, j] * rw[i]
+        partial[j] = s * s
+    total = 0.0
+    for j in range(r):
+        total += partial[j]
+    return total
+
+
+@njit(cache=True)
+def dense_quad_int8(D8, w):
+    """``sum_ij D8[i, j] w[i] w[j]`` for int8 dense ``D8`` (caller divides by 127)."""
+    m = D8.shape[0]
+    total = 0.0
+    for i in range(m):
+        wi = w[i]
+        if wi == 0.0:
+            continue
+        acc = 0.0
+        for j in range(m):
+            acc += D8[i, j] * w[j]
+        total += wi * acc
+    return total

@@ -99,8 +99,13 @@ Marchenko-Pastur `alpha = min(max_shrink, intensity * k / n_ref)`).
 
 **Kernels: numba.** The block sweeps for `w^T D w` are implemented with numba
 `@njit(parallel=True)` kernels, mirroring ldpred3's `_lr8_sweep_all` /
-`_d8_sweep_all` in `ldpred3/_kernels.py`, so PPB reuses the same tested,
-size-aware int8/LR8 machinery rather than reimplementing LD storage.
+`_d8_sweep_all` in `ldpred3/_kernels.py`.
+
+**Implemented in `ppb/ld_backend.py`:** `DenseLDInt8` (D8, `round(corr*127)`,
+diagonal dequantises to exactly 1) and `LowRankLDInt8` (LR8, int8 factor with a
+global `scale` and per-row rescaling to restore the unit diagonal), plus
+`quantize_lowrank`. Both are ~8x smaller than float64 and agree with the float
+path to within quantisation (~1-2%); LR8 stays PSD, so `w^T D w >= 0`.
 
 **Oracle vs. production banding — a deliberate deviation to validate.** The
 preprint's published numbers use a plain cM-window banded `D` (non-PSD, and the

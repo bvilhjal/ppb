@@ -16,14 +16,18 @@ from .io import read_bundle, read_weights, write_bundle
 from .ld_backend import (
     BlockDiagonalLD,
     DenseLD,
+    DenseLDInt8,
     LDBackend,
     LowRankLD,
+    LowRankLDInt8,
     lowrank_ld,
+    quantize_lowrank,
 )
 
 __all__ = [
     "r2", "mse",
     "DenseLD", "LowRankLD", "BlockDiagonalLD", "LDBackend",
+    "DenseLDInt8", "LowRankLDInt8", "quantize_lowrank",
     "lowrank_ld",
     "VariantTable", "harmonize_to", "HarmonizeReport",
     "evaluate", "EvaluationResult",
