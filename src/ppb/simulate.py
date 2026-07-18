@@ -117,6 +117,8 @@ def bn_freqs(rng, m, fst):
 
     Frequencies are clipped away from 0/1 so every variant stays polymorphic.
     """
+    if not 0.0 < fst < 1.0:
+        raise ValueError(f"fst must be in (0, 1); got {fst}")
     anc = rng.uniform(0.1, 0.9, size=m)
     a = anc * (1 - fst) / fst
     b = (1 - anc) * (1 - fst) / fst

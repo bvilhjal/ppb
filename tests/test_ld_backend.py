@@ -95,3 +95,11 @@ def test_block_diagonal_rejects_size_mismatch():
     C = _corr_block(4, seed=9)
     with pytest.raises(ValueError):
         BlockDiagonalLD([(DenseLD(C), [0, 1, 2])])      # backend.m=4, idx=3
+
+
+def test_block_diagonal_rejects_uncovered_variants():
+    # A gapped partition silently drops the uncovered variants' diagonal mass
+    # from w^T D w while they still enter w^T z -- it must fail loudly.
+    C = _corr_block(2, seed=10)
+    with pytest.raises(ValueError, match="cover"):
+        BlockDiagonalLD([(DenseLD(C), [0, 1]), (DenseLD(C), [3, 4])])

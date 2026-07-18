@@ -9,7 +9,7 @@ import pytest
 
 from ppb import DenseLD, LowRankLD, mse, r2
 
-TOL = 1e-9
+TOL = 1e-10
 
 
 def _standardize(A, axis=0):

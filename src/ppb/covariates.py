@@ -71,5 +71,8 @@ def principal_components(X, k):
     if k < 1:
         raise ValueError("k must be >= 1")
     Xs = _standardize_cols(X)
+    if k > min(Xs.shape):
+        raise ValueError(
+            f"k={k} exceeds the available components min(n, m)={min(Xs.shape)}")
     U, _, _ = np.linalg.svd(Xs, full_matrices=False)
     return np.ascontiguousarray(U[:, :k])

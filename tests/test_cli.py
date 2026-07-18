@@ -84,3 +84,11 @@ def test_cli_evaluate_writes_json_file(tmp_path):
     assert rc == 0
     result = json.loads(out_path.read_text(encoding="utf-8"))
     assert abs(result["r2"] - truth) <= 1e-9
+
+
+def test_read_weights_ragged_row_errors_with_line_number(tmp_path):
+    p = tmp_path / "w.tsv"
+    p.write_text("chr\tpos\ta1\ta2\tweight\n1\t100\tA\tG\t0.25\n2\t200\tC\n",
+                 encoding="utf-8")
+    with pytest.raises(ValueError, match="line 3"):
+        read_weights(p)

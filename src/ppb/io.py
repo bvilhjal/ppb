@@ -42,16 +42,22 @@ def _resolve_columns(header):
 def read_weights(path):
     """Read a PGS weights file -> ``(VariantTable, weights)``."""
     with open(path, "r", encoding="utf-8") as fh:
-        lines = [ln for ln in fh.read().splitlines()
+        lines = [(i, ln) for i, ln in enumerate(fh.read().splitlines(), start=1)
                  if ln.strip() and not ln.lstrip().startswith("#")]
     if len(lines) < 2:
         raise ValueError(f"weights file {path!r} has no data rows")
-    delim = "\t" if "\t" in lines[0] else ("," if "," in lines[0] else None)
-    rows = [ln.split(delim) if delim else ln.split() for ln in lines]
-    cols = _resolve_columns(rows[0])
+    delim = "\t" if "\t" in lines[0][1] else ("," if "," in lines[0][1] else None)
+    split = (lambda ln: ln.split(delim)) if delim else (lambda ln: ln.split())
+    cols = _resolve_columns(split(lines[0][1]))
 
+    need = max(cols.values()) + 1
     chrom, pos, a1, a2, weight = [], [], [], [], []
-    for r in rows[1:]:
+    for lineno, ln in lines[1:]:
+        r = split(ln)
+        if len(r) < need:
+            raise ValueError(
+                f"weights file {path!r} line {lineno}: expected {need} "
+                f"fields, got {len(r)}")
         chrom.append(r[cols["chrom"]].strip())
         pos.append(int(r[cols["pos"]]))
         a1.append(r[cols["a1"]].strip())

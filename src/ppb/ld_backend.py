@@ -111,6 +111,10 @@ class BlockDiagonalLD(LDBackend):
             self.blocks.append((backend, idx))
         if not self.blocks:
             raise ValueError("BlockDiagonalLD needs at least one block")
+        if not seen.all():
+            raise ValueError(
+                f"blocks must cover every variant in [0, {seen.size}); "
+                f"{int((~seen).sum())} position(s) have no LD block")
         self.m = m
 
     def quad(self, w) -> float:
@@ -137,7 +141,7 @@ class LowRankLDInt8(LDBackend):
     still PSD, so ``quad(w) = ||U^T w||^2 >= 0``.
     """
 
-    def __init__(self, U8, scale, m=None):
+    def __init__(self, U8, scale):
         U8 = np.ascontiguousarray(np.asarray(U8, dtype=np.int8))
         if U8.ndim != 2:
             raise ValueError(f"U8 must be 2-D (m, r); got {U8.shape}")

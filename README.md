@@ -30,7 +30,7 @@ the validation anchor.
 
 > **Status:** early development. The estimator, LD backends, harmonization, and the
 > cross-ancestry method are **validated in simulation against individual-level
-> truth** (67 tests, CI green). It has **not** been run on real cross-ancestry
+> truth** (70 tests, CI green). It has **not** been run on real cross-ancestry
 > data. See [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the roadmap and
 > [`docs/METHOD.md`](docs/METHOD.md) / [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)
 > for the specification and scope.

@@ -85,8 +85,9 @@ into the Python 3.14 env). The whole estimator only ever needs two reductions ov
     denominator = w^T D w          (a quadratic form)
 
 so `D` never needs to be materialised densely. `D` is stored **block-diagonal**
-(recombination-aware blocks, `optimal_ld_blocks`, Privé 2022) and each block uses
-one of two int8 representations from `ldpred3/ld_repr.py`:
+(recombination-aware blocks — ldpred3's `optimal_ld_blocks`, Privé 2022; ppb
+itself takes caller-supplied blocks) and each block uses one of two int8
+representations from `ldpred3/ld_repr.py`:
 
 - **D8** — `PackedSymmetricInt8LD`: a dense int8 upper-triangle for small blocks
   (`round(corr * 127)`, dequantised by `/127`), memory-mapped, never expanded.
@@ -106,8 +107,9 @@ semi-definite, so `w^T D w = ||U^T w||^2 >= 0` always. A block-diagonal of PSD
 blocks is PSD. This *removes* the negative-denominator failure that a raw
 cM-banded truncation (non-PSD) would introduce, so no ad-hoc clamping is needed
 on the production path. Finite-reference-panel noise in large blocks is handled by
-size-aware spectral shrinkage toward the identity (`shrink_ld_blocks`,
-Marchenko-Pastur `alpha = min(max_shrink, intensity * k / n_ref)`).
+size-aware spectral shrinkage toward the identity (ldpred3's `shrink_ld_blocks`,
+Marchenko-Pastur `alpha = min(max_shrink, intensity * k / n_ref)`); ppb does not
+yet mirror the shrinkage — `lowrank_ld` does plain eigen-truncation.
 
 **Kernels: numba.** The block sweeps for `w^T D w` are implemented as original
 numba `@njit(parallel=True)` kernels in `ppb/_kernels.py` (the same scalar-loop

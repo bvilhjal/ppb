@@ -45,7 +45,7 @@ with **both** `z_B` and `D_B` from ancestry B:
 |---|---|---|
 | `z_B` | target-trait marginal correlations in B, `r_{B,j} = t_{B,j}/√(t_{B,j}²+n_{B,j}−2)` | **B GWAS** of the trait |
 | `D_B` | LD (genotype correlation) matrix in B, ideally from a panel independent of the `z_B` sample | **B reference panel** |
-| `w_B` | weights on B's standardized scale | per-allele β from A, rescaled by B allele frequencies |
+| `w_B` | weights on B's standardized scale | per-allele β from A, rescaled to B's empirical genotype SDs (`sd_B/sd_A`) |
 
 **Not required:** cross-population genetic correlation `r_g`, the discovery LD
 `D_A`, discovery frequencies `p_A`, or `var(y_B)` (it cancels on the correlation
@@ -73,9 +73,11 @@ standardized, so this is automatic and the identity is exact to machine precisio
 4. **Tri-panel allele harmonization** (weights, `z_B`, `D_B`); drop strand-ambiguous
    SNPs — cross-ancestry MAF differences make frequency-based strand tie-breaks unreliable.
 5. **Sample independence** between the A training GWAS and the `z_B` GWAS; PC-adjust within B.
-6. **Finite-sample numerator correction**: the plug-in `(wᵀẑ_B)²` is biased upward
-   by `≈ wᵀD_B w / N_B`; subtract it (or use within-B PUMAS subsampling) and report an SE.
-   This matters because target-ancestry GWAS are usually small.
+6. **Finite-sample numerator correction** *(not yet implemented)*: the plug-in
+   `(wᵀẑ_B)²` is biased upward by `≈ wᵀD_B w / N_B` (an absolute R² bias of
+   `≈ 1/N_B` — small even at modest GWAS N, but cheap to remove); subtract it
+   (or use within-B PUMAS subsampling) and report an SE. Tracked as a v0.1
+   completion item in `FINISHING_PLAN.md`.
 7. **Matched coverage**: estimate on the intersection of `w`, `z_B`, `D_B`; report retained fraction.
 
 ## What is impossible without target-ancestry data

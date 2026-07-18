@@ -66,7 +66,8 @@ and inherit their overfitting.
 - **PPB's role stays measurement/diagnostic**, consistent with its identity:
   - *measure* which existing placement transfers best — a target-ancestry,
     summary-stat `R²_B` selection objective for scoring candidate PGS (the
-    trans-ancestry analogue of PUMAS), used with the finite-sample correction and
+    trans-ancestry analogue of PUMAS), used with the finite-sample correction
+    (once implemented — see `CROSS_ANCESTRY.md` requirement 6) and
     held-out/PUMAS validation; and
   - *diagnose* where a PGS is LD-fragile in B via the decomposable per-block
     LD-form ratio `ρ_b = w_bᵀD_{A,b}w_b / w_bᵀD_{B,b}w_b` (grounded in Wang et al.

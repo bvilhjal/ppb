@@ -85,7 +85,7 @@ hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out o
 
 ## Current state (2026-07-18)
 
-**Built and green (67 tests, CI on Python 3.11/3.12):**
+**Built and green (70 tests, CI on Python 3.11/3.12):**
 
 - Core estimator (`r2`, `mse`) and LD backends: dense, block-diagonal, low-rank
   (LR8) and int8 (D8/LR8, ~8× smaller), all validated against individual-level
@@ -151,7 +151,8 @@ Complete when:
 - the real-data-critical pieces exist and are tested: **tri-panel allele
   harmonization**, **empirical (in-sample) per-ancestry standardization** (not the
   HWE `2p(1−p)` formula, which breaks for admixed targets), the **finite-sample
-  numerator correction** `≈ wᵀD_B w / N_B` with a reported SE, and per-variant `n`;
+  numerator correction** `≈ wᵀD_B w / N_B` with a reported delta-method SE
+  (`Var(wᵀẑ) ≈ wᵀD_B w / N_B`, i.e. `SE(R²) ≈ 2√(R²/N_B)`), and per-variant `n`;
 - synthetic fixtures, equation-level tests, and CI pass;
 - scope, limitations, privacy claims, and the measure-vs-predict boundary are
   documented; the historical notebook is preserved out of production.

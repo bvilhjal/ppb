@@ -76,3 +76,11 @@ def test_pc_adjustment_removes_structure_confounding():
 
     # Genuine genetic prediction survives adjustment (not driven to ~0).
     assert gen_adj > 0.03, f"adjusted genetic R^2 {gen_adj:.4f} lost too much signal"
+
+
+def test_principal_components_rejects_too_many_components():
+    rng = np.random.default_rng(6)
+    X = rng.standard_normal((50, 40))
+    with pytest.raises(ValueError, match="available components"):
+        principal_components(X, 51)              # min(n, m) = 40
+    assert principal_components(X, 40).shape == (50, 40)
