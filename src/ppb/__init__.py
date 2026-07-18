@@ -25,6 +25,7 @@ from .ld_backend import (
     quantize_lowrank,
 )
 from .pumas import pumas_r2, subsample_sumstats
+from .sumstats import standardized_marginal, zstat_to_corr
 
 __all__ = [
     "r2", "mse",
@@ -36,5 +37,6 @@ __all__ = [
     "read_weights", "read_bundle", "write_bundle",
     "residualize", "adjust", "principal_components",
     "pumas_r2", "subsample_sumstats",
+    "standardized_marginal", "zstat_to_corr",
 ]
 __version__ = "0.0.1.dev0"

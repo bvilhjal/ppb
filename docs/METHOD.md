@@ -146,8 +146,12 @@ hyper-parameter selection only, not for estimating final performance.
   normalized `(chrom, pos)`, flip the value sign on allele swaps and strand
   flips (reverse-complement, indel-aware), and drop strand-ambiguous
   palindromes. `ppb.evaluate` composes harmonization with the estimator.
-- Per-variant sample size: the paper uses `1/N` scaling; confirm whether a single
-  `N` or per-variant `n_j` is used for `z` and `D`, and how missingness enters.
+- Per-variant sample size: handled by `ppb/sumstats.py`
+  (`standardized_marginal(beta, se, n)` → `r_j = t_j/√(t_j²+n_j−2)`), which
+  recovers the standardized marginal correlation per variant. Assuming a uniform
+  `N` when the true `n_j` vary biases R² downward (see
+  `experiments/per_variant_n.py`), so summary-statistic bundles should carry
+  per-variant `n`.
 - Variant set: HapMap3 (paper reports 1,117,493 variants; genome build to confirm
   — likely GRCh37 given the era and UKB pipeline).
 

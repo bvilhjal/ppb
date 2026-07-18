@@ -130,6 +130,32 @@ construction; PUMAS recovers it from a single GWAS. So PUMAS is the
 internal-cross-validation cousin of PPB's external benchmark — same estimator,
 different source of the validation data. Encoded in `tests/test_pumas.py`.
 
+## `per_variant_n.py` — per-variant sample sizes; uniform N biases R²
+
+In a meta-analysis each variant has its own sample size `n_j`. The standardized
+marginal correlation is recovered per variant via
+`r_j = t_j / √(t_j² + n_j − 2)` (`ppb.standardized_marginal`). Using a single
+uniform `N` instead shrinks every low-`n` variant and biases R² **downward**.
+
+Run:
+
+```bash
+python experiments/per_variant_n.py
+```
+
+Observed (individual-level R² = 0.332):
+
+| n_j range   | individual | per-variant n | uniform N |
+|-------------|-----------:|--------------:|----------:|
+| all = N     |    0.3323  |    0.3323     |  0.3323   |
+| [0.50N, N]  |    0.3323  |    0.3292     |  0.2448   |
+| [0.25N, N]  |    0.3323  |    0.3317     |  **0.1939** |
+
+Per-variant conversion recovers the truth; assuming uniform N underestimates R²
+by up to ~42% when sample sizes vary. Encoded in `tests/test_sumstats.py`. (This
+is why PUMAS's Eq. 20 carries per-SNP N/SE terms, and why real summary-statistic
+bundles should ship per-variant `n`.)
+
 ---
 
 Method ranking from `benchmark_methods.py` (mean R², individual-level vs
