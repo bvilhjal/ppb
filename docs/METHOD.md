@@ -132,6 +132,11 @@ hyper-parameter selection only, not for estimating final performance.
   then standardized (per the Privé et al. setup the paper follows).
 - Allele alignment: `w` and `z` must be harmonized to the same effect allele; a
   sign convention and a variant-key (build, chr:pos:a1:a2) must be fixed.
+  Implemented in `ppb/harmonize.py` (`VariantTable`, `harmonize_to`) as a
+  bigsnpr-`snp_match`-style pass, mirroring `ldpred3.harmonize`: match by
+  normalized `(chrom, pos)`, flip the value sign on allele swaps and strand
+  flips (reverse-complement, indel-aware), and drop strand-ambiguous
+  palindromes. `ppb.evaluate` composes harmonization with the estimator.
 - Per-variant sample size: the paper uses `1/N` scaling; confirm whether a single
   `N` or per-variant `n_j` is used for `z` and `D`, and how missingness enters.
 - Variant set: HapMap3 (paper reports 1,117,493 variants; genome build to confirm

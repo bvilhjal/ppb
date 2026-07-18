@@ -10,6 +10,8 @@ See ``docs/METHOD.md`` for the full specification.
 """
 
 from .estimator import mse, r2
+from .evaluate import EvaluationResult, evaluate
+from .harmonize import HarmonizeReport, VariantTable, harmonize_to
 from .ld_backend import (
     BlockDiagonalLD,
     DenseLD,
@@ -22,5 +24,7 @@ __all__ = [
     "r2", "mse",
     "DenseLD", "LowRankLD", "BlockDiagonalLD", "LDBackend",
     "lowrank_ld",
+    "VariantTable", "harmonize_to", "HarmonizeReport",
+    "evaluate", "EvaluationResult",
 ]
 __version__ = "0.0.1.dev0"
