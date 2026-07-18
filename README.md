@@ -86,7 +86,9 @@ The command harmonizes the weights to the bundle's variants and prints a JSON
 cross-ancestry portability measurement (`cross_ancestry.py`), the within-ancestry
 LD-reference behaviour (`figure_s1.py`), cross-method concordance
 (`benchmark_methods.py`), PC adjustment (`pc_adjustment.py`), per-variant N
-(`per_variant_n.py`), and PUMAS agreement (`pumas_agreement.py`). See
+(`per_variant_n.py`), PUMAS agreement (`pumas_agreement.py`), and the negative
+result on LD-based transferability reweighting (`transferability.py`, see
+[`docs/TRANSFERABILITY.md`](docs/TRANSFERABILITY.md)). See
 [`experiments/README.md`](experiments/README.md).
 
 ## Test

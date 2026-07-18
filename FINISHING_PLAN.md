@@ -53,6 +53,13 @@ Popcorn / S-LDXR). PPB is complementary to cross-population PRS *construction*
 methods (PRS-CSx, XPASS): they build weights, PPB scores whatever they emit. See
 `docs/CROSS_ANCESTRY.md`.
 
+**Decided (2026-07-18): PPB does not construct or reweight PGS.** Whether the two
+LD matrices could reweight a score onto more transferable variants was
+investigated and **declined** — LD-only reweighting empirically *degrades* R²_B
+and target-informed reweighting collapses to an overfitting B-refit; the real
+gains belong to fine-mapping methods (PolyPred etc.). PPB *measures* and
+*diagnoses* transferability, not builds scores. See `docs/TRANSFERABILITY.md`.
+
 ## Implementation approach (decided 2026-07-17): reimplement from theory
 
 The evaluator is rebuilt from the method described in the preprint rather than
