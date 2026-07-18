@@ -73,11 +73,13 @@ a clean slate:
   containing LD information and matched GWAS summary statistics, for 8 outcomes
   (somatic and psychiatric). The 352K test scale is UK Biobank-derived European.
 - **Hosting is fragile.** The datasets are distributed as two bare Google Drive
-  file IDs plus `pgsbenchmark.org`. A quick check on 2026-07-17 returned 404 for
-  both Drive links via direct request (this may reflect Drive's consent gating
-  rather than deletion) and an ambiguous response for the domain. Durable,
-  checksummed, DOI-backed re-hosting is therefore an early requirement, and link
-  recovery must be verified interactively before it is assumed intact.
+  file IDs. A quick check on 2026-07-17 returned 404 for both Drive links via
+  direct request (this may reflect Drive's consent gating rather than deletion).
+  Durable, checksummed, DOI-backed re-hosting is therefore an early requirement,
+  and link recovery must be verified interactively before it is assumed intact.
+  The original `pgsbenchmark.org` platform is out of scope for now -- treat the
+  Google Drive artifacts (or a direct copy from the authors) as the source of
+  truth, not the website.
 - **Reproduction may be partly underway.** Recent commits here (`figure S1`,
   `Comparison using reference LD`) suggest work toward reproducing a published
   figure already exists; Phase 1 should be estimated from that baseline, not zero.
@@ -271,12 +273,13 @@ credit request in parallel without blocking engineering work.
 
 The benchmark data is already public and CC-BY, so the binding question is
 durability and provenance, not permission. Recover both HDF5 datasets from the
-Google Drive links and any mirror, verify them against a recorded checksum,
-confirm the UK Biobank-derived summary-level nature is documented and compliant
-with how they were originally released, and re-host them in durable,
-DOI-backed storage with an object-store mirror. Treat the bare Google Drive links
-and `pgsbenchmark.org` as single points of failure that may already have decayed
-— verify recovery interactively before assuming it. If a dataset genuinely
+Google Drive links (or a direct copy from the authors), verify them against a
+recorded checksum, confirm the UK Biobank-derived summary-level nature is
+documented and compliant with how they were originally released, and re-host them
+in durable, DOI-backed storage with an object-store mirror. Treat the bare Google
+Drive links as single points of failure that may already have decayed — verify
+recovery interactively before assuming it. (The `pgsbenchmark.org` platform is
+out of scope for now; do not depend on it for recovery.) If a dataset genuinely
 cannot be recovered from any source, do not silently substitute another; either
 redesign around openly licensable data as a new major version or finish only the
 synthetic/reference artifact.
@@ -316,7 +319,8 @@ The first five working days should produce:
 1. A decision on upstream revival versus controlled fork.
 2. A data inventory listing every expected artifact, known backup, owner,
    licence, provenance, and current availability, with the two Google Drive
-   links and `pgsbenchmark.org` verified as live or dead.
+   links verified as live or dead (the `pgsbenchmark.org` site is out of scope
+   for now).
 3. An extraction and audit of `PPB.ipynb` and the successor package into plain
    source, so the actual historical logic is inventoried rather than trapped in
    notebook output; strip embedded outputs (for example with `nbstripout`) and
@@ -343,8 +347,9 @@ cleanup, branding, and a website come later.
   https://openreview.net/forum?id=ZRZDTY3L8Ne
 - Historical successor repository:
   https://github.com/mennowitteveen/pgsbenchmark
-- Benchmark platform and data (verify availability): http://www.pgsbenchmark.org;
-  validation dataset https://drive.google.com/file/d/1eZIiuz__tiqEtTyL14C_GwPEC6raSFSf;
+- Benchmark data (verify availability; `pgsbenchmark.org` platform out of scope
+  for now): validation dataset
+  https://drive.google.com/file/d/1eZIiuz__tiqEtTyL14C_GwPEC6raSFSf;
   test dataset https://drive.google.com/file/d/12v67vJoAZqkvaStqiYzUrAezS4KTNdNP
 - Pattee and Pan, quasi-correlation:
   https://doi.org/10.1371/journal.pcbi.1008271
