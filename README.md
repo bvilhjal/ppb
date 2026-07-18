@@ -44,6 +44,24 @@ The estimator only ever needs `wᵀz` and `wᵀDw`, so `D` is never materialised
 densely in the scalable path. The low-rank factor `R ≈ U Uᵀ` is positive
 semi-definite by construction, so `wᵀDw ≥ 0` always holds.
 
+## Command line
+
+```bash
+ppb evaluate --weights weights.tsv --bundle benchmark.npz [--out result.json]
+```
+
+- **weights**: a TSV/CSV with columns for chromosome, position, effect allele,
+  other allele, and weight (PGS Catalog names like `chr_name`, `chr_position`,
+  `effect_allele`, `other_allele`, `effect_weight` are recognised; `#` comment
+  lines are skipped).
+- **bundle**: an `.npz` with the benchmark's variant table (`chrom, pos, a1, a2`),
+  target summary statistics `z`, and an LD reference (dense `D` or low-rank `U`).
+  Build one with `ppb.write_bundle(...)`.
+
+The command harmonizes the weights to the bundle's variants (flipping signs on
+allele swaps/strand, dropping palindromes) and prints a JSON `EvaluationResult`
+with the `R²`, `MSE`, and per-input harmonization counts.
+
 ## Test
 
 ```bash

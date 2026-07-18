@@ -20,6 +20,9 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=7"]
 
+[project.scripts]
+ppb = "ppb.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
