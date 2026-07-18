@@ -156,6 +156,37 @@ by up to ~42% when sample sizes vary. Encoded in `tests/test_sumstats.py`. (This
 is why PUMAS's Eq. 20 carries per-SNP N/SE terms, and why real summary-statistic
 bundles should ship per-variant `n`.)
 
+## `cross_ancestry.py` — measuring PRS portability across ancestries
+
+The estimator is ancestry-agnostic in *form*: to get the R² of an
+ancestry-A-trained PGS in a target ancestry B, feed it **ancestry-B** target
+sumstats `z_B` and a **B-matched** LD reference `D_B`. Two Balding-Nichols
+ancestries, shared causal effects correlated at `r_g`. See
+[`../docs/CROSS_ANCESTRY.md`](../docs/CROSS_ANCESTRY.md) for the derivation,
+requirements, and the measure-vs-predict boundary.
+
+Run:
+
+```bash
+python experiments/cross_ancestry.py --rg 0.8
+```
+
+Observed (m=500, n=20000, F_ST=0.25, h²=0.5):
+
+| | r_g = 1.0 | r_g = 0.8 |
+|---|---|---|
+| portability R²_B/R²_A | 0.998 | **0.648** |
+| exact (z_B, test-B LD) | −0.000% | +0.000% |
+| independent (z_B, indep-B LD) | −0.095% | −0.095% |
+| mismatched (z_B, ancestry-A LD) | −3.02% | −3.02% |
+| A-only (z_A, ancestry-A LD) | +0.06% | **+57.7%** |
+
+With B target stats + B LD the estimate is exact/unbiased and recovers the
+portability loss; ancestry-A LD biases it (the LD-form ratio 1.031); substituting
+ancestry-A sumstats does not estimate R²_B at all (+58%). **Target-ancestry
+summary statistics are irreducibly required.** Encoded in
+`tests/test_cross_ancestry.py`.
+
 ---
 
 Method ranking from `benchmark_methods.py` (mean R², individual-level vs
