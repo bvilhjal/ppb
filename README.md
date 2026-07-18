@@ -15,8 +15,9 @@ R² = (wᵀz)² / (wᵀ D w)
 This is a maintained reimplementation of the method in Witteveen et al.,
 *Publicly Available Privacy-preserving Benchmarks for Polygenic Prediction*
 (bioRxiv 2022, [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)).
-See [`docs/METHOD.md`](docs/METHOD.md) for the estimator specification and
-[`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the project plan and status.
+See [`docs/METHOD.md`](docs/METHOD.md) for the estimator specification,
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for scope, limitations, and privacy
+claims, and [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the project plan and status.
 
 > Status: early v0.1 development. The core estimator and LD backends exist and are
 > covered by equation-level tests; datasets, CLI, and schemas are in progress.

@@ -321,7 +321,7 @@ The first five working days should produce:
    licence, provenance, and current availability, with the two Google Drive
    links verified as live or dead (the `pgsbenchmark.org` site is out of scope
    for now).
-3. An extraction and audit of `PPB.ipynb` and the successor package into plain
+3. An extraction and audit of `archive/PPB.ipynb` and the successor package into plain
    source, so the actual historical logic is inventoried rather than trapped in
    notebook output; strip embedded outputs (for example with `nbstripout`) and
    decide whether the notebook stays in the main repository or moves to an
