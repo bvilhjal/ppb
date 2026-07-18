@@ -24,6 +24,7 @@ from .ld_backend import (
     lowrank_ld,
     quantize_lowrank,
 )
+from .pumas import pumas_r2, subsample_sumstats
 
 __all__ = [
     "r2", "mse",
@@ -34,5 +35,6 @@ __all__ = [
     "evaluate", "EvaluationResult",
     "read_weights", "read_bundle", "write_bundle",
     "residualize", "adjust", "principal_components",
+    "pumas_r2", "subsample_sumstats",
 ]
 __version__ = "0.0.1.dev0"

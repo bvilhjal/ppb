@@ -102,6 +102,34 @@ preserving genuine genetic prediction — encoded in `tests/test_covariates.py`.
 The per-draw spurious R² is noisy (a 2-population axis is low-rank), so the
 result is averaged over replicates.
 
+## `pumas_agreement.py` — PUMAS (single-GWAS subsampling) agrees with PPB
+
+PUMAS (Zhao et al. 2021) and PPB compute the same summary-statistic prediction
+R². PPB uses a genuinely held-out target cohort; PUMAS manufactures a
+pseudo-validation set by subsampling one GWAS's summary statistics
+(`ppb.subsample_sumstats` / `ppb.pumas_r2`), needing no separate cohort. This
+experiment shows both, and the individual-level truth, agree across PGS methods.
+
+Run:
+
+```bash
+python experiments/pumas_agreement.py
+```
+
+Observed:
+
+| arch      | method   | individual | PPB (exact) | PUMAS  |
+|-----------|----------|-----------:|------------:|-------:|
+| sparse    | causal   |   0.5002   |   0.5002    | 0.5027 |
+| sparse    | marginal |   0.3509   |   0.3509    | 0.3508 |
+| sparse    | pT       |   0.3758   |   0.3758    | 0.3752 |
+| polygenic | marginal |   0.3505   |   0.3505    | 0.3509 |
+
+PPB with exact target cross-products equals the individual-level R² by
+construction; PUMAS recovers it from a single GWAS. So PUMAS is the
+internal-cross-validation cousin of PPB's external benchmark — same estimator,
+different source of the validation data. Encoded in `tests/test_pumas.py`.
+
 ---
 
 Method ranking from `benchmark_methods.py` (mean R², individual-level vs
