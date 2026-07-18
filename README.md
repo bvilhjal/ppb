@@ -1,28 +1,38 @@
-# PPB — Privacy-preserving Benchmark for Polygenic Prediction
+# PPB — cross-ancestry polygenic-score portability benchmark
 
 [![CI](https://github.com/bvilhjal/ppb/actions/workflows/ci.yml/badge.svg)](https://github.com/bvilhjal/ppb/actions/workflows/ci.yml)
 
-PPB evaluates the predictive accuracy of linear polygenic scores (PGS) from
-**summary-level information only** — LD and GWAS summary statistics — without
-individual-level test records. Given PGS weights `w`, target marginal summary
-statistics `z = (1/N) Xᵀy`, and an LD matrix `D = (1/N) XᵀX`, the prediction
-accuracy is
+PPB **measures the cross-ancestry portability of a polygenic score** — its
+predictive accuracy (R²) in a *target ancestry* — from **summary-level data only**
+(target-ancestry GWAS summary statistics + a matched LD reference), without
+individual-level test records. The estimator is
 
 ```
-R² = (wᵀz)² / (wᵀ D w)
+R²_B = (wᵀ z_B)² / (wᵀ D_B w)
 ```
 
-This is a maintained reimplementation of the method in Witteveen et al.,
-*Publicly Available Privacy-preserving Benchmarks for Polygenic Prediction*
-(bioRxiv 2022, [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)).
-See [`docs/METHOD.md`](docs/METHOD.md) for the estimator specification,
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for scope, limitations, and privacy
-claims, [`docs/CROSS_ANCESTRY.md`](docs/CROSS_ANCESTRY.md) for cross-ancestry
-(portability) R² estimation, and [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the
-project plan and status.
+where `w` are the PGS weights (trained in any ancestry) and **both** `z_B`
+(marginal summary statistics of the trait) and `D_B` (the LD matrix) come from the
+**target ancestry B**. The within-ancestry case is the special case `A = B` and
+the validation anchor.
 
-> Status: early v0.1 development. The core estimator and LD backends exist and are
-> covered by equation-level tests; datasets, CLI, and schemas are in progress.
+- **Measures, does not predict.** Given target-ancestry data it measures realized
+  portability; it cannot forecast portability from discovery-ancestry data alone
+  (substituting discovery sumstats overstates R² — +58% at r_g=0.8 in simulation).
+  See [`docs/CROSS_ANCESTRY.md`](docs/CROSS_ANCESTRY.md).
+- **Foundation.** Built on the within-ancestry summary-statistic evaluator of
+  Witteveen et al., *Publicly Available Privacy-preserving Benchmarks for Polygenic
+  Prediction* (bioRxiv 2022,
+  [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)). The
+  cross-ancestry direction is **new to this project** and is not attributed to that
+  paper (which is European-only).
+
+> **Status:** early development. The estimator, LD backends, harmonization, and the
+> cross-ancestry method are **validated in simulation against individual-level
+> truth** (67 tests, CI green). It has **not** been run on real cross-ancestry
+> data. See [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the roadmap and
+> [`docs/METHOD.md`](docs/METHOD.md) / [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)
+> for the specification and scope.
 
 ## Install
 
@@ -37,17 +47,21 @@ numba; no scipy is required.
 ## Usage
 
 ```python
-import numpy as np
-from ppb import r2, DenseLD, LowRankLD
+from ppb import r2, DenseLD
 
-# w: PGS weights, z: target marginal summary stats, D: LD matrix (all aligned)
-acc = r2(w, z, DenseLD(D))                 # exact, dense D
-acc = r2(w, z, LowRankLD(U))               # low-rank D ≈ U Uᵀ (LR8-style)
+# Cross-ancestry: z_B, D_B from the TARGET ancestry B; w harmonized to B's variants.
+acc_B = r2(w, z_B, DenseLD(D_B))     # predictive R² of w in ancestry B
 ```
 
-The estimator only ever needs `wᵀz` and `wᵀDw`, so `D` is never materialised
-densely in the scalable path. The low-rank factor `R ≈ U Uᵀ` is positive
-semi-definite by construction, so `wᵀDw ≥ 0` always holds.
+The estimator is ancestry-agnostic in form — within-ancestry is `z`/`D` from the
+same population. It only needs `wᵀz` and `wᵀDw`, so `D` is never materialised
+densely (dense, block-diagonal, low-rank, and int8 D8/LR8 backends are provided;
+the low-rank factor is PSD, so `wᵀDw ≥ 0`).
+
+Supporting pieces for real summary statistics: allele harmonization
+(`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
+sizes (`ppb.standardized_marginal`), and PUMAS-style single-GWAS subsampling
+(`ppb.subsample_sumstats`).
 
 ## Command line
 
@@ -55,17 +69,24 @@ semi-definite by construction, so `wᵀDw ≥ 0` always holds.
 ppb evaluate --weights weights.tsv --bundle benchmark.npz [--out result.json]
 ```
 
-- **weights**: a TSV/CSV with columns for chromosome, position, effect allele,
-  other allele, and weight (PGS Catalog names like `chr_name`, `chr_position`,
-  `effect_allele`, `other_allele`, `effect_weight` are recognised; `#` comment
-  lines are skipped).
-- **bundle**: an `.npz` with the benchmark's variant table (`chrom, pos, a1, a2`),
-  target summary statistics `z`, and an LD reference (dense `D` or low-rank `U`).
-  Build one with `ppb.write_bundle(...)`.
+- **weights**: a TSV/CSV with chromosome, position, effect allele, other allele,
+  and weight (PGS Catalog column names recognised; `#` comment lines skipped).
+- **bundle**: an `.npz` with the target-ancestry variant table (`chrom, pos, a1,
+  a2`), summary statistics `z`, and an LD reference (dense `D` or low-rank `U`).
+  Build one with `ppb.write_bundle(...)`. (A per-ancestry bundle schema carrying
+  allele frequencies and per-variant `n` is on the v0.1 roadmap.)
 
-The command harmonizes the weights to the bundle's variants (flipping signs on
-allele swaps/strand, dropping palindromes) and prints a JSON `EvaluationResult`
-with the `R²`, `MSE`, and per-input harmonization counts.
+The command harmonizes the weights to the bundle's variants and prints a JSON
+`EvaluationResult` with `R²`, `MSE`, and harmonization counts.
+
+## Experiments
+
+`experiments/` holds validated demonstrations, each encoded as a test: the
+cross-ancestry portability measurement (`cross_ancestry.py`), the within-ancestry
+LD-reference behaviour (`figure_s1.py`), cross-method concordance
+(`benchmark_methods.py`), PC adjustment (`pc_adjustment.py`), per-variant N
+(`per_variant_n.py`), and PUMAS agreement (`pumas_agreement.py`). See
+[`experiments/README.md`](experiments/README.md).
 
 ## Test
 
@@ -75,6 +96,6 @@ pytest -q
 
 ## License
 
-Code: MIT (see [`LICENSE`](LICENSE)). The method and benchmark datasets are
-CC-BY per the source preprint; data terms are tracked separately from the code
+Code: MIT (see [`LICENSE`](LICENSE)). The foundational method and legacy datasets
+are CC-BY per the source preprint; data terms are tracked separately from the code
 license.

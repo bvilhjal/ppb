@@ -1,17 +1,24 @@
 # PPB method specification
 
-Status: draft, 2026-07-17
+Status: draft, revised 2026-07-18 (cross-ancestry focus).
 
 This is the contract for the reimplementation. PPB is being rebuilt from the
 theory in the source preprint, not ported from the historical notebook. The
 legacy code and datasets are used only as a **reference oracle** to check that
 this implementation reproduces the published numbers; no legacy logic is copied.
 
-Source: Witteveen, Pedersen, Meijsen, Andersen, Privé, Speed, Vilhjalmsson,
-*Publicly Available Privacy-preserving Benchmarks for Polygenic Prediction*,
-bioRxiv 2022, doi:10.1101/2022.10.10.510645 (CC-BY). Equation numbers below are
-re-derived here and must be reconciled with the supplementary derivation once it
-is obtained.
+Source (foundation): Witteveen, Pedersen, Meijsen, Andersen, Privé, Speed,
+Vilhjalmsson, *Publicly Available Privacy-preserving Benchmarks for Polygenic
+Prediction*, bioRxiv 2022, doi:10.1101/2022.10.10.510645 (CC-BY). Equation numbers
+below are re-derived here.
+
+**Project focus: cross-ancestry portability.** The estimator below is
+ancestry-agnostic in *form*; PPB's flagship application is measuring the R² of a
+polygenic score in a **target ancestry B** by supplying the target-ancestry
+moments `z_B`, `D_B` (the within-ancestry case is `A = B`). The cross-ancestry
+derivation, per-ancestry inputs, gauge condition, finite-sample correction, and
+failure modes are specified in **`docs/CROSS_ANCESTRY.md`**; this file specifies
+the shared core estimator and its conventions.
 
 ## 1. Core estimator
 

@@ -6,14 +6,22 @@ specification in [`METHOD.md`](METHOD.md) and the project plan in
 
 ## What PPB is
 
-A versioned evaluator for the predictive accuracy of **linear polygenic scores**
-from **summary-level information only** — an LD matrix and GWAS summary
-statistics — without individual-level test records:
+A tool (and planned benchmark) that measures the **cross-ancestry portability** of
+**linear polygenic scores** — the predictive R² of a PGS in a *target ancestry* —
+from **summary-level information only** (target-ancestry GWAS summary statistics +
+a matched LD reference), without individual-level test records:
 
-    R² = (wᵀz)² / (wᵀ D w).
+    R²_B = (wᵀ z_B)² / (wᵀ D_B w),   with z_B, D_B from the target ancestry B.
 
-It reproduces the method of Witteveen et al. (2022, bioRxiv, CC-BY), which was
-never peer-reviewed or journal-published; claims here are at preprint strength.
+The within-ancestry case (`A = B`) is the special case and validation anchor; it
+reproduces the method of Witteveen et al. (2022, bioRxiv, CC-BY), which was never
+peer-reviewed. The cross-ancestry direction is new to this project (the source
+paper is European-only) and is **validated in simulation only** — not yet run on
+real cross-ancestry data. Claims are at preprint strength. See
+[`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md).
+
+PPB **measures** portability given target-ancestry data; it does **not predict**
+portability from discovery-ancestry data alone (that is a different method class).
 
 ## Privacy claims — deliberately narrow
 

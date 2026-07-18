@@ -1,12 +1,14 @@
-# Cross-ancestry R² estimation
+# Cross-ancestry R² estimation — PPB's flagship method
 
-**Can PPB estimate the predictive R² of a PGS in a different ancestry?** Yes — to
-*measure* it, given target-ancestry data; no new estimator is needed. It cannot
-*predict* cross-ancestry accuracy from discovery-ancestry data alone.
+This is the project's central method (see `FINISHING_PLAN.md`, "Project focus"):
+**measure the predictive R² of a polygenic score in a target ancestry** from
+summary-level data. It *measures* portability given target-ancestry data; it does
+not *predict* portability from discovery-ancestry data alone.
 
-This was derived and adversarially verified (18 claim-lens checks, 0 refuted, 5
-qualifications folded in) and demonstrated in `experiments/cross_ancestry.py` /
-`tests/test_cross_ancestry.py`.
+Derived and adversarially verified (18 claim-lens checks, 0 refuted, 5
+qualifications folded in) and demonstrated against individual-level truth in
+`experiments/cross_ancestry.py` / `tests/test_cross_ancestry.py`. **Status:
+validated in simulation; not yet run on real cross-ancestry data.**
 
 ## The estimator
 
