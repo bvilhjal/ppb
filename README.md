@@ -30,9 +30,12 @@ the validation anchor.
 
 > **Status:** early development. The estimator, LD backends, harmonization, and the
 > cross-ancestry method are **validated in simulation against individual-level
-> truth** (70 tests, CI green). It has **not** been run on real cross-ancestry
-> data. See [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the roadmap and
-> [`docs/METHOD.md`](docs/METHOD.md) / [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)
+> truth** (79 tests, CI green), and the within-ancestry anchor has been
+> **demonstrated on real data** (public PGS Catalog scores × non-overlapping
+> consortium GWAS × the bigsnpr HM3+ European LD reference — see
+> [`docs/REAL_DATA.md`](docs/REAL_DATA.md)). It has **not** been run on real
+> cross-ancestry data. See [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the
+> roadmap and [`docs/METHOD.md`](docs/METHOD.md) / [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)
 > for the specification and scope.
 
 ## Install
@@ -63,6 +66,36 @@ Supporting pieces for real summary statistics: allele harmonization
 (`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
 sizes (`ppb.standardized_marginal`), and PUMAS-style single-GWAS subsampling
 (`ppb.subsample_sumstats`).
+
+## LD reference (real data)
+
+`scripts/bigsnpr_ldref_to_ppb.py` converts bigsnpr's precomputed **HapMap3+
+European LD reference** (Privé,
+[doi:10.6084/m9.figshare.21305061](https://doi.org/10.6084/m9.figshare.21305061),
+CC BY 4.0 — 1,444,196 variants, UK Biobank Europeans, 431 independent LD
+blocks, GRCh37 with `pos_hg38` alongside) into ppb's LD-reference `.npz`: one
+file per chromosome holding the variant table (`chrom, pos, a1, a2`, `rsid`,
+`af_UKBB`) and the LD as dense int8 blocks (`DenseLDInt8` / D8 convention) keyed
+by the reference's own block structure — exactly block-diagonal (0 off-block
+entries). Needs `pip install rdata` (reads the R `dsCMatrix` serializations
+directly; no R required).
+
+```bash
+python scripts/bigsnpr_ldref_to_ppb.py <data_dir> <out_dir>   # all 22 chromosomes
+```
+
+```python
+from ppb import read_ldref
+
+ref = read_ldref("ldref_chr22.npz")   # variants, BlockDiagonalLD, rsid, af, pos_hg38
+den = ref["ld"].quad(w)               # w^T D w for weights w on ref["variants"]
+```
+
+End-to-end evaluations of public PGS Catalog scores against real GWAS with this
+reference are in [`docs/REAL_DATA.md`](docs/REAL_DATA.md); the pipelines are
+`scripts/panukb_download.sh` + `scripts/panukb_filter_hm3plus.py` (Pan-UKB
+targets), `scripts/consortium_prep.py` (consortium targets), and
+`scripts/eval_consortium.py` / `scripts/eval_panukb.py` (ppb evaluation).
 
 ## Command line
 

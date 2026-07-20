@@ -8,6 +8,14 @@ Revised: 2026-07-18 — **project refocused on cross-ancestry portability** (see
 "Project focus" below). Earlier revision 2026-07-17 after reviewing the source
 preprint and successor repository.
 
+Revised: 2026-07-20 — **first real-data runs** (within-ancestry anchor only):
+bigsnpr HM3+ European LD reference converted to the block-diagonal int8 store
+(`ppb.ldref`), and public PGS Catalog scores evaluated against non-overlapping
+consortium GWAS across 6 traits (R² 0.025-0.21, consistent with the
+literature); the overlapping-cohort (in-sample) failure mode demonstrated
+quantitatively on the same scores. See `docs/REAL_DATA.md`. Still no real
+cross-ancestry result.
+
 ## Objective
 
 Build PPB into a maintained, versioned benchmark that **measures the
@@ -110,6 +118,20 @@ published European benchmark data is two fragile Google Drive HDF5 files
 (validation ~10K, test ~352K UK-Biobank-derived; 8 traits). Because that test
 data is already public, a leakage-resistant *competitive* benchmark is a redesign,
 not a repackaging (Gate D).
+
+**Real-data progress (2026-07-20):**
+
+- The bigsnpr HM3+ European LD reference (Privé, figshare 21305061) is
+  converted to the project's block-diagonal int8 store
+  (`scripts/bigsnpr_ldref_to_ppb.py`, loader `ppb.read_ldref`): 1,444,196
+  variants, 431 blocks, exactly block-diagonal, verified against the source
+  matrices to quantization error.
+- First real-data evaluations done (within-ancestry anchor, Phase-1/2
+  overlap): public PGS Catalog `portability-ldpred2` scores vs six
+  non-overlapping consortium GWAS — R² 0.21 (height), 0.10 (LDL), 0.056 (BMI),
+  0.044 (T2D), 0.042 (breast cancer), 0.025 (CAD) — plus the in-sample
+  (overlapping-cohort) failure mode quantified (same scores vs Pan-UKB GWAS:
+  up to 15× inflation). Details and provenance in `docs/REAL_DATA.md`.
 
 ## Stewardship and provenance
 

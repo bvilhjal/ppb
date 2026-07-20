@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
+ldref = ["rdata>=1.0"]   # scripts/bigsnpr_ldref_to_ppb.py (reads R serializations)
 
 [project.scripts]
 ppb = "ppb.cli:main"

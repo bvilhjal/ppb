@@ -125,5 +125,8 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# Downloaded data (LD references etc.) — not versioned
+data/
+
 # Pyre type checker
 .pyre/
