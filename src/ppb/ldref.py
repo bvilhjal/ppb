@@ -15,7 +15,7 @@ Schema (arrays in the ``.npz``):
   ``round(corr * 127)`` with diagonal 127 -- the :class:`DenseLDInt8` store.
 
 The reference converted from bigsnpr's HapMap3+ European LD (see
-``scripts/bigsnpr_ldref_to_blocks.R``) is written in this format.
+``scripts/bigsnpr_ldref_to_ppb.py``) is written in this format.
 """
 
 from __future__ import annotations

@@ -71,3 +71,17 @@ def test_int8_rejects_minus_128():
         DenseLDInt8(np.array([[127, -128], [-128, 127]], dtype=np.int8))
     with pytest.raises(ValueError):
         LowRankLDInt8(np.array([[-128]], dtype=np.int8), scale=0.01)
+
+
+def test_lr8_quad_is_invariant_to_scale():
+    """Row normalisation divides ``scale`` out, so ``quad`` cannot depend on it.
+
+    Documents the contract: ``scale`` dequantises the stored factor
+    (``U ~= U8 * scale``) but does not enter the quadratic form.
+    """
+    rng = np.random.default_rng(11)
+    U8 = rng.integers(-127, 128, size=(40, 6)).astype(np.int8)
+    w = rng.standard_normal(40)
+    base = LowRankLDInt8(U8, scale=1.0).quad(w)
+    for scale in (1e-4, 0.25, 7.0, 1e3):
+        assert LowRankLDInt8(U8, scale=scale).quad(w) == pytest.approx(base, rel=1e-12)

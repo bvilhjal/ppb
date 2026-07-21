@@ -60,3 +60,29 @@ def test_simulation_sparse_detector_blind():
     out = run(reps=2, seed=7)
     # documented failure mode: sparse scores hide overlap from the detector
     assert abs(out["gamma_sparse_full"]) < 0.2 * out["gamma_sparse_full_true"]
+
+
+def test_overlap_slope_default_groups_with_empty_blocks():
+    """Blocks with no score variance are dropped; the default jackknife groups
+    must be indexed like the inputs, not like the filtered arrays (regression:
+    this raised IndexError whenever any block was filtered out)."""
+    rng = np.random.default_rng(3)
+    n_blocks = 60
+    m = np.full(n_blocks, 100.0)
+    v = np.ones(n_blocks)
+    v[[3, 17, 42]] = 0.0                      # e.g. a sparse score with no weight here
+    u_t = 0.01 * m + rng.normal(size=n_blocks)
+    u_r = rng.normal(size=n_blocks)
+    est = overlap_slope(u_t, u_r, m, v, v)    # default groups
+    assert est.n_blocks == n_blocks - 3
+    assert est.gamma == pytest.approx(0.01, rel=0.3)
+    assert est.se > 0
+
+
+def test_overlap_slope_rejects_misaligned_groups():
+    n_blocks = 60
+    m = np.full(n_blocks, 100.0)
+    v = np.ones(n_blocks)
+    u = np.zeros(n_blocks)
+    with pytest.raises(ValueError, match="one entry per block"):
+        overlap_slope(u, u, m, v, v, groups=np.arange(n_blocks - 1))

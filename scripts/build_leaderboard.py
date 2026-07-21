@@ -5,11 +5,17 @@ Reads every ``results/*.json`` result pack (schema: ``results/schema.md``) and
 writes a self-contained ``site/index.html`` (inline CSS/JS, sortable table).
 Run from anywhere:  python scripts/build_leaderboard.py
 """
+import html
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# Records arrive by pull request, so every interpolated field is untrusted:
+# escape it, and only build a catalog link for an id we recognise.
+_PGS_ID = re.compile(r"^PGS\d{6}$")
 
 
 def load_records():
@@ -22,7 +28,16 @@ def load_records():
 
 
 def esc(s):
-    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    """HTML-escape for text *and* attribute contexts (quotes included)."""
+    return html.escape(str(s), quote=True)
+
+
+def score_link(score_id):
+    """Catalog link for a well-formed PGS id; plain escaped text otherwise."""
+    sid = esc(score_id)
+    if not _PGS_ID.match(str(score_id)):
+        return sid
+    return f'<a href="https://www.pgscatalog.org/score/{sid}/">{sid}</a>'
 
 
 def fmt(v, nd=4):
@@ -39,7 +54,7 @@ STATUS = {
 def row(rec):
     m, ov, sc, tg = rec["metrics"], rec["overlap"], rec["score"], rec["target"]
     role = ov.get("role", "reference")
-    label, color = STATUS.get(role, (role, "#fff"))
+    label, color = STATUS.get(role, (esc(role), "#fff"))
     corrected = fmt(ov.get("corrected_r2")) if ov.get("corrected_r2") is not None else "—"
     z = fmt(ov.get("z"), 1) if ov.get("z") is not None else "—"
     ref = esc(ov.get("reference", "—"))
@@ -47,11 +62,11 @@ def row(rec):
     return (
         f'<tr style="background:{color}">'
         f"<td>{esc(rec['trait'])}</td>"
-        f'<td><a href="https://www.pgscatalog.org/score/{sc["id"]}/">{sc["id"]}</a>'
+        f"<td>{score_link(sc['id'])}"
         f"<br><small>{esc(sc['name'])}</small></td>"
         f"<td>{esc(tg['gwas'])}<br><small>{esc(tg['cohort'])} · n_eff {tg['n_eff']:,}</small></td>"
         f"<td>{esc(tg['ancestry'])}</td>"
-        f'<td data-sort="{m["r2"]}"><b>{m["r2"]:.4f}</b></td>'
+        f'<td data-sort="{m["r2"]:.6f}"><b>{m["r2"]:.4f}</b></td>'
         f"<td>{label}{note}</td>"
         f"<td>{z}</td>"
         f"<td>{corrected}</td>"
@@ -61,7 +76,9 @@ def row(rec):
 
 def build(records):
     rows = "\n".join(row(r) for r in records)
-    commit = records[0].get("ppb_commit", "?") if records else "?"
+    # Packs may be generated at different commits; list every one represented.
+    commits = sorted({str(r.get("ppb_commit", "?")) for r in records})
+    commit = esc(", ".join(commits)) if commits else "?"
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">

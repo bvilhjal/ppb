@@ -29,7 +29,9 @@ records, one per (score × target GWAS) evaluation.
 | `overlap.role` | `"reference"` (declared non-overlapping) \| `"suspect"` (paired with a reference) \| `"suspect-unpaired"` (upper bound, no reference) |
 | `overlap.gamma`, `overlap.gamma_se`, `overlap.z` | dual-target detector fit (`ppb.overlap_slope`), when a reference exists |
 | `overlap.corrected_r2` | numerator-corrected R² (dense scores only) |
+| `overlap.m_total` | variant count the per-variant overlap term is summed over — the **LD reference's**, not the score's (`ppb.correct_numerator`) |
 | `overlap.reference` | label + R² of the reference evaluation |
+| `overlap.note` | why a `suspect` carries no `corrected_r2` (sparse / borderline score) |
 | `date`, `ppb_commit` | provenance |
 
 ## Rules for records
@@ -38,5 +40,15 @@ records, one per (score × target GWAS) evaluation.
   as **upper bounds**, never as accuracy measurements.
 - `suspect` records must carry the detector fit and the corrected R² when the
   score is dense; sparse scores are flagged `upper bound` instead (see
-  `docs/OVERLAP.md`).
+  `docs/OVERLAP.md`). A `suspect` without a `corrected_r2` must say why in
+  `overlap.note`.
+- `metrics.num` and `metrics.den` must be recorded with enough significant
+  digits to reproduce `metrics.r2` — a reader must be able to recompute the
+  headline number. Rounding both to 4 decimals leaves small-`den` traits with
+  ~1 significant figure and makes `r2` unverifiable.
+- A record with a `corrected_r2` must carry `overlap.m_total`, or the
+  correction cannot be checked.
 - Records are immutable once merged; corrections land as new packs.
+
+These rules are enforced by `tests/test_results_registry.py`, so a malformed
+pack fails CI on the pull request rather than in the Pages deploy job.

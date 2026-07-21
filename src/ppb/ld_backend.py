@@ -139,6 +139,12 @@ class LowRankLDInt8(LDBackend):
     ``U ~= U8 * scale``. Per-row scales restore the exact unit LD diagonal that
     quantisation perturbs. ~4x smaller than a float32 factor, ~8x vs float64, and
     still PSD, so ``quad(w) = ||U^T w||^2 >= 0``.
+
+    Note that ``quad`` is *invariant* to ``scale``: the row normalisation divides
+    it back out, so it cancels exactly against the ``scale^2`` refolded at the
+    end. ``scale`` is kept because it dequantises the stored factor itself
+    (``U ~= U8 * scale``, needed by anything that reads ``U8`` directly), not
+    because the quadratic form needs it.
     """
 
     def __init__(self, U8, scale):

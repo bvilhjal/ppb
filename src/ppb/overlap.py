@@ -38,6 +38,7 @@ bounds rather than corrected. See ``docs/OVERLAP.md``.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -79,8 +80,13 @@ def overlap_slope(u_target, u_reference, m, v_target, v_reference, *,
     ``m`` are the per-block variant counts, ``v_*`` the per-block score
     variances (from :func:`block_products`). Weights are ``1 / (v_t + v_r)``,
     the inverse noise variances of the block differences (up to the constant
-    1/N). ``groups`` are leave-one-out jackknife groups (default: ~20
-    contiguous block groups); chromosomes are the natural choice on real data.
+    1/N). ``groups`` are leave-one-out jackknife groups, one entry per input
+    block (default: ~20 contiguous block groups); chromosomes are the natural
+    choice on real data.
+
+    Blocks with no score variance (``v_t + v_r == 0``, e.g. a sparse score with
+    no weight in the block) carry no information and are dropped, along with
+    their ``groups`` entries.
     """
     du = np.asarray(u_target, dtype=np.float64) - np.asarray(u_reference, dtype=np.float64)
     dv = np.asarray(v_target, dtype=np.float64) + np.asarray(v_reference, dtype=np.float64)
@@ -88,11 +94,16 @@ def overlap_slope(u_target, u_reference, m, v_target, v_reference, *,
     ok = dv > 0
     if ok.sum() < 4:
         raise ValueError("need at least 4 blocks with positive score variance")
-    du, dv, m = du[ok], dv[ok], m[ok]
-    wt = 1.0 / dv
+    # groups are indexed like the *inputs*, so build the default before filtering.
     if groups is None:
-        groups = np.repeat(np.arange(20), np.ceil(len(du) / 20))[:len(du)]
-    groups = np.asarray(groups)[ok]
+        n_all = ok.size
+        groups = np.repeat(np.arange(20), int(np.ceil(n_all / 20)))[:n_all]
+    groups = np.asarray(groups)
+    if groups.shape != ok.shape:
+        raise ValueError(
+            f"groups must have one entry per block ({ok.size},); got {groups.shape}")
+    du, dv, m, groups = du[ok], dv[ok], m[ok], groups[ok]
+    wt = 1.0 / dv
     uniq = np.unique(groups)
     if len(uniq) < 2:
         raise ValueError("need at least 2 jackknife groups")
@@ -105,8 +116,11 @@ def overlap_slope(u_target, u_reference, m, v_target, v_reference, *,
     ests = np.array([fit(groups != g) for g in uniq])
     k = len(ests)
     se = float(np.sqrt((k - 1) / k * ((ests - ests.mean()) ** 2).sum()))
-    return OverlapEstimate(gamma=gamma, se=se,
-                           z=gamma / se if se > 0 else np.inf, n_blocks=int(ok.sum()))
+    if se > 0:
+        z = gamma / se
+    else:                       # degenerate jackknife: signed infinity, or nan at gamma = 0
+        z = math.copysign(np.inf, gamma) if gamma != 0.0 else np.nan
+    return OverlapEstimate(gamma=gamma, se=se, z=z, n_blocks=int(ok.sum()))
 
 
 def correct_numerator(num, gamma, m_total):
