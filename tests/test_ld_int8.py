@@ -85,3 +85,28 @@ def test_lr8_quad_is_invariant_to_scale():
     base = LowRankLDInt8(U8, scale=1.0).quad(w)
     for scale in (1e-4, 0.25, 7.0, 1e3):
         assert LowRankLDInt8(U8, scale=scale).quad(w) == pytest.approx(base, rel=1e-12)
+
+
+def test_quantize_lowrank_rejects_non_unit_rows():
+    """LR8 re-normalizes rows on every quad, so quantising a factor with
+    non-unit rows would return a *different* operator, not a lossy copy.
+
+    Regression: this silently changed w'Dw by ~35x instead of the ~1% the int8
+    round trip is documented to cost.
+    """
+    rng = np.random.default_rng(21)
+    U = rng.standard_normal((10, 4)) * 3.0          # rows far from unit norm
+    with pytest.raises(ValueError, match="unit-norm rows"):
+        quantize_lowrank(LowRankLD(U))
+
+
+def test_quantize_lowrank_round_trip_is_within_quantisation_error():
+    """The legitimate path: a factor from lowrank_ld has unit rows, and the int8
+    round trip then agrees with the float factor to quantisation accuracy."""
+    rng = np.random.default_rng(22)
+    C = _corr_block(48, seed=3)
+    low = lowrank_ld(C, variance=1.0)
+    w = rng.standard_normal(48)
+    exact, approx = DenseLD(C).quad(w), low.quad(w)
+    assert approx == pytest.approx(exact, rel=1e-9)     # full rank reproduces D
+    assert quantize_lowrank(low).quad(w) == pytest.approx(approx, rel=0.02)

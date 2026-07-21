@@ -140,6 +140,11 @@ class LowRankLDInt8(LDBackend):
     quantisation perturbs. ~4x smaller than a float32 factor, ~8x vs float64, and
     still PSD, so ``quad(w) = ||U^T w||^2 >= 0``.
 
+    **Precondition: the represented matrix has a unit diagonal** (an LD /
+    correlation matrix). Rows are re-normalized on every ``quad``, so a factor
+    whose rows are not unit-norm describes a *different* operator here than it
+    does under :class:`LowRankLD` -- :func:`quantize_lowrank` enforces this.
+
     Note that ``quad`` is *invariant* to ``scale``: the row normalisation divides
     it back out, so it cancels exactly against the ``scale^2`` refolded at the
     end. ``scale`` is kept because it dequantises the stored factor itself
@@ -204,8 +209,25 @@ class DenseLDInt8(LDBackend):
 
 
 def quantize_lowrank(low: LowRankLD) -> LowRankLDInt8:
-    """Quantise a float :class:`LowRankLD` factor to int8 (LR8 storage)."""
+    """Quantise a float :class:`LowRankLD` factor to int8 (LR8 storage).
+
+    Requires ``low``'s rows to be unit-norm, i.e. the reconstruction ``U U^T``
+    to have the unit diagonal of a correlation matrix. :class:`LowRankLDInt8`
+    re-normalizes rows on every ``quad`` (that is how it undoes quantisation
+    drift in the diagonal), so quantising a factor whose rows are *not* unit-norm
+    silently returns a different operator rather than a lossy copy of this one.
+    Factors from :func:`lowrank_ld` always satisfy this; raise rather than let
+    the discrepancy pass as quantisation error.
+    """
     U = low.U
+    row_norm = np.sqrt((U * U).sum(axis=1))
+    if not np.allclose(row_norm, 1.0, rtol=1e-6, atol=1e-6):
+        worst = int(np.argmax(np.abs(row_norm - 1.0)))
+        raise ValueError(
+            "quantize_lowrank requires unit-norm rows (a unit-diagonal LD "
+            f"matrix); row {worst} has norm {row_norm[worst]!r}. Build the "
+            "factor with lowrank_ld(), which row-normalizes, or rescale it "
+            "yourself -- LR8 cannot represent a non-unit diagonal.")
     scale = float(np.abs(U).max()) or 1.0
     return LowRankLDInt8(_clip_int8(U / scale * _Q8), scale=scale / _Q8)
 
@@ -224,6 +246,13 @@ def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
         raise ValueError("corr must be a non-empty square matrix")
     if not np.isfinite(corr).all():
         raise ValueError("corr must be finite")
+    # np.linalg.eigh reads a single triangle, so an asymmetric input would be
+    # silently reinterpreted as its own lower triangle -- a wrong answer with no
+    # error. Check rather than let that through.
+    if not np.allclose(corr, corr.T, rtol=1e-8, atol=1e-10):
+        raise ValueError(
+            "corr must be symmetric; eigh would silently use only its lower "
+            "triangle and return a factor for a different matrix")
     variance = float(variance)
     if not 0.0 < variance <= 1.0:
         raise ValueError("variance must be in (0, 1]")

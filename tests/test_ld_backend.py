@@ -103,3 +103,18 @@ def test_block_diagonal_rejects_uncovered_variants():
     C = _corr_block(2, seed=10)
     with pytest.raises(ValueError, match="cover"):
         BlockDiagonalLD([(DenseLD(C), [0, 1]), (DenseLD(C), [3, 4])])
+
+
+def test_lowrank_ld_rejects_asymmetric_input():
+    """np.linalg.eigh reads a single triangle, so an asymmetric matrix would be
+    silently reinterpreted as its own lower triangle and factored into a
+    perfectly valid-looking operator for a *different* matrix."""
+    rng = np.random.default_rng(5)
+    A = rng.standard_normal((12, 12))
+    C = A @ A.T + 0.5 * np.eye(12)
+    C = C / np.sqrt(np.outer(np.diag(C), np.diag(C)))
+    lowrank_ld(C)                                   # symmetric: fine
+    asym = C.copy()
+    asym[0, 1] += 5.0
+    with pytest.raises(ValueError, match="symmetric"):
+        lowrank_ld(asym)
