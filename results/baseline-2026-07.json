@@ -1,137 +1,500 @@
 [
-  {
-    "trait": "height",
-    "score": {"id": "PGS002146", "name": "portability-ldpred2_height", "training": "UK Biobank (LDpred2)", "n_variants": 922538},
-    "target": {"gwas": "GIANT 2014 (Wood et al.)", "cohort": "GIANT consortium (no UKBB)", "ancestry": "EUR", "n_eff": 253213, "overlap": "none (declared)"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 1.8623, "den": 16.4517, "r2": 0.2108, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "reference"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+ {
+  "trait": "height",
+  "score": {
+   "id": "PGS002146",
+   "name": "portability-ldpred2_height",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 922538
   },
-  {
-    "trait": "BMI",
-    "score": {"id": "PGS002161", "name": "portability-ldpred2_log_BMI", "training": "UK Biobank (LDpred2)", "n_variants": 990022},
-    "target": {"gwas": "GIANT 2015 (Locke et al.)", "cohort": "GIANT consortium (no UKBB)", "ancestry": "EUR", "n_eff": 339224, "overlap": "none (declared)"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0143, "den": 0.0037, "r2": 0.0555, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "reference"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "target": {
+   "gwas": "GIANT 2014 (Wood et al.)",
+   "cohort": "GIANT consortium (no UKBB)",
+   "ancestry": "EUR",
+   "n_eff": 251960,
+   "n_eff_basis": "median of the per-variant N column",
+   "n_eff_range": [
+    50003,
+    253279
+   ],
+   "overlap": "none (declared)"
   },
-  {
-    "trait": "LDL",
-    "score": {"id": "PGS002150", "name": "portability-ldpred2_LDL", "training": "UK Biobank (LDpred2)", "n_variants": 360007},
-    "target": {"gwas": "GLGC 2013 (Teslovich et al.)", "cohort": "GLGC consortium (no UKBB)", "ancestry": "EUR", "n_eff": 188577, "overlap": "none (declared)"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0890, "den": 0.0791, "r2": 0.1000, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "reference"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 1.8622804350997695,
+   "den": 16.451729617751347,
+   "r2": 0.21080387895588398,
+   "w_match": 1.0,
+   "z_match": 0.9999217380256639
   },
-  {
-    "trait": "CAD",
-    "score": {"id": "PGS002048", "name": "portability-ldpred2_411.4", "training": "UK Biobank (LDpred2)", "n_variants": 762124},
-    "target": {"gwas": "CARDIoGRAMplusC4D 2015 (Nikpay et al.)", "cohort": "CARDIoGRAMplusC4D (no UKBB)", "ancestry": "EUR", "n_eff": 163123, "overlap": "none (declared)"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0044, "den": 0.0008, "r2": 0.0252, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "reference"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "overlap": {
+   "role": "reference"
   },
-  {
-    "trait": "T2D",
-    "score": {"id": "PGS002026", "name": "portability-ldpred2_250.2", "training": "UK Biobank (LDpred2)", "n_variants": 830783},
-    "target": {"gwas": "DIAGRAM 2017 (Scott et al.)", "cohort": "DIAGRAM consortium (no UKBB)", "ancestry": "EUR", "n_eff": 88810, "overlap": "none (declared)"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0064, "den": 0.0009, "r2": 0.0443, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "reference"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "height",
+  "score": {
+   "id": "PGS002146",
+   "name": "portability-ldpred2_height",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 922538
   },
-  {
-    "trait": "BrCa",
-    "score": {"id": "PGS002015", "name": "portability-ldpred2_174.1", "training": "UK Biobank (LDpred2)", "n_variants": 488608},
-    "target": {"gwas": "BCAC 2017 (Michailidou et al.)", "cohort": "BCAC (no UKBB)", "ancestry": "EUR", "n_eff": 254739, "overlap": "none (declared)"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0064, "den": 0.0010, "r2": 0.0422, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "reference"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 419596,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
   },
-  {
-    "trait": "height",
-    "score": {"id": "PGS002146", "name": "portability-ldpred2_height", "training": "UK Biobank (LDpred2)", "n_variants": 922538},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 419596, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 3.6350, "den": 16.4517, "r2": 0.8031, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect", "gamma": 6.298e-07, "gamma_se": 5.149e-08, "z": 12.23, "corrected_r2": 0.4515, "reference": "GIANT 2014 (R² 0.2108)"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 3.6349880790063205,
+   "den": 16.451729617751347,
+   "r2": 0.8031458479758347,
+   "w_match": 1.0,
+   "z_match": 0.9994865899527886
   },
-  {
-    "trait": "BMI",
-    "score": {"id": "PGS002161", "name": "portability-ldpred2_log_BMI", "training": "UK Biobank (LDpred2)", "n_variants": 990022},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 419163, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0386, "den": 0.0037, "r2": 0.4048, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect", "gamma": 1.333e-08, "gamma_se": 1.085e-09, "z": 12.28, "corrected_r2": 0.1019, "reference": "GIANT 2015 (R² 0.0555)"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "overlap": {
+   "role": "suspect",
+   "gamma": 6.297817245675309e-07,
+   "gamma_se": 5.1494722665773405e-08,
+   "z": 12.23002459213404,
+   "m_total": 1444196,
+   "reference": "GIANT 2014 (R² 0.2108)",
+   "corrected_r2": 0.45151065971658116
   },
-  {
-    "trait": "LDL",
-    "score": {"id": "PGS002150", "name": "portability-ldpred2_LDL", "training": "UK Biobank (LDpred2)", "n_variants": 360007},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 400223, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.1083, "den": 0.0791, "r2": 0.1482, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect", "gamma": 4.984e-12, "gamma_se": 6.809e-10, "z": 0.01, "corrected_r2": null, "reference": "GLGC 2013 (R² 0.1000)", "note": "sparse score: detector blind by construction (docs/OVERLAP.md); treat as upper bound"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "BMI",
+  "score": {
+   "id": "PGS002161",
+   "name": "portability-ldpred2_BMI",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 990022
   },
-  {
-    "trait": "SBP",
-    "score": {"id": "PGS002228", "name": "portability-ldpred2_systolic_BP", "training": "UK Biobank (LDpred2)", "n_variants": 937030},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 396663, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 2.3657, "den": 22.5019, "r2": 0.2487, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect-unpaired", "note": "no declared reference target; upper bound"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "target": {
+   "gwas": "GIANT 2015 (Locke et al.)",
+   "cohort": "GIANT consortium (no UKBB)",
+   "ancestry": "EUR",
+   "n_eff": 233656,
+   "n_eff_basis": "median of the per-variant N column",
+   "n_eff_range": [
+    50033,
+    322153
+   ],
+   "overlap": "none (declared)"
   },
-  {
-    "trait": "T2D",
-    "score": {"id": "PGS002026", "name": "portability-ldpred2_250.2", "training": "UK Biobank (LDpred2)", "n_variants": 830783},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 85663, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0215, "den": 0.0009, "r2": 0.5089, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect", "gamma": 6.280e-09, "gamma_se": 1.244e-09, "z": 5.05, "corrected_r2": 0.1707, "reference": "DIAGRAM 2017 (R² 0.0443)"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.014304884208551787,
+   "den": 0.0036883554551039527,
+   "r2": 0.055479932645024044,
+   "w_match": 1.0,
+   "z_match": 0.9999188959302991
   },
-  {
-    "trait": "asthma",
-    "score": {"id": "PGS002061", "name": "portability-ldpred2_495", "training": "UK Biobank (LDpred2)", "n_variants": 793375},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 114961, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0165, "den": 0.0009, "r2": 0.3105, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect-unpaired", "note": "no declared reference target; upper bound"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "overlap": {
+   "role": "reference"
   },
-  {
-    "trait": "MDD",
-    "score": {"id": "PGS002036", "name": "portability-ldpred2_296.2", "training": "UK Biobank (LDpred2)", "n_variants": 807338},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 60359, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0020, "den": 0.0002, "r2": 0.0210, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect-unpaired", "note": "no declared reference target; upper bound"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "BMI",
+  "score": {
+   "id": "PGS002161",
+   "name": "portability-ldpred2_BMI",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 990022
   },
-  {
-    "trait": "CAD",
-    "score": {"id": "PGS002048", "name": "portability-ldpred2_411.4", "training": "UK Biobank (LDpred2)", "n_variants": 762124},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 115364, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0134, "den": 0.0008, "r2": 0.2313, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect", "gamma": 2.304e-09, "gamma_se": 4.095e-10, "z": 5.63, "corrected_r2": 0.1305, "reference": "CARDIoGRAMplusC4D 2015 (R² 0.0252)"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 419163,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
   },
-  {
-    "trait": "BrCa",
-    "score": {"id": "PGS002015", "name": "portability-ldpred2_174.1", "training": "UK Biobank (LDpred2)", "n_variants": 488608},
-    "target": {"gwas": "Pan-UK Biobank (2020)", "cohort": "UK Biobank", "ancestry": "EUR", "n_eff": 45796, "overlap": "in-sample"},
-    "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
-    "metrics": {"num": 0.0130, "den": 0.0010, "r2": 0.1758, "w_match": 1.0, "z_match": 1.0},
-    "overlap": {"role": "suspect", "gamma": 3.574e-10, "gamma_se": 2.286e-10, "z": 1.56, "corrected_r2": null, "reference": "BCAC 2017 (R² 0.0422)", "note": "borderline detection; sparse-leaning score: treat as upper bound"},
-    "date": "2026-07-20", "ppb_commit": "b1ac38d"
-  }
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.03864139009146392,
+   "den": 0.0036883554551039527,
+   "r2": 0.404830024214302,
+   "w_match": 1.0,
+   "z_match": 0.9994865899527886
+  },
+  "overlap": {
+   "role": "suspect",
+   "gamma": 1.3330778821951783e-08,
+   "gamma_se": 1.0848479530982528e-09,
+   "z": 12.2881540992726,
+   "m_total": 1444196,
+   "reference": "GIANT 2015 (R² 0.0555)",
+   "corrected_r2": 0.10192576857202001
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "LDL",
+  "score": {
+   "id": "PGS002150",
+   "name": "portability-ldpred2_LDL",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 360007
+  },
+  "target": {
+   "gwas": "GLGC 2013 (Teslovich et al.)",
+   "cohort": "GLGC consortium (no UKBB)",
+   "ancestry": "EUR",
+   "n_eff": 89856,
+   "n_eff_basis": "median of the per-variant N column",
+   "n_eff_range": [
+    50000,
+    173081
+   ],
+   "overlap": "none (declared)"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.0889514103103386,
+   "den": 0.07909158886233228,
+   "r2": 0.10004039000873462,
+   "w_match": 1.0,
+   "z_match": 0.9999221233797191
+  },
+  "overlap": {
+   "role": "reference"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "LDL",
+  "score": {
+   "id": "PGS002150",
+   "name": "portability-ldpred2_LDL",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 360007
+  },
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 400223,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.10827686117709273,
+   "den": 0.07909158886233228,
+   "r2": 0.14823167463192738,
+   "w_match": 1.0,
+   "z_match": 0.9994872871631355
+  },
+  "overlap": {
+   "role": "suspect",
+   "gamma": 4.984437507079846e-12,
+   "gamma_se": 6.808518209526914e-10,
+   "z": 0.007320884447522372,
+   "m_total": 1444196,
+   "reference": "GLGC 2013 (R² 0.1000)",
+   "note": "no detectable uniform overlap term (z = 0.01); score covers 25% of the LD reference — detector blind by construction for shrunk/low-coverage scores, so this is an upper bound, not a corrected measurement"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "CAD",
+  "score": {
+   "id": "PGS002048",
+   "name": "portability-ldpred2_CAD",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 762124
+  },
+  "target": {
+   "gwas": "CARDIoGRAMplusC4D 2015 (Nikpay et al.)",
+   "cohort": "CARDIoGRAMplusC4D (no UKBB)",
+   "ancestry": "EUR",
+   "n_eff": 163123,
+   "n_eff_basis": "trait-level constant in the sumstats file",
+   "overlap": "none (declared)"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.004416062930830733,
+   "den": 0.0007735255567675866,
+   "r2": 0.025211334827191463,
+   "w_match": 1.0,
+   "z_match": 0.9996544726180866
+  },
+  "overlap": {
+   "role": "reference"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "CAD",
+  "score": {
+   "id": "PGS002048",
+   "name": "portability-ldpred2_CAD",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 762124
+  },
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 115364,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.013375547868144107,
+   "den": 0.0007735255567675866,
+   "r2": 0.23128554604016557,
+   "w_match": 1.0,
+   "z_match": 0.9995171637135971
+  },
+  "overlap": {
+   "role": "suspect",
+   "gamma": 2.3041775627466583e-09,
+   "gamma_se": 4.0953946047433053e-10,
+   "z": 5.626265073646259,
+   "m_total": 1444196,
+   "reference": "CARDIoGRAMplusC4D 2015 (R² 0.0252)",
+   "corrected_r2": 0.13051872305889795
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "T2D",
+  "score": {
+   "id": "PGS002026",
+   "name": "portability-ldpred2_T2D",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 830783
+  },
+  "target": {
+   "gwas": "DIAGRAM 2017 (Scott et al.)",
+   "cohort": "DIAGRAM consortium (no UKBB)",
+   "ancestry": "EUR",
+   "n_eff": 88810,
+   "n_eff_basis": "trait-level constant in the sumstats file",
+   "overlap": "none (declared)"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.006360823493447967,
+   "den": 0.0009125747032968863,
+   "r2": 0.0443361791299148,
+   "w_match": 1.0,
+   "z_match": 0.9998416762157918
+  },
+  "overlap": {
+   "role": "reference"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "T2D",
+  "score": {
+   "id": "PGS002026",
+   "name": "portability-ldpred2_T2D",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 830783
+  },
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 85663,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.02154927106833115,
+   "den": 0.0009125747032968863,
+   "r2": 0.5088581591170197,
+   "w_match": 1.0,
+   "z_match": 0.9995305131567933
+  },
+  "overlap": {
+   "role": "suspect",
+   "gamma": 6.279906780775493e-09,
+   "gamma_se": 1.2442712183387516e-09,
+   "z": 5.04705621107262,
+   "m_total": 1444196,
+   "reference": "DIAGRAM 2017 (R² 0.0443)",
+   "corrected_r2": 0.17066742661708542
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "BrCa",
+  "score": {
+   "id": "PGS002015",
+   "name": "portability-ldpred2_BrCa",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 488608
+  },
+  "target": {
+   "gwas": "BCAC 2017 (Michailidou et al.)",
+   "cohort": "BCAC consortium (no UKBB)",
+   "ancestry": "EUR",
+   "n_eff": 254739,
+   "n_eff_basis": "trait-level constant in the sumstats file",
+   "overlap": "none (declared)"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.006381519204488711,
+   "den": 0.0009654423769303014,
+   "r2": 0.042181479009387034,
+   "w_match": 1.0,
+   "z_match": 0.9996091398953458
+  },
+  "overlap": {
+   "role": "reference"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "BrCa",
+  "score": {
+   "id": "PGS002015",
+   "name": "portability-ldpred2_BrCa",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 488608
+  },
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 45796,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.013026340608239609,
+   "den": 0.0009654423769303014,
+   "r2": 0.17575937590537571,
+   "w_match": 1.0,
+   "z_match": 0.999575810303484
+  },
+  "overlap": {
+   "role": "suspect",
+   "gamma": 3.5739962262425773e-10,
+   "gamma_se": 2.28636990021997e-10,
+   "z": 1.5631749813968097,
+   "m_total": 1444196,
+   "reference": "BCAC 2017 (R² 0.0422)",
+   "note": "no detectable uniform overlap term (z = 1.56); score covers 34% of the LD reference — detector blind by construction for shrunk/low-coverage scores, so this is an upper bound, not a corrected measurement"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "SBP",
+  "score": {
+   "id": "PGS002228",
+   "name": "portability-ldpred2_SBP",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 937030
+  },
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 396663,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 2.365729308043414,
+   "den": 22.50185074345069,
+   "r2": 0.24872065959127912,
+   "w_match": 1.0,
+   "z_match": 0.9994872871631355
+  },
+  "overlap": {
+   "role": "suspect-unpaired"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "asthma",
+  "score": {
+   "id": "PGS002061",
+   "name": "portability-ldpred2_asthma",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 793375
+  },
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 114961,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.01653432767962976,
+   "den": 0.0008804847836027373,
+   "r2": 0.3104925796658832,
+   "w_match": 1.0,
+   "z_match": 0.999515176036442
+  },
+  "overlap": {
+   "role": "suspect-unpaired"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ },
+ {
+  "trait": "MDD",
+  "score": {
+   "id": "PGS002036",
+   "name": "portability-ldpred2_MDD",
+   "training": "UK Biobank (LDpred2)",
+   "n_variants": 807338
+  },
+  "target": {
+   "gwas": "Pan-UK Biobank (2020)",
+   "cohort": "UK Biobank",
+   "ancestry": "EUR",
+   "n_eff": 60359,
+   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "overlap": "in-sample"
+  },
+  "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
+  "metrics": {
+   "num": 0.002032510635086759,
+   "den": 0.00019695069438799563,
+   "r2": 0.020975297876342884,
+   "w_match": 1.0,
+   "z_match": 0.9995507270338845
+  },
+  "overlap": {
+   "role": "suspect-unpaired"
+  },
+  "date": "2026-07-21",
+  "ppb_commit": "aa4c293"
+ }
 ]

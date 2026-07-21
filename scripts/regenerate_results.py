@@ -289,9 +289,19 @@ def build_records(trait, cfg, commit, date):
 
 
 def git_commit():
+    """Short HEAD, suffixed ``-dirty`` when the working tree has uncommitted changes.
+
+    Without the suffix a pack can claim a commit that does not contain the code
+    that produced it -- e.g. a run started before this script itself was
+    committed. The marker makes that unreproducible provenance visible in the
+    record instead of silently plausible.
+    """
+    def _git(*args):
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True,
+                              text=True, check=True).stdout
     try:
-        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
-                              capture_output=True, text=True, check=True).stdout.strip()
+        commit = _git("rev-parse", "--short", "HEAD").strip()
+        return f"{commit}-dirty" if _git("status", "--porcelain").strip() else commit
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
