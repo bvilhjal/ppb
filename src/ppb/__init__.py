@@ -25,6 +25,7 @@ from .ld_backend import (
     LDBackend,
     LowRankLD,
     LowRankLDInt8,
+    PackedDenseLDInt8,
     lowrank_ld,
     quantize_lowrank,
 )
@@ -34,7 +35,7 @@ from .sumstats import standardized_marginal, zstat_to_corr
 __all__ = [
     "r2", "mse",
     "DenseLD", "LowRankLD", "BlockDiagonalLD", "LDBackend",
-    "DenseLDInt8", "LowRankLDInt8", "quantize_lowrank",
+    "DenseLDInt8", "LowRankLDInt8", "PackedDenseLDInt8", "quantize_lowrank",
     "lowrank_ld",
     "VariantTable", "harmonize_to", "HarmonizeReport",
     "evaluate", "EvaluationResult",

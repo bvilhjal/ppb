@@ -98,12 +98,14 @@ representations from `ldpred3/ld_repr.py`:
   ldpred3's `PackedSymmetricInt8LD` stores only the upper triangle and
   memory-maps it; **ppb's `DenseLDInt8` stores the full square array and loads
   it into RAM** (see "Implementation gaps" below).
-- **LR8** — `LowRankLDInt8`: for large blocks (>= ~1500), an int8 low-rank factor
-  with `R ~= U U^T`, `U` shape `(m, r)`, rows unit-norm so the LD diagonal is 1.
+- **LR8** — `LowRankLDInt8`: an int8 low-rank factor with `R ~= U U^T`, `U` shape
+  `(m, r)`, rows unit-norm so the LD diagonal is 1. ldpred3 selects this for large
+  blocks (>= ~1500); ppb implements it as a backend but does not store it — the
+  measured trade-off is in "On-disk LD store" below.
 
 The block quadratic form is then, per block `b`:
 
-- D8 block:  `w_b^T D_b w_b`  over the packed int8 triangle;
+- D8 block:  `w_b^T D_b w_b`  over the int8 block (square or packed triangle);
 - LR8 block: `s = U_b^T w_b` (length `r`), then `w_b^T D_b w_b = s^T s = ||s||^2`.
 
 Total `w^T D w = sum_b (block quadratic form)`. This is O(sum k_b * r_b) time and
@@ -113,10 +115,20 @@ int8 (~1 byte/entry) memory — the efficiency win.
 semi-definite, so `w^T D w = ||U^T w||^2 >= 0` always. A block-diagonal of PSD
 blocks is PSD. This *removes* the negative-denominator failure that a raw
 cM-banded truncation (non-PSD) would introduce, so no ad-hoc clamping is needed
-on the production path. Finite-reference-panel noise in large blocks is handled by
-size-aware spectral shrinkage toward the identity (ldpred3's `shrink_ld_blocks`,
-Marchenko-Pastur `alpha = min(max_shrink, intensity * k / n_ref)`); ppb does not
-yet mirror the shrinkage — `lowrank_ld` does plain eigen-truncation.
+on the production path.
+
+ldpred3 additionally applies **linear shrinkage toward the identity** to large
+blocks (`shrink_ld_blocks`: `D_a = (1-a) D + a I`, with an MP-motivated intensity
+`a = min(max_shrink, intensity * k / n_ref)`; defaults `max_shrink=0.5`,
+`intensity=1.0`). ppb does **not** mirror it, and should not: it is not a
+Marchenko-Pastur estimator (there is no MP edge or deconvolution anywhere in
+ldpred3 — an earlier revision of this document called it one, wrongly), its only
+measured benefit is conditioning a Gibbs sampler at small `n_ref`, and ppb never
+solves or iterates with `D`. At ppb's `n_ref = 362,320` the intensity works out
+to `a` = 0.048 for the largest block and 0.0006 for the smallest — numerically a
+no-op. It would also bias ppb's estimand in a known direction:
+`w^T D_a w = (1-a) w^T D w + a ||w||^2`, which for LD-tagged weights deflates the
+denominator and *inflates* R².
 
 **Kernels: numba.** The block sweeps for `w^T D w` are implemented as original
 numba `@njit(parallel=True)` kernels in `ppb/_kernels.py` (the same scalar-loop
@@ -128,28 +140,44 @@ global `scale` and per-row rescaling to restore the unit diagonal), plus
 `quantize_lowrank`. Both are ~8x smaller than float64 and agree with the float
 path to within quantisation (~1-2%); LR8 stays PSD, so `w^T D w >= 0`.
 
-### Implementation gaps in the LD store (as of the HM3+ reference)
+### On-disk LD store: what is wired up, and why LR8 is not
 
-The two representations above are both implemented as *backends*, but the
-on-disk LD-reference format (`ppb/ldref.py`) currently supports only D8:
-`write_ldref` raises `TypeError` on anything that is not a `DenseLDInt8`, and
-`read_ldref` reconstructs every block as `DenseLDInt8`. So the size-based D8/LR8
-selection described above is **specified but not wired up**. Measured on the
-converted bigsnpr HM3+ EUR reference (1,444,196 variants in 431 blocks; block
-sizes min 216, median 1,901, mean 3,351, max 17,304):
+The `.npz` LD-reference format (`ppb/ldref.py`) is versioned:
 
-- **241 of 431 blocks (56%) are >= 1500 variants and hold 90% of all variants** —
-  i.e. the regime this spec assigns to LR8 covers almost the whole genome, yet
-  every block is stored as D8.
-- Full-square int8 storage costs **10.4 GB** (`sum_b m_b^2`); the packed upper
-  triangle this spec describes would cost **5.2 GB**, a flat 50% saving.
-- The largest single block (17,304 variants) is a 300 MB array that
-  `read_ldref` materialises in full.
+- **v1** — every block a full `m x m` int8 square in `ld8`. What the converted
+  HM3+ reference originally shipped.
+- **v2** — adds `format_version`, `block_kind` and `block_offset`, and carries
+  packed upper triangles in `ld8p`. Written only when a packed block is present,
+  so square-only references stay byte-for-byte v1 and older readers keep working;
+  every v2 array has a default reproducing the v1 parse exactly. `block_kind = 1`
+  is reserved for an int8 low-rank factor, which nothing writes (see below).
 
-None of this affects correctness — `w^T D w` is exact for the stored int8 values
-either way — but the memory characteristics of the shipped reference are ~2x
-(triangle) to ~10x (LR8) worse than this section promises. Closing the gap means
-teaching the `.npz` schema to carry a per-block representation tag.
+`scripts/repack_ldref.py` converts v1 to packed v2. Measured on the shipped
+reference (1,444,196 variants in 431 blocks; block sizes min 216, median 1,901,
+mean 3,351, max 17,304), per chr22 and scaling with `sum_b m_b^2`:
+
+| layout | genome-wide | read (chr22) | note |
+|---|---|---|---|
+| v1 square, raw | 10.4 GB | 0.070 s | the original store |
+| **v2 packed, raw** | **5.2 GB** | **0.034 s** | 2.00x smaller *and* 2x faster to read |
+| v2 packed, compressed | ~1.8 GB | 0.086 s | `compress=True`; for distribution |
+
+Packing is lossless — only the redundant lower triangle is dropped — and the
+packed kernel is parallel over rows where the square one is serial (~6x faster
+`quad` at m = 2000). `w^T D w` is *not* bit-identical across the two layouts,
+because the packed kernel sums each off-diagonal pair once and doubles it:
+measured at **at most 17 machine epsilon (~4e-15 relative)**, eleven orders of
+magnitude below int8 quantisation's own ~0.1% error, but not exactly zero.
+
+**LR8 is implemented as a backend but deliberately not as a storage format.**
+Measured on this reference, the retained rank fraction at 99% variance is
+essentially size-invariant (`r/m` ~ 0.42-0.51 from m = 220 to m = 17,304), so
+LR8@0.99 would come to ~3.9 GB — only **1.34x** better than the lossless packed
+triangle — while costing ~0.45% error in `w^T D w` on real PGS weights against
+D8's own 0.12%. At 99.9% variance it is *larger* than the triangle. There is also
+an LR8 error floor of ~0.25% from the PSD clamp, row renormalization and factor
+quantisation that no retained-variance setting removes. Revisit only if a
+distribution-size requirement forces below the packed triangle.
 
 **Oracle vs. production banding — a deliberate deviation to validate.** The
 preprint's published numbers use a plain cM-window banded `D` (non-PSD, and the

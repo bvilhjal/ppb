@@ -102,3 +102,33 @@ def dense_quad_int8(D8, w):
             acc += D8[i, j] * w[j]
         total += wi * acc
     return total
+
+
+@njit(parallel=True, cache=True)
+def packed_quad_int8(p8, w, m):
+    """``w^T D w`` for an int8 upper triangle packed row-major (caller divides by 127).
+
+    Row ``i`` starts at ``i*m - i*(i-1)//2`` and holds ``D8[i, i:]``, so the
+    whole matrix is ``m(m+1)/2`` bytes instead of ``m^2``. Using symmetry,
+
+        w^T D w = sum_i w_i * ( D[i, i] w_i + 2 * sum_{j>i} D[i, j] w_j ).
+
+    Rows are independent, so each accumulates into its own slot of ``partial``
+    and the sum is taken afterwards -- no cross-thread reduction race. Row ``i``
+    does ``m - i`` work, so the loop is deliberately left to numba's scheduler
+    rather than chunked by hand.
+    """
+    partial = np.zeros(m)
+    for i in prange(m):
+        wi = w[i]
+        if wi == 0.0:
+            continue
+        base = i * m - (i * (i - 1)) // 2
+        off = 0.0
+        for j in range(i + 1, m):
+            off += p8[base + (j - i)] * w[j]
+        partial[i] = wi * (p8[base] * wi + 2.0 * off)
+    total = 0.0
+    for i in range(m):
+        total += partial[i]
+    return total

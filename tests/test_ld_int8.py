@@ -8,6 +8,7 @@ from ppb import (
     DenseLDInt8,
     LowRankLD,
     LowRankLDInt8,
+    PackedDenseLDInt8,
     lowrank_ld,
     quantize_lowrank,
     r2,
@@ -110,3 +111,23 @@ def test_quantize_lowrank_round_trip_is_within_quantisation_error():
     exact, approx = DenseLD(C).quad(w), low.quad(w)
     assert approx == pytest.approx(exact, rel=1e-9)     # full rank reproduces D
     assert quantize_lowrank(low).quad(w) == pytest.approx(approx, rel=0.02)
+
+
+def test_packed_matches_square_and_halves_the_bytes():
+    """The packed triangle is the same operator as the square block, at half
+    the size -- an LD matrix is symmetric, so the lower triangle is redundant."""
+    rng = np.random.default_rng(31)
+    C = _corr_block(120, seed=9)
+    sq = DenseLDInt8.from_dense(C)
+    pk = sq.packed()
+    assert pk.nbytes == 120 * 121 // 2
+    assert sq.nbytes / pk.nbytes == pytest.approx(2.0, rel=0.02)
+    assert np.array_equal(pk.to_dense_int8(), sq.D8)        # lossless
+    for _ in range(5):
+        w = rng.standard_normal(120)
+        assert pk.quad(w) == pytest.approx(sq.quad(w), rel=1e-12)
+
+
+def test_packed_rejects_a_wrong_length_payload():
+    with pytest.raises(ValueError, match="needs"):
+        PackedDenseLDInt8(np.zeros(10, dtype=np.int8), 10)   # needs 55, not 10

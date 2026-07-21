@@ -80,3 +80,23 @@ def test_nonpositive_denominator_raises():
         r2(np.zeros(3), np.zeros(3), DenseLD(np.eye(3)))
     with pytest.raises(ValueError):
         r2([1.0, 2.0], [1.0], DenseLD(np.eye(2)))     # length mismatch
+
+
+def test_mse_rejects_a_negative_quadratic_form_but_allows_zero():
+    """A negative w'Dw (non-PSD LD) would silently understate the error. Zero is
+    fine though: all-zero weights predict nothing and MSE = var_y is correct,
+    where r2 is genuinely undefined."""
+    class _Neg:
+        m = 3
+        def quad(self, w):
+            return -1.0
+
+    class _Zero:
+        m = 3
+        def quad(self, w):
+            return 0.0
+
+    z = np.zeros(3)
+    with pytest.raises(ValueError, match="negative"):
+        mse(np.ones(3), z, _Neg())
+    assert mse(np.zeros(3), z, _Zero(), var_y=2.0) == pytest.approx(2.0)

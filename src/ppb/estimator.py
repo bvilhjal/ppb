@@ -39,6 +39,17 @@ def r2(weights, z, ld: LDBackend) -> float:
 
 
 def mse(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
-    """Estimated mean squared error from the same summary-level inputs."""
+    """Estimated mean squared error from the same summary-level inputs.
+
+    Raises ``ValueError`` if ``w^T D w`` is negative, which a non-PSD ``D`` can
+    produce and which would silently understate the error. Unlike :func:`r2`,
+    zero is allowed: all-zero weights predict nothing, and ``MSE = var_y`` is
+    the right answer for them rather than an undefined ratio.
+    """
     w, wz = _wz(weights, z)
-    return float(var_y) - 2.0 * wz + ld.quad(w)
+    den = ld.quad(w)
+    if den < 0.0:
+        raise ValueError(
+            f"w^T D w = {den!r} is negative; MSE would be understated "
+            "(a non-PSD LD approximation)")
+    return float(var_y) - 2.0 * wz + den
