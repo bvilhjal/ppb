@@ -47,7 +47,12 @@ utility, causality, or individual privacy.
   source paper, small cM windows overestimate R² (~+1.9% at 2 cM; ldetect blocks
   ~+12%); 4 cM is the accuracy/size trade-off. In this implementation, aggressive
   low-rank (LR8) compression slightly *underestimates* R² (≈−2% at 95% variance
-  retained; near-zero at 99%). int8 quantisation adds ~1–2% error.
+  retained; near-zero at 99%). int8 quantisation of the shipped reference moves
+  the **genome-wide** R² by at most **0.02%** (measured against the float source
+  for six real scores) — individual blocks are ~0.1–0.2%, but summing 431 blocks
+  averages independent rounding down. The residual is *not* common-mode across
+  scores, so it does not cancel in ratios or rankings; it is simply small (worst
+  pairwise ratio error 0.022%). See [`METHOD.md`](METHOD.md).
 - **Training/target sample overlap — the dominant failure mode for a
   benchmark.** The estimator assumes `w` was trained independently of the target
   GWAS's noise. When it was not, the numerator is inflated additively — up to

@@ -156,18 +156,61 @@ The `.npz` LD-reference format (`ppb/ldref.py`) is versioned:
 reference (1,444,196 variants in 431 blocks; block sizes min 216, median 1,901,
 mean 3,351, max 17,304), per chr22 and scaling with `sum_b m_b^2`:
 
-| layout | genome-wide | read (chr22) | note |
-|---|---|---|---|
-| v1 square, raw | 10.4 GB | 0.070 s | the original store |
-| **v2 packed, raw** | **5.2 GB** | **0.034 s** | 2.00x smaller *and* 2x faster to read |
-| v2 packed, compressed | ~1.8 GB | 0.086 s | `compress=True`; for distribution |
+| layout | in memory | on disk | read (chr22) | note |
+|---|---|---|---|---|
+| v1 square, raw | 10.41 GB | 10.61 GB | 0.070 s | the original store |
+| **v2 packed, raw** | **5.21 GB** | **5.40 GB** | **0.034 s** | 2.000x smaller *and* 2x faster to read |
+| v2 packed, compressed | 5.21 GB | ~1.8 GB* | 0.086 s | `compress=True`; for distribution |
+
+Memory and disk figures are measured over all 22 chromosomes; *the compressed
+total is extrapolated from chr22 (25.2 -> 8.1 MB, 3.1x on top of packing).
 
 Packing is lossless — only the redundant lower triangle is dropped — and the
 packed kernel is parallel over rows where the square one is serial (~6x faster
-`quad` at m = 2000). `w^T D w` is *not* bit-identical across the two layouts,
-because the packed kernel sums each off-diagonal pair once and doubles it:
-measured at **at most 17 machine epsilon (~4e-15 relative)**, eleven orders of
-magnitude below int8 quantisation's own ~0.1% error, but not exactly zero.
+`quad` at m = 2000). End to end, a full 22-chromosome sweep with a real PGS
+(922,538 variants) ran 48.3 s -> 38.6 s; the gain is diluted because
+`harmonize_to` dominates that loop, not the quadratic form.
+
+`w^T D w` is *not* bit-identical across the two layouts, because the packed
+kernel sums each off-diagonal pair once and doubles it. Measured: at most **11.3
+machine epsilon** per chromosome on random weights, and **2.2e-16 relative** on
+the real genome-wide height denominator. That is four orders of magnitude below
+the 0.02% int8 error already in the reference (next section), so repacking is
+numerically a non-event — but it is not exactly zero, so a regenerated registry
+would differ in the last digit or two.
+
+### How much does int8 quantisation move the published number?
+
+Measured genome-wide against the float bigsnpr source (diagonal forced to 1 in
+both, so this isolates quantisation), for the six real PGS Catalog scores of
+`docs/REAL_DATA.md`:
+
+| trait | error in `w^T D w` | error in R² |
+|---|---:|---:|
+| T2D | +0.0196% | −0.0196% |
+| BMI | +0.0122% | −0.0122% |
+| BrCa | +0.0018% | −0.0018% |
+| CAD | +0.0012% | −0.0012% |
+| height | −0.0018% | +0.0018% |
+| LDL | −0.0027% | +0.0027% |
+
+Two things matter here.
+
+**The genome-wide error is ~25x smaller than the per-block error.** Individual
+blocks show ~0.1-0.2%; summing 431 blocks over 22 chromosomes averages
+independent rounding down to a mean of 0.005% and a worst case of 0.02%. An
+error budget quoted per block badly overstates what reaches the published R².
+
+**It is not common-mode, so it does not cancel.** The signs differ (height and
+LDL negative, the rest positive) and the spread across scores (sd 0.008%)
+exceeds the mean (0.005%). So the intuition that a shared multiplicative bias
+cancels in a ratio of quadratic forms — `experiments/cross_ancestry.py`'s
+`w^T D_A w / w^T D_B w` — or in a ranking of scores on one reference is
+**wrong**. What saves both is magnitude, not cancellation: the worst pairwise
+ratio error is 0.022%, so only scores whose true R² differ by less than that
+could swap order. Note that the cross-ancestry ratio takes its two denominators
+from *different* references, where the errors are independent draws rather than
+a shared bias, so expect ~sqrt(2) times the within-reference figure.
 
 **LR8 is implemented as a backend but deliberately not as a storage format.**
 Measured on this reference, the retained rank fraction at 99% variance is
