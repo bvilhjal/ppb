@@ -240,6 +240,12 @@ def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
     row-normalizes so the reconstruction ``U U^T`` has unit diagonal -- the
     LR8 / SBayesRC-style construction (mirrors ``ldpred3.ld_repr.lowrank_ld``).
     ``variance=1.0`` keeps full rank and reproduces ``corr`` exactly.
+
+    The retained rank is raised past the ``variance`` rule if that rule would
+    leave any variant with no support among the kept eigenvectors -- see the
+    comment at the extension loop for why that case is dangerous. Raises if
+    ``max_rank`` forbids the extension, or if a variant has non-positive
+    variance (no unit diagonal exists for it; drop such variants first).
     """
     corr = np.ascontiguousarray(np.asarray(corr, dtype=np.float64))
     if corr.ndim != 2 or corr.shape[0] != corr.shape[1] or corr.shape[0] == 0:
@@ -257,6 +263,13 @@ def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
     if not 0.0 < variance <= 1.0:
         raise ValueError("variance must be in (0, 1]")
     m = corr.shape[0]
+    diag = np.diag(corr).copy()
+    weak = np.flatnonzero(diag <= 0.0)
+    if weak.size:
+        raise ValueError(
+            f"corr has {weak.size} variant(s) with non-positive variance (e.g. "
+            f"index {int(weak[0])}, diagonal {diag[weak[0]]!r}); no unit "
+            "diagonal can be reconstructed for them -- drop them first")
     evals, evecs = np.linalg.eigh(corr)
     evals = np.maximum(evals[::-1], 0.0)
     evecs = evecs[:, ::-1]
@@ -268,6 +281,37 @@ def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
     r = max(1, min(r, m))
     if max_rank is not None:
         r = min(r, int(max_rank))
+
+    # Truncation can leave a variant with no support among the kept
+    # eigenvectors -- its row of U is then (near) zero. Normalizing that row is
+    # either impossible (exactly zero stays zero, so U U^T has diagonal 0 there,
+    # quad() silently drops the variant's self term and R^2 comes out too high)
+    # or meaningless (a near-zero row gets amplified into a numerically
+    # arbitrary direction). Neither is acceptable in a denominator, so extend
+    # the rank by the minimum that supports every variant. Costs nothing on
+    # well-conditioned LD; it only bites degenerate spectra, e.g. an identity
+    # block, where the variance rule drops a whole basis direction.
+    def _row_energy(k):
+        return np.einsum("ij,ij,j->i", evecs[:, :k], evecs[:, :k], evals[:k])
+
+    # An explicit max_rank is a hard cap: extend up to it, then raise rather
+    # than quietly returning more rank than the caller allowed.
+    r_cap = m if max_rank is None else min(m, int(max_rank))
+    floor = 1e-8 * diag                      # keep >=1e-8 of each variant's own variance
+    row_e = _row_energy(r)
+    short = np.flatnonzero(row_e < floor)
+    while short.size and r < r_cap:
+        row_e[short] += evecs[short, r] ** 2 * evals[r]
+        r += 1
+        short = short[row_e[short] < floor[short]]
+    if short.size:
+        raise ValueError(
+            f"max_rank={max_rank} leaves {short.size} variant(s) with no "
+            f"support in the retained eigenvectors (e.g. index {int(short[0])}); "
+            "their reconstructed LD diagonal would be 0 rather than 1, "
+            "understating w^T D w. Raise max_rank.")
+
     U = evecs[:, :r] * np.sqrt(np.maximum(evals[:r], min_eig))
-    d = np.sqrt(np.clip((U * U).sum(axis=1), 1e-12, None))
-    return LowRankLD(U / d[:, None])
+    # Every row now carries real energy, so normalize by the true norm -- no
+    # clip, which would silently under-normalize a small row instead.
+    return LowRankLD(U / np.sqrt(np.einsum("ij,ij->i", U, U))[:, None])

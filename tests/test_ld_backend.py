@@ -118,3 +118,52 @@ def test_lowrank_ld_rejects_asymmetric_input():
     asym[0, 1] += 5.0
     with pytest.raises(ValueError, match="symmetric"):
         lowrank_ld(asym)
+
+
+def test_lowrank_ld_extends_rank_so_every_variant_is_supported():
+    """Truncation must not leave a variant with no support in the kept factors.
+
+    Regression: the variance rule dropped a whole basis direction of an identity
+    block, leaving that row of U exactly zero. U U^T then had diagonal 0 there,
+    quad() silently omitted the variant's self term, and R^2 came out too high
+    with no error raised.
+    """
+    low = lowrank_ld(np.eye(100), variance=0.99)
+    assert low.rank == 100                                  # bumped up from 99
+    norms = np.sqrt((low.U * low.U).sum(axis=1))
+    assert np.allclose(norms, 1.0)                          # unit diagonal restored
+    assert low.quad(np.eye(100)[0]) == pytest.approx(1.0)
+    assert low.quad(np.ones(100)) == pytest.approx(100.0)
+
+
+def test_lowrank_ld_supports_a_variant_in_zero_ld_with_the_block():
+    """The realistic shape of the same defect: one variant uncorrelated with all
+    others, so the leading eigenvectors of the block carry nothing for it."""
+    rng = np.random.default_rng(7)
+    A = rng.standard_normal((30, 30))
+    C = A @ A.T + 0.5 * np.eye(30)
+    C = C / np.sqrt(np.outer(np.diag(C), np.diag(C)))
+    full = np.eye(31)
+    full[:30, :30] = C
+    low = lowrank_ld(full, variance=0.99)
+    assert np.allclose(np.sqrt((low.U * low.U).sum(axis=1)), 1.0)
+    assert low.quad(np.eye(31)[30]) == pytest.approx(1.0)   # the lone variant
+
+
+def test_lowrank_ld_rejects_non_positive_variance_variants():
+    bad = np.eye(5)
+    bad[2, 2] = 0.0
+    with pytest.raises(ValueError, match="non-positive variance"):
+        lowrank_ld(bad)
+
+
+def test_lowrank_ld_max_rank_is_a_hard_cap():
+    """max_rank must be honoured when satisfiable, and raise -- not silently
+    exceeded -- when it cannot support every variant."""
+    rng = np.random.default_rng(8)
+    A = rng.standard_normal((40, 40))
+    C = A @ A.T + 0.5 * np.eye(40)
+    C = C / np.sqrt(np.outer(np.diag(C), np.diag(C)))
+    assert lowrank_ld(C, variance=0.99, max_rank=12).rank <= 12
+    with pytest.raises(ValueError, match="max_rank"):
+        lowrank_ld(np.eye(50), variance=0.99, max_rank=10)
