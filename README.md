@@ -64,8 +64,9 @@ the low-rank factor is PSD, so `wᵀDw ≥ 0`).
 
 Supporting pieces for real summary statistics: allele harmonization
 (`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
-sizes (`ppb.standardized_marginal`), and PUMAS-style single-GWAS subsampling
-(`ppb.subsample_sumstats`).
+sizes (`ppb.standardized_marginal`), PUMAS-style single-GWAS subsampling
+(`ppb.subsample_sumstats`), and detection/correction of training-target sample
+overlap (`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)).
 
 ## LD reference (real data)
 
@@ -119,7 +120,9 @@ The command harmonizes the weights to the bundle's variants and prints a JSON
 cross-ancestry portability measurement (`cross_ancestry.py`), the within-ancestry
 LD-reference behaviour (`figure_s1.py`), cross-method concordance
 (`benchmark_methods.py`), PC adjustment (`pc_adjustment.py`), per-variant N
-(`per_variant_n.py`), PUMAS agreement (`pumas_agreement.py`), and the negative
+(`per_variant_n.py`), PUMAS agreement (`pumas_agreement.py`), training-target
+sample-overlap detection/correction (`overlap_detection.py`, see
+[`docs/OVERLAP.md`](docs/OVERLAP.md)), and the negative
 result on LD-based transferability reweighting (`transferability.py`, see
 [`docs/TRANSFERABILITY.md`](docs/TRANSFERABILITY.md)). See
 [`experiments/README.md`](experiments/README.md).

@@ -191,6 +191,32 @@ ancestry-A sumstats does not estimate R²_B at all (+58%). **Target-ancestry
 summary statistics are irreducibly required.** Encoded in
 `tests/test_cross_ancestry.py`.
 
+## `overlap_detection.py` — detecting/correcting training-target sample overlap
+
+When the score's training data overlaps the target GWAS, `w` fits the shared
+noise and the numerator `wᵀz` is inflated (the benchmark's Gate-D failure
+mode). For a near-linear trainer the overlap term is uniform per variant,
+recoverable from `(w, z, D)` alone with the dual-target block detector
+(`ppb.overlap_slope`), and subtractable (`ppb.correct_numerator`). Sparse
+scores hide overlap by construction (projected onto signal variants) and must
+be flagged as upper bounds. Method note: [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
+
+Run:
+
+```bash
+python experiments/overlap_detection.py
+```
+
+Observed (dense score; corrected vs honest anchor; sparse = known blind spot):
+
+| overlap | γ̂ | γ_true | R² naive | R² corrected | R² honest |
+|---:|---:|---:|---:|---:|---:|
+| 0% | ~0 | 0 | 0.074 | 0.076 | 0.075 |
+| 25% | 5.8e-05 | 6.3e-05 | 0.163 | 0.080 | 0.077 |
+| 100% | 2.3e-04 | 2.5e-04 | 0.616 | 0.102 | 0.088 |
+
+Encoded in `tests/test_overlap.py`.
+
 ---
 
 Method ranking from `benchmark_methods.py` (mean R², individual-level vs

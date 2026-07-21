@@ -16,6 +16,15 @@ literature); the overlapping-cohort (in-sample) failure mode demonstrated
 quantitatively on the same scores. See `docs/REAL_DATA.md`. Still no real
 cross-ancestry result.
 
+Revised: 2026-07-20 — **Gate-D overlap detector added** (`ppb.overlap`):
+detects and approximately corrects training-target sample overlap from the PGS
+weights alone (no training summary statistics), via the uniform per-variant
+noise-fit term recovered by a dual-target block regression; validated in
+simulation (`experiments/overlap_detection.py`) and on the real-data
+evaluations (polygenic scores: z = 5-12; sparse scores are blind by
+construction and are flagged as upper bounds). Method note:
+`docs/OVERLAP.md`.
+
 ## Objective
 
 Build PPB into a maintained, versioned benchmark that **measures the

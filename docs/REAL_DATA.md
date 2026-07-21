@@ -59,7 +59,10 @@ case; it is not a cross-ancestry result.
 
 The overlap contrast is the expected behaviour of the estimator: with the
 training cohort as target it recovers the in-sample fit (up to 15× inflation),
-with an independent target it measures the score's real accuracy. All runs had
+with an independent target it measures the score's real accuracy. This failure
+mode is detectable and approximately correctable from the score weights alone —
+see [`OVERLAP.md`](OVERLAP.md) (`ppb.overlap`; polygenic scores detected at
+z = 5-12 here; sparse scores are flagged as upper bounds). All runs had
 100% weight variants and ≥99.9% z variants matched, positive `wᵀz`, and
 strictly positive `wᵀDw`. The magnitudes are consistent with the literature
 (height ~20-25%, LDL ~10%, BMI ~5-8%, CAD/T2D ~3-5%).
