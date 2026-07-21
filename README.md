@@ -30,7 +30,7 @@ the validation anchor.
 
 > **Status:** early development. The estimator, LD backends, harmonization, and the
 > cross-ancestry method are **validated in simulation against individual-level
-> truth** (79 tests, CI green), and the within-ancestry anchor has been
+> truth** (CI green), and the within-ancestry anchor has been
 > **demonstrated on real data** (public PGS Catalog scores × non-overlapping
 > consortium GWAS × the bigsnpr HM3+ European LD reference — see
 > [`docs/REAL_DATA.md`](docs/REAL_DATA.md)). It has **not** been run on real
@@ -96,7 +96,9 @@ End-to-end evaluations of public PGS Catalog scores against real GWAS with this
 reference are in [`docs/REAL_DATA.md`](docs/REAL_DATA.md); the pipelines are
 `scripts/panukb_download.sh` + `scripts/panukb_filter_hm3plus.py` (Pan-UKB
 targets), `scripts/consortium_prep.py` (consortium targets), and
-`scripts/eval_consortium.py` / `scripts/eval_panukb.py` (ppb evaluation).
+`scripts/regenerate_results.py` (the ppb evaluation that produces the results
+registry — `scripts/eval_consortium.py` / `scripts/eval_panukb.py` remain as
+human-readable single-target tables).
 
 ## Command line
 

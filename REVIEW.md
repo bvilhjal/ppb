@@ -1,5 +1,12 @@
 # PPB Review — Idea, Theory, Plan, Documentation, Code
 
+> **Historical snapshot — not a live document.** This is a point-in-time review
+> of commit `bd5d0d9` (2026-07-18). The repository has moved on substantially
+> since: the real-data evaluations, the sample-overlap detector, the results
+> registry, and the stage-1 leaderboard all post-date it, and some findings here
+> have since been fixed. For current status see [`FINISHING_PLAN.md`](FINISHING_PLAN.md);
+> for current specification see [`docs/METHOD.md`](docs/METHOD.md).
+
 **Date:** 2026-07-18
 **Scope:** full review at commit `bd5d0d9` — the scientific idea (Witteveen
 within-ancestry evaluator → cross-ancestry portability measurement), the theory

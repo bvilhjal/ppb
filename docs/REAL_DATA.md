@@ -39,9 +39,16 @@ case; it is not a cross-ancestry result.
 | height | PGS002146 | GIANT 2014 (Wood) | 253k | 0.211 |
 | LDL | PGS002150 | GLGC 2013 (Teslovich) | 189k | 0.100 |
 | BMI | PGS002161 | GIANT 2015 (Locke) | 339k | 0.056 |
-| T2D | PGS002026 | DIAGRAM 2017 (Scott) | 159k | 0.044 |
+| T2D | PGS002026 | DIAGRAM 2017 (Scott) | 88.8k | 0.044 |
 | breast cancer | PGS002015 | BCAC 2017 (Michailidou) | 255k | 0.042 |
-| CAD | PGS002048 | CARDIoGRAMplusC4D 2015 (Nikpay) | 184k | 0.025 |
+| CAD | PGS002048 | CARDIoGRAMplusC4D 2015 (Nikpay) | 163k | 0.025 |
+
+`n_eff` is the value actually used to standardize `z`, as set in
+`scripts/consortium_prep.py`: per-variant `N` for height/LDL/BMI (the GIANT and
+GLGC files carry it), and the trait-level effective size for the case/control
+studies — T2D 88,810 and CAD 163,123. Earlier revisions of this table quoted
+159k and 184k for those two, which were the studies' *total* sample sizes, not
+the effective sizes fed to the estimator.
 
 ### Same scores, overlapping Pan-UKB targets (in-sample failure mode)
 
@@ -88,9 +95,17 @@ strictly positive `wᵀDw`. The magnitudes are consistent with the literature
 scripts/panukb_download.sh                                   # Pan-UKB flat files (~21 GB)
 python scripts/panukb_filter_hm3plus.py                      # -> data/panukb/*_hm3plus.tsv
 python scripts/consortium_prep.py                            # -> data/consortium/*_hm3plus.tsv
-python scripts/eval_consortium.py                            # honest R² table
-python scripts/eval_panukb.py                                # in-sample (overlap) table
+python scripts/regenerate_results.py --out results/<pack>.json   # all 15 evaluations
 ```
+
+`regenerate_results.py` is the reproducible path and the one that produces the
+results registry: it sweeps each score against **both** its targets in a single
+pass over the LD reference, runs the overlap detector, and writes the JSON
+records at full precision (~5.5 min per trait, ~35 min for all nine). The older
+`scripts/eval_consortium.py` / `scripts/eval_panukb.py` print the same R² values
+as a human-readable table rounded to four decimals; do not transcribe registry
+numbers from them — at `wᵀDw ≈ 8e-4` four decimals leaves one significant figure
+and `r2` can no longer be recomputed from the recorded `num`/`den`.
 
 Scripts resolve `data/` relative to the repository root. PGS Catalog weights
 (`data/pgs_weights/`) are downloaded directly from the PGS Catalog FTP

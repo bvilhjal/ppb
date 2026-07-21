@@ -69,7 +69,12 @@ membership inference — see `LIMITATIONS.md`.)
     trade-off used for the released benchmark.
 
 The banding scheme (window in cM, or block definition) is a versioned parameter
-of the benchmark and must be recorded with every result.
+of the benchmark and must be recorded with every result. In the results registry
+this is the `ld_ref` field (`results/schema.md`), which names the reference and
+therefore its block definition; ppb does **not** implement cM-window banding at
+all — it consumes caller-supplied blocks, and the shipped reference uses
+bigsnpr's 431 HM3+ blocks rather than a cM window. The window-size biases quoted
+above are the source paper's, and are not a property of this implementation.
 
 ### LD representation (int8 block LD, reimplemented independently, with numba)
 
@@ -89,10 +94,12 @@ so `D` never needs to be materialised densely. `D` is stored **block-diagonal**
 itself takes caller-supplied blocks) and each block uses one of two int8
 representations from `ldpred3/ld_repr.py`:
 
-- **D8** — `PackedSymmetricInt8LD`: a dense int8 upper-triangle for small blocks
-  (`round(corr * 127)`, dequantised by `/127`), memory-mapped, never expanded.
-- **LR8** — `LowRankLD`: for large blocks (>= ~1500), an int8 low-rank factor with
-  `R ~= U U^T`, `U` shape `(m, r)`, rows unit-norm so the LD diagonal is 1.
+- **D8** — a dense int8 block (`round(corr * 127)`, dequantised by `/127`).
+  ldpred3's `PackedSymmetricInt8LD` stores only the upper triangle and
+  memory-maps it; **ppb's `DenseLDInt8` stores the full square array and loads
+  it into RAM** (see "Implementation gaps" below).
+- **LR8** — `LowRankLDInt8`: for large blocks (>= ~1500), an int8 low-rank factor
+  with `R ~= U U^T`, `U` shape `(m, r)`, rows unit-norm so the LD diagonal is 1.
 
 The block quadratic form is then, per block `b`:
 
@@ -120,6 +127,29 @@ diagonal dequantises to exactly 1) and `LowRankLDInt8` (LR8, int8 factor with a
 global `scale` and per-row rescaling to restore the unit diagonal), plus
 `quantize_lowrank`. Both are ~8x smaller than float64 and agree with the float
 path to within quantisation (~1-2%); LR8 stays PSD, so `w^T D w >= 0`.
+
+### Implementation gaps in the LD store (as of the HM3+ reference)
+
+The two representations above are both implemented as *backends*, but the
+on-disk LD-reference format (`ppb/ldref.py`) currently supports only D8:
+`write_ldref` raises `TypeError` on anything that is not a `DenseLDInt8`, and
+`read_ldref` reconstructs every block as `DenseLDInt8`. So the size-based D8/LR8
+selection described above is **specified but not wired up**. Measured on the
+converted bigsnpr HM3+ EUR reference (1,444,196 variants in 431 blocks; block
+sizes min 216, median 1,901, mean 3,351, max 17,304):
+
+- **241 of 431 blocks (56%) are >= 1500 variants and hold 90% of all variants** —
+  i.e. the regime this spec assigns to LR8 covers almost the whole genome, yet
+  every block is stored as D8.
+- Full-square int8 storage costs **10.4 GB** (`sum_b m_b^2`); the packed upper
+  triangle this spec describes would cost **5.2 GB**, a flat 50% saving.
+- The largest single block (17,304 variants) is a 300 MB array that
+  `read_ldref` materialises in full.
+
+None of this affects correctness — `w^T D w` is exact for the stored int8 values
+either way — but the memory characteristics of the shipped reference are ~2x
+(triangle) to ~10x (LR8) worse than this section promises. Closing the gap means
+teaching the `.npz` schema to carry a per-block representation tag.
 
 **Oracle vs. production banding — a deliberate deviation to validate.** The
 preprint's published numbers use a plain cM-window banded `D` (non-PSD, and the
@@ -166,8 +196,12 @@ hyper-parameter selection only, not for estimating final performance.
   `N` when the true `n_j` vary biases R² downward (see
   `experiments/per_variant_n.py`), so summary-statistic bundles should carry
   per-variant `n`.
-- Variant set: HapMap3 (paper reports 1,117,493 variants; genome build to confirm
-  — likely GRCh37 given the era and UKB pipeline).
+- Variant set: the source paper reports HapMap3, 1,117,493 variants. This
+  implementation uses the **HapMap3+ (HM3+)** set from bigsnpr's precomputed
+  European LD reference — **1,444,196 variants in 431 blocks, GRCh37** (with
+  `pos_hg38` carried alongside), confirmed by reading the converted reference,
+  not inferred. Results are therefore not on the same variant set as the paper's,
+  which the golden-result comparison in §6 must account for.
 
 ## 5. Secondary measure (same inputs)
 

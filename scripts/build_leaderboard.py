@@ -59,12 +59,20 @@ def row(rec):
     z = fmt(ov.get("z"), 1) if ov.get("z") is not None else "—"
     ref = esc(ov.get("reference", "—"))
     note = f'<br><small>{esc(ov["note"])}</small>' if ov.get("note") else ""
+    # n_eff means different things per target; expose its basis rather than
+    # letting a bare number read as one comparable quantity across rows.
+    basis = tg.get("n_eff_basis", "")
+    if tg.get("n_eff_range"):
+        lo, hi = tg["n_eff_range"]
+        basis = f"{basis} ({lo:,}–{hi:,})" if basis else f"per-variant N {lo:,}–{hi:,}"
+    n_eff = (f'<abbr title="{esc(basis)}">n_eff {tg["n_eff"]:,}</abbr>'
+             if basis else f"n_eff {tg['n_eff']:,}")
     return (
         f'<tr style="background:{color}">'
         f"<td>{esc(rec['trait'])}</td>"
         f"<td>{score_link(sc['id'])}"
         f"<br><small>{esc(sc['name'])}</small></td>"
-        f"<td>{esc(tg['gwas'])}<br><small>{esc(tg['cohort'])} · n_eff {tg['n_eff']:,}</small></td>"
+        f"<td>{esc(tg['gwas'])}<br><small>{esc(tg['cohort'])} · {n_eff}</small></td>"
         f"<td>{esc(tg['ancestry'])}</td>"
         f'<td data-sort="{m["r2"]:.6f}"><b>{m["r2"]:.4f}</b></td>'
         f"<td>{label}{note}</td>"

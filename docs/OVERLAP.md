@@ -29,23 +29,33 @@ E[wᵀẑ] = wᵀζ (true signal) + E[wᵀε] (overlap term)
 
 Under no overlap, `w` is independent of `ε`, the second term vanishes, and only
 the second-moment finite-sample bias `wᵀDw/N` remains (handled separately; see
-`docs/METHOD.md`). Under overlap, `w = f(ẑ_train)` was fit to noise correlated
-with `ε`, and the second term is a **first-moment, additive inflation**.
+`docs/CROSS_ANCESTRY.md`, hard requirement 6). Under overlap, `w = f(ẑ_train)`
+was fit to noise correlated with `ε`, and the second term is a **first-moment,
+additive inflation**.
 
 For a trainer that is linear in the training statistics, `w ≈ A ẑ_train`
 (marginal/Z-score weights: `A = I`; LDpred2-inf: `A = (D + λI)⁻¹`; LDpred2 with
 a large causal fraction approximately so),
 
 ```
-E[wᵀε] = (N_ov / √(n₁ n₂)) · ρ_ε · tr(A D)  ≈  γ · m,
+E[wᵀε] = (N_ov / (n₁ n₂)) · ρ_ε · tr(A D)  ≈  γ · m,
 ```
 
 with `N_ov` the number of shared samples, `ρ_ε` the noise correlation of the
 two traits, and `γ` the per-variant overlap coefficient. For `A = I` exactly,
-`γ = N_ov / (n₁ n₂)`. The key structural fact: **estimation noise carries no LD
-structure, so the overlap term is uniform per variant, while true signal
-concentrates in LD.** That asymmetry makes overlap identifiable from
-`(w, z, D)` alone — no training summary statistics required.
+`tr(D) = m` (unit diagonal) so `γ = N_ov / (n₁ n₂)`.
+
+Note the `n₁ n₂` denominator, not `√(n₁ n₂)`: PPB works on the **marginal
+correlation** scale `z = (1/N) Xᵀy`, where `Cov(ε₁, ε₂) = ρ_ε N_ov/(n₁ n₂) · D`.
+The familiar `√(n₁ n₂)` belongs to the χ²/z-score scale used by cross-trait
+LDSC, and would be inconsistent with the `γ = N_ov/(n₁ n₂)` above. The
+simulation validates the form used here: `experiments/overlap_detection.py`
+sets `gamma_true = n_ov/(n1·n2)` and the detector recovers it (see Validation).
+
+The key structural fact: **estimation noise carries no LD structure, so the
+overlap term is uniform per variant, while true signal concentrates in LD.**
+That asymmetry makes overlap identifiable from `(w, z, D)` alone — no training
+summary statistics required.
 
 ## Dual-target detector (validated design)
 
@@ -73,15 +83,31 @@ with controlled overlap fraction, independent anchor, matched cohort LD.
 | 100% | 2.3e-04 | 2.5e-04 | 0.616 | 0.102 | 0.088 |
 
 The detector is calibrated under the null, recovers `γ_true`, and the
-correction restores the honest anchor within ~15% even at full overlap
-(slightly conservative: it under-corrects, because γ̂ is ~10% low there).
+correction restores the honest anchor within ~15% even at full overlap.
+It **under-corrects** there (γ̂ runs ~10% low), so the corrected R² is left
+slightly *above* the honest anchor — residual inflation, not a safety margin.
+A corrected R² is therefore still an upper bound on the honest value, just a
+much tighter one than the naive estimate.
 
 **Real data** (scores from `docs/REAL_DATA.md`, dual-target against the
-consortium GWAS): overlap decisively detected for the polygenic scores
-(height z = 12.2, BMI z = 12.3, T2D z = 5.0, CAD z = 5.6); corrections move
-R² from the in-sample values most of the way toward the honest anchors
-(e.g. height 0.80 → 0.45 vs honest 0.21 — the remainder is genuine
-UKBB→GIANT transportability loss, not overlap; see Caveats).
+consortium GWAS): overlap decisively detected for the dense scores
+(height z = 12.2, BMI z = 12.3, T2D z = 5.1, CAD z = 5.6). The correction moves
+R² from the in-sample value a substantial but incomplete fraction of the way to
+the honest anchor:
+
+| trait | R² in-sample | R² corrected | R² honest | gap closed |
+|---|---:|---:|---:|---:|
+| BMI | 0.4048 | 0.1019 | 0.0555 | 87% |
+| T2D | 0.5089 | 0.1707 | 0.0443 | 73% |
+| height | 0.8031 | 0.4515 | 0.2108 | 59% |
+| CAD | 0.2313 | 0.1305 | 0.0252 | 49% |
+
+So 49–87% of the gap (mean 67%), not all of it. Two things are mixed in the
+remainder and this design cannot separate them: the detector's known ~10%
+under-estimation of γ (see the simulation above), and genuine
+UKBB→consortium transportability loss, which is signal the benchmark is
+*supposed* to measure rather than bias to remove (see Caveats). Do not read a
+corrected R² as an overlap-free measurement — it remains an upper bound.
 
 ## The sparse-score failure mode (important)
 

@@ -217,6 +217,34 @@ Observed (dense score; corrected vs honest anchor; sparse = known blind spot):
 
 Encoded in `tests/test_overlap.py`.
 
+## `transferability.py` — LD-based reweighting does not improve portability (negative result)
+
+Asks whether the two LD matrices `D_A` (discovery) and `D_B` (target) can be
+used to move a PGS onto more transferable variants. They cannot. A per-variant
+LD-concordance score `s_j = cos(D_A row_j, D_B row_j)` (LD-only, no phenotype)
+cannot distinguish a discordant *tag* from a discordant *causal* variant, so
+reweighting by it removes signal; and maximizing `(wᵀz_B)²/(wᵀD_B w)` over `w`
+has optimum `w ∝ D_B⁻¹z_B` — a ridge/BLUP refit in B, i.e. score construction,
+not reweighting. Recorded so the question is not re-litigated. Method note:
+[`../docs/TRANSFERABILITY.md`](../docs/TRANSFERABILITY.md).
+
+Run:
+
+```bash
+python experiments/transferability.py
+```
+
+Observed (F_ST = 0.3, m = 500), change in realized `R²_B` vs the naive score:
+
+| reweighting | R²_B vs naive |
+|---|---|
+| LD-only shrinkage `w·s^γ` | −3% to −9% |
+| LD-only pruning (drop low-`s`) | −18% to −29% |
+| target-informed efficiency prune (*in-sample*) | +15% (overfitting artifact) |
+| causal-effect oracle (`w = β_B`) | +20–90% (the real headroom) |
+
+Encoded in `tests/test_transferability.py`.
+
 ---
 
 Method ranking from `benchmark_methods.py` (mean R², individual-level vs

@@ -107,9 +107,9 @@ resolves to the **free-threaded** build (`*_cp314t`), under which numpy/MKL matm
 hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out of
 `njit`.
 
-## Current state (2026-07-18)
+## Current state (2026-07-21)
 
-**Built and green (70 tests, CI on Python 3.11/3.12):**
+**Built and green (CI on Python 3.11/3.12):**
 
 - Core estimator (`r2`, `mse`) and LD backends: dense, block-diagonal, low-rank
   (LR8) and int8 (D8/LR8, ~8× smaller), all validated against individual-level
@@ -124,6 +124,14 @@ hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out o
   PC adjustment removing stratification, per-variant-N correction, PUMAS-style
   single-GWAS subsampling agreement, and **cross-ancestry portability**
   (`experiments/cross_ancestry.py`).
+- Training/target sample-overlap detection and numerator correction
+  (`ppb.overlap`, Gate D) — validated in simulation and applied to the
+  real-data evaluations; the sparse-score blind spot is documented and the
+  affected evaluations are reported as upper bounds (`docs/OVERLAP.md`).
+- Stage-1 leaderboard: the versioned results registry (`results/`, schema
+  enforced by `tests/test_results_registry.py`) regenerated end-to-end from
+  source data by `scripts/regenerate_results.py`, rendered to a static site by
+  `scripts/build_leaderboard.py`.
 
 **Historical starting point (for provenance):** this repo began as a single
 ~1.4 MB notebook (now `archive/PPB.ipynb`); the working legacy code/data live in

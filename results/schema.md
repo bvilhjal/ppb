@@ -20,7 +20,9 @@ records, one per (score × target GWAS) evaluation.
 | `target.gwas` | target GWAS label (study, year) |
 | `target.cohort` | target cohort description |
 | `target.ancestry` | target ancestry (evaluation frame) |
-| `target.n_eff` | (effective) sample size |
+| `target.n_eff` | the sample size the estimator actually used to standardize `z` |
+| `target.n_eff_basis` | how `n_eff` was derived — a trait-level constant, a binary-trait effective N, or the median of a per-variant `N` column |
+| `target.n_eff_range` | `[min, max]` of the per-variant `N` column, when `n_eff` is a median over a varying column |
 | `target.overlap` | `"none (declared)"` \| `"in-sample"` |
 | `ld_ref` | LD reference id/version |
 | `metrics.num`, `metrics.den` | `wᵀz`, `wᵀDw` over the LD-ref variants |
@@ -48,7 +50,19 @@ records, one per (score × target GWAS) evaluation.
   ~1 significant figure and makes `r2` unverifiable.
 - A record with a `corrected_r2` must carry `overlap.m_total`, or the
   correction cannot be checked.
+- `target.n_eff` is the sample size **the estimator used**, never the study's
+  published headline N. Where the sumstats carry a per-variant `N`, no single
+  number is well defined — record the median, the basis, and the range. (The
+  published N can exceed every per-variant value in the HM3+-filtered file:
+  GIANT BMI publishes 339,224 against a per-variant maximum of 322,153.)
 - Records are immutable once merged; corrections land as new packs.
+
+## Generating a pack
+
+`python scripts/regenerate_results.py [traits...] --out results/<pack>.json`
+emits records directly from the source data at full precision — never
+hand-transcribe numbers from a script's printed table. One pass covers both
+targets of a trait and the overlap fit; it takes ~5.5 min per trait.
 
 These rules are enforced by `tests/test_results_registry.py`, so a malformed
 pack fails CI on the pull request rather than in the Pages deploy job.

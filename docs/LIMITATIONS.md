@@ -48,6 +48,26 @@ utility, causality, or individual privacy.
   ~+12%); 4 cM is the accuracy/size trade-off. In this implementation, aggressive
   low-rank (LR8) compression slightly *underestimates* R² (≈−2% at 95% variance
   retained; near-zero at 99%). int8 quantisation adds ~1–2% error.
+- **Training/target sample overlap — the dominant failure mode for a
+  benchmark.** The estimator assumes `w` was trained independently of the target
+  GWAS's noise. When it was not, the numerator is inflated additively — up to
+  **15×** in the real-data demonstration (height R² 0.80 against an in-sample
+  Pan-UKB target vs 0.21 against non-overlapping GIANT). It is detectable and
+  approximately correctable from `(w, z, D)` alone for dense scores, but
+  **undetectable for strongly shrunk / low-coverage scores**, which must be
+  reported as upper bounds rather than corrected. Every result record must
+  declare its overlap status. See [`OVERLAP.md`](OVERLAP.md).
+- **The estimate is not bounded by 1.** `(wᵀz)²/(wᵀDw)` equals a squared
+  correlation only when `z` and `D` describe the same sample as the phenotype.
+  With a mismatched LD reference, overlap, or a `z` on an inconsistent gauge it
+  can exceed 1; ppb does not clamp it. A value near or above 1 is a diagnostic
+  that an assumption has failed, not a very good score.
+- **Gauge (standardization) consistency.** `w`, `z` and `D` must share one
+  self-consistent standardization; the ratio is invariant to a *global* rescale
+  of `w` but not a per-variant one. The current real-data path uses the HWE
+  scale `√(2f(1−f))` rather than empirical genotype SDs — acceptable for the
+  within-ancestry EUR anchor, not for structured or admixed targets (see
+  [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md), "gauge self-consistency").
 - **LD reference choice.** Test-set LD is exact; training-set LD is biased for
   data-derived weights; an independent same-population panel is unbiased
   (reproduced in `experiments/figure_s1.py`).

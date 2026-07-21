@@ -64,6 +64,18 @@ all three with the same **empirical B genotype SDs** (in-sample B moments), not
 the `2p(1−p)` formula. (In the simulation harness everything is within-cohort
 standardized, so this is automatic and the identity is exact to machine precision.)
 
+> **Known deviation in the current real-data path.** `scripts/regenerate_results.py`
+> (and the older `scripts/eval_*.py`) put `w` on the standardized scale with
+> `sd_j = √(2 f_j (1 − f_j))` using `af_UKBB` from the LD reference — i.e. the HWE
+> formula this rule warns against, because the shipped reference carries allele
+> frequencies but not empirical genotype SDs. For the current **within-ancestry
+> EUR anchor** the two are close (a homogeneous, PC-adjusted UKBB sample is near
+> HWE), so the demonstrated numbers are not materially affected. It is **not**
+> acceptable for the flagship cross-ancestry application on a structured or
+> admixed target, where the residual does not cancel. Carrying empirical per-variant
+> SDs in the LD-reference schema is a prerequisite for the first real
+> cross-ancestry run.
+
 ## Hard requirements
 
 1. **`z_B` from a B GWAS of the same trait** (with per-variant `n_B`). Irreplaceable.
