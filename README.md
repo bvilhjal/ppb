@@ -133,6 +133,19 @@ result on LD-based transferability reweighting (`transferability.py`, see
 pytest -q
 ```
 
+## Leaderboard (stage 1)
+
+A static leaderboard is generated from the versioned results registry in
+[`results/`](results/) (schema: [`results/schema.md`](results/schema.md)) by
+`scripts/build_leaderboard.py` and published to GitHub Pages by the
+`leaderboard` workflow (enable Pages with source "GitHub Actions" in repo
+settings). It shows maintainer-run baselines only — every evaluation declares
+its training/target overlap, in-sample rows are marked as **upper bounds**,
+and dense-score suspects carry the overlap-detector fit and corrected R²
+(`docs/OVERLAP.md`). External submissions enter as reviewed result packs via
+pull request; there is deliberately no submission service yet
+(`FINISHING_PLAN.md`, Gate D).
+
 ## License
 
 Code: MIT (see [`LICENSE`](LICENSE)). The source preprint manuscript is CC-BY. The

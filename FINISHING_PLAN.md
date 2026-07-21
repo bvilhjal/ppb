@@ -25,6 +25,13 @@ evaluations (polygenic scores: z = 5-12; sparse scores are blind by
 construction and are flagged as upper bounds). Method note:
 `docs/OVERLAP.md`.
 
+Revised: 2026-07-20 — **stage-1 leaderboard**: versioned results registry
+(`results/`, schema in `results/schema.md`) + static site generator
+(`scripts/build_leaderboard.py`) + GitHub Pages workflow. Baselines only;
+in-sample rows are displayed as upper bounds with the overlap-detector fit
+alongside. This is the "first leaderboard from reviewed result files" — no
+submission service before the protocol survives external beta (unchanged).
+
 ## Objective
 
 Build PPB into a maintained, versioned benchmark that **measures the

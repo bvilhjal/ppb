@@ -128,5 +128,8 @@ dmypy.json
 # Downloaded data (LD references etc.) — not versioned
 data/
 
+# Generated leaderboard site — built by the leaderboard workflow
+site/
+
 # Pyre type checker
 .pyre/
