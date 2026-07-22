@@ -38,29 +38,35 @@ def evaluate(pgs_file, ss_file):
     z_var, beta, se, n = load_sumstats(ss_file)
     z = standardized_marginal(beta, se, n)
     num = den = 0.0
-    w_match = z_match = 0
+    w_match = z_match = n_scored = 0
     for c in map(str, range(1, 23)):
         ref = read_ldref(f"{DATA}/ldref_hm3_plus/npz/ldref_chr{c}.npz")
-        w_al, rep_w = harmonize_to(ref["variants"], w_var, w)
-        z_al, rep_z = harmonize_to(ref["variants"], z_var, z)
+        w_al, rep_w, w_mask = harmonize_to(
+            ref["variants"], w_var, w, return_mask=True)
+        z_al, rep_z, z_mask = harmonize_to(
+            ref["variants"], z_var, z, return_mask=True)
         sd = np.sqrt(2 * ref["af"] * (1 - ref["af"]))
         w_std = w_al * sd
+        joint = w_mask & z_mask
+        w_std[~joint] = 0.0
+        z_al[~joint] = 0.0
         num += float(w_std @ z_al)
         den += ref["ld"].quad(w_std)
+        n_scored += int(np.count_nonzero(w_std))
         w_match += rep_w.n_matched
         z_match += rep_z.n_matched
         del ref
-    return num, den, w_match, w_var.n, z_match, z_var.n
+    return num, den, w_match, w_var.n, z_match, z_var.n, n_scored
 
 
 if __name__ == "__main__":
     only = sys.argv[1:] or list(TRAITS)
-    print(f"{'trait':8} {'PGS':10} {'w_match':>8} {'z_match':>8} "
+    print(f"{'trait':8} {'PGS':10} {'w_match':>8} {'z_match':>8} {'support':>8} "
           f"{'w^T z':>10} {'w^T D w':>10} {'R^2':>8}")
     for trait in only:
-        num, den, wm, wn, zm, zn = evaluate(
+        num, den, wm, wn, zm, zn, ns = evaluate(
             f"{DATA}/pgs_weights/{TRAITS[trait]}_hmPOS_GRCh37.txt",
             f"{DATA}/consortium/{trait}_hm3plus.tsv")
         r2 = num * num / den
-        print(f"{trait:8} {TRAITS[trait]:10} {wm/wn:8.1%} {zm/zn:8.1%} "
+        print(f"{trait:8} {TRAITS[trait]:10} {wm/wn:8.1%} {zm/zn:8.1%} {ns/wn:8.1%} "
               f"{num:10.4f} {den:10.4f} {r2:8.4f}", flush=True)

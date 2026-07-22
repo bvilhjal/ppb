@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from ppb.harmonize import VariantTable
+from scripts import eval_consortium, eval_panukb
 from scripts import regenerate_results as regenerate
 
 
@@ -23,6 +24,12 @@ class _IdentityBlock:
 
 class _OneBlockLD:
     blocks = [(_IdentityBlock(), np.arange(3))]
+
+
+class _IdentityLD:
+    @staticmethod
+    def quad(x):
+        return float(x @ x)
 
 
 def test_no_n_target_records_trait_specific_sample_size_basis(tmp_path):
@@ -123,3 +130,42 @@ def test_build_records_fails_closed_and_labels_metric_scale(monkeypatch):
         "standardized logistic-summary approximation (not liability R2)")
     assert unpaired["overlap"]["status"] == "basis_unavailable"
     assert "no independent reference" in unpaired["overlap"]["note"]
+
+
+@pytest.mark.parametrize(
+    "module,is_panukb",
+    [(eval_consortium, False), (eval_panukb, True)],
+)
+def test_human_readable_evaluators_use_joint_support(
+        monkeypatch, module, is_panukb):
+    reference = _variants([1, 2, 3])
+    partial = _variants([1, 3])
+    weights = np.array([1.0, 2.0, 3.0])
+    z = np.array([10.0, 30.0])
+    monkeypatch.setattr(module, "map", lambda function, values: ("1",),
+                        raising=False)
+    monkeypatch.setattr(module, "read_weights", lambda path: (reference, weights))
+    monkeypatch.setattr(
+        module, "read_ldref",
+        lambda path: {
+            "variants": reference,
+            "af": np.repeat(0.5, 3),
+            "ld": _IdentityLD(),
+        })
+    monkeypatch.setattr(module, "standardized_marginal",
+                        lambda beta, se, n: beta)
+    if is_panukb:
+        monkeypatch.setattr(
+            module, "load_sumstats",
+            lambda path: (partial, z, np.ones(2)))
+        observed = module.evaluate("weights", "sumstats", 1000)
+    else:
+        monkeypatch.setattr(
+            module, "load_sumstats",
+            lambda path: (partial, z, np.ones(2), np.repeat(1000.0, 2)))
+        observed = module.evaluate("weights", "sumstats")
+
+    num, den, w_matched, w_total, z_matched, z_total, n_scored = observed
+    assert num == pytest.approx(100.0 / np.sqrt(2.0))
+    assert den == pytest.approx(5.0)
+    assert (w_matched, w_total, z_matched, z_total, n_scored) == (3, 3, 2, 2, 2)
