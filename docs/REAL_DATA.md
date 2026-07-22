@@ -34,21 +34,21 @@ case; it is not a cross-ancestry result.
 
 ### Honest R² (non-overlapping consortium targets)
 
-| trait | score (PGS Catalog) | target GWAS | n_eff | R² |
+| trait | score (PGS Catalog) | target GWAS | N used | R² |
 |---|---|---|---:|---:|
-| height | PGS002146 | GIANT 2014 (Wood) | 253k | 0.211 |
-| LDL | PGS002150 | GLGC 2013 (Teslovich) | 189k | 0.100 |
-| BMI | PGS002161 | GIANT 2015 (Locke) | 339k | 0.056 |
+| height | PGS002146 | GIANT 2014 (Wood) | median 252k (50.0k–253k) | 0.211 |
+| LDL | PGS002150 | GLGC 2013 (Teslovich) | median 89.9k (50.0k–173k) | 0.100 |
+| BMI | PGS002161 | GIANT 2015 (Locke) | median 234k (50.0k–322k) | 0.056 |
 | T2D | PGS002026 | DIAGRAM 2017 (Scott) | 88.8k | 0.044 |
 | breast cancer | PGS002015 | BCAC 2017 (Michailidou) | 255k | 0.042 |
 | CAD | PGS002048 | CARDIoGRAMplusC4D 2015 (Nikpay) | 163k | 0.025 |
 
-`n_eff` is the value actually used to standardize `z`, as set in
-`scripts/consortium_prep.py`: per-variant `N` for height/LDL/BMI (the GIANT and
-GLGC files carry it), and the trait-level effective size for the case/control
-studies — T2D 88,810 and CAD 163,123. Earlier revisions of this table quoted
-159k and 184k for those two, which were the studies' *total* sample sizes, not
-the effective sizes fed to the estimator.
+`N used` is the sample-size input actually supplied to
+`ppb.standardized_marginal`, as recorded in the results registry. The GIANT and
+GLGC files carry per-variant `N`, so the table reports its median and range; no
+single `n_eff` exists for those rows. Case/control studies use a trait-level
+effective size (for example, T2D 88,810 and CAD 163,123). Published headline or
+total sample sizes are not substituted for the values fed to the estimator.
 
 ### Same scores, overlapping Pan-UKB targets (in-sample failure mode)
 
