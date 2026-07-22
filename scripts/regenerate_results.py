@@ -2,23 +2,23 @@
 """Regenerate the results registry (``results/*.json``) from the source data.
 
 Supersedes the hand-transcription behind ``results/baseline-2026-07.json``: it
-runs the genome-wide evaluation and the dual-target overlap detector in one
-pass and emits the JSON record directly, at full precision, so every number in
-the registry is reproducible from committed code (schema: ``results/schema.md``).
+runs the genome-wide evaluation in one pass and emits the JSON record directly,
+at full precision, so every number in the registry is reproducible from
+committed code (schema: ``results/schema.md``).
 
 It replaces three previously separate paths:
 
 - ``scripts/eval_consortium.py`` -- R^2 against non-UKBB consortium targets,
 - ``scripts/eval_panukb.py``     -- R^2 against the in-sample Pan-UKB targets,
-- ``data/overlap_test/wldsc.py`` -- the overlap fit, which lived in the
-  *gitignored* ``data/`` tree with a hardcoded absolute path, so the recorded
-  ``gamma``/``corrected_r2`` were not reproducible from the repository at all.
-  The fit here uses the library's :func:`ppb.overlap.overlap_slope` rather than
-  a private copy of the weighted through-origin regression.
+- ``data/overlap_test/wldsc.py`` -- the legacy overlap fit, which lived in the
+  *gitignored* ``data/`` tree with a hardcoded absolute path. The available
+  artifacts contain only final LDpred2 weights, not the trainer sensitivity
+  operator required by the basis-aware correction, so regenerated records fail
+  closed with ``basis_unavailable`` rather than inventing a variant-count basis.
 
-For one score, the LD reference and the per-block score variance ``v_b`` are
-target-independent, so both targets are evaluated in a single sweep over the
-chromosomes -- the LD reference is read once per trait, not once per target.
+Both targets are evaluated in one sweep over the chromosomes, but each target
+gets its own joint weight/sumstat support and score variance. Missing target
+statistics therefore cannot remain in that target's denominator.
 
 Run (needs the ~24G LD reference and the target sumstats under ``data/``):
 
@@ -38,9 +38,14 @@ from pathlib import Path
 
 import numpy as np
 
-from ppb import harmonize_to, read_ldref, read_weights, standardized_marginal
+from ppb import (
+    OverlapBasis,
+    harmonize_to,
+    read_ldref,
+    read_weights,
+    standardized_marginal,
+)
 from ppb.harmonize import VariantTable
-from ppb.overlap import correct_numerator, overlap_slope
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
@@ -48,11 +53,16 @@ CHROMS = [str(c) for c in range(1, 23)]
 
 LD_REF = "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)"
 
-# Correct the numerator only when the detector actually detects. Below this the
-# fit is consistent with zero, and subtracting an insignificant gamma would fit
-# noise rather than remove overlap -- so the evaluation stays an upper bound.
-# This is the threshold the leaderboard legend and docs/OVERLAP.md state.
-Z_DETECT = 2.0
+OVERLAP_METHOD = "scaled_signal_eiv_v1"
+FINAL_WEIGHT_BASIS = OverlapBasis.unavailable(
+    "only final PGS Catalog LDpred2 weights are available; "
+    "the trainer sensitivity operator cannot be reconstructed"
+)
+
+METRIC_SCALES = {
+    "quantitative": "quantitative correlation R2",
+    "binary": "standardized logistic-summary approximation (not liability R2)",
+}
 
 # Pan-UKB effective sample sizes: n for quantitative traits, 4/(1/n_case + 1/n_ctrl)
 # for binary ones (the same values scripts/eval_panukb.py derives from the counts).
@@ -67,6 +77,10 @@ def _n_eff(trait, quantitative):
         n_case, n_ctrl = _BINARY[trait]
         return 4.0 / (1.0 / n_case + 1.0 / n_ctrl)
     return float(quantitative)
+
+
+def _trait_type(trait):
+    return "binary" if trait in _BINARY else "quantitative"
 
 
 # trait -> score, prose provenance, Pan-UKB sumstats stem + n_eff, consortium stem + label
@@ -115,12 +129,13 @@ TRAITS = {
 }
 
 
-def load_target(path, n_eff=None):
+def load_target(path, n_eff=None, trait_type=None):
     """Target sumstats -> ``(VariantTable, z, n_summary)``.
 
     Per-variant ``n`` is used when the file carries an ``n`` column (the
     consortium targets); otherwise the supplied trait-level ``n_eff`` is used
-    (the Pan-UKB targets).
+    (the Pan-UKB targets). ``trait_type`` distinguishes a quantitative sample
+    size from a binary effective sample size in the recorded provenance.
 
     ``n_summary`` describes the sample size the estimator actually saw, which is
     a *distribution* when ``n`` is per-variant: GIANT/GLGC files carry an ``N``
@@ -154,30 +169,38 @@ def load_target(path, n_eff=None):
         return variants, standardized_marginal(beta, se, n), summary
     if n_eff is None:
         raise ValueError(f"{path} has no 'n' column and no n_eff was supplied")
-    summary = dict(n_eff=int(round(float(n_eff))),
-                   n_eff_basis="trait-level effective N (4/(1/n_case + 1/n_ctrl) "
-                               "for binary traits)")
+    if trait_type not in METRIC_SCALES:
+        raise ValueError(
+            f"{path} has no 'n' column; trait_type must be 'quantitative' or 'binary'")
+    basis = (
+        "trait-level sample size" if trait_type == "quantitative" else
+        "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)"
+    )
+    summary = dict(n_eff=int(round(float(n_eff))), n_eff_basis=basis)
     return variants, standardized_marginal(beta, se, n_eff), summary
 
 
 def sweep(pgs, targets):
     """One pass over chromosomes 1-22 for a score and its targets.
 
-    Returns ``(per_block, totals)``. ``per_block`` holds the block-level
-    ``chrom``, ``m`` (variant count), ``v`` (score variance ``w'Dw``) and one
-    ``u`` (``w'z``) column per target; ``totals`` holds the harmonization match
-    counts. ``v`` is target-independent, so it is computed once.
+    Returns ``(per_block, totals)``. ``per_block`` holds one block-level score
+    product ``u = w'z`` and score variance ``v = w'Dw`` per target. Both use
+    that target's joint weight/sumstat intersection. ``totals`` holds the
+    harmonization match counts.
     """
     w_var, w = read_weights(DATA / "pgs_weights" / f"{pgs}_hmPOS_GRCh37.txt")
-    chrom_tag, m_b, v_b = [], [], []
+    chrom_tag = []
     u_b = {name: [] for name in targets}
+    v_b = {name: [] for name in targets}
     w_matched = 0
     z_matched = {name: 0 for name in targets}
+    n_variants_scored = {name: 0 for name in targets}
 
     for c in CHROMS:
         t0 = time.time()
         ref = read_ldref(DATA / "ldref_hm3_plus" / "npz" / f"ldref_chr{c}.npz")
-        w_al, rep_w = harmonize_to(ref["variants"], w_var, w)
+        w_al, rep_w, w_mask = harmonize_to(
+            ref["variants"], w_var, w, return_mask=True)
         # Put the weights on the standardized-genotype scale the LD is defined on.
         sd = np.sqrt(2.0 * ref["af"] * (1.0 - ref["af"]))
         ws = w_al * sd
@@ -185,49 +208,79 @@ def sweep(pgs, targets):
 
         aligned = {}
         for name, (z_var, z, _) in targets.items():
-            z_al, rep_z = harmonize_to(ref["variants"], z_var, z)
-            aligned[name] = z_al
+            z_al, rep_z, z_mask = harmonize_to(
+                ref["variants"], z_var, z, return_mask=True)
+            w_joint = ws.copy()
+            w_joint[~(w_mask & z_mask)] = 0.0
+            aligned[name] = (w_joint, z_al)
             z_matched[name] += rep_z.n_matched
+            n_variants_scored[name] += int(np.count_nonzero(w_joint))
 
         for backend, idx in ref["ld"].blocks:
             chrom_tag.append(c)
-            m_b.append(idx.size)
-            v_b.append(backend.quad(ws[idx]))
-            for name, z_al in aligned.items():
-                u_b[name].append(float(ws[idx] @ z_al[idx]))
+            for name, (w_joint, z_al) in aligned.items():
+                u_b[name].append(float(w_joint[idx] @ z_al[idx]))
+                v_b[name].append(backend.quad(w_joint[idx]))
         print(f"    chr{c:<2} {len(ref['ld'].blocks):>4} blocks  "
               f"{time.time() - t0:6.1f}s", flush=True)
         del ref
 
     per_block = dict(
-        chrom=np.array(chrom_tag), m=np.array(m_b, dtype=float),
-        v=np.array(v_b, dtype=float),
+        chrom=np.array(chrom_tag),
+        v={name: np.array(vals, dtype=float) for name, vals in v_b.items()},
         u={name: np.array(vals, dtype=float) for name, vals in u_b.items()})
     totals = dict(w_matched=w_matched, w_total=w_var.n,
                   z_matched=z_matched,
-                  z_total={name: t[0].n for name, t in targets.items()})
+                  z_total={name: t[0].n for name, t in targets.items()},
+                  n_variants_scored=n_variants_scored)
     return per_block, totals
 
 
-def _metrics(num, den, w_frac, z_frac):
+def _metrics(num, den, w_frac, z_frac, n_variants_scored, trait_type):
     return dict(num=num, den=den, r2=num * num / den,
-                w_match=w_frac, z_match=z_frac)
+                w_match=w_frac, z_match=z_frac,
+                n_variants_scored=n_variants_scored,
+                scale=METRIC_SCALES[trait_type])
+
+
+def _unavailable_overlap(role, reference=None):
+    note = (
+        "correction refused: only final LDpred2 weights are available, so the "
+        "trainer sensitivity basis cannot be reconstructed; this in-sample "
+        "estimate remains an upper bound"
+    )
+    if role == "suspect-unpaired":
+        note += "; no independent reference target is available"
+    overlap = dict(
+        role=role,
+        status="basis_unavailable",
+        method=OVERLAP_METHOD,
+        basis=dict(
+            kind=FINAL_WEIGHT_BASIS.kind,
+            provenance=FINAL_WEIGHT_BASIS.provenance,
+        ),
+        note=note,
+    )
+    if reference is not None:
+        overlap["reference"] = reference
+    return overlap
 
 
 def build_records(trait, cfg, commit, date):
     """Evaluate one trait against its targets and return its registry records."""
+    trait_type = _trait_type(trait)
     targets = {}
     if "consortium" in cfg:
         path = DATA / "consortium" / f"{cfg['consortium']}_hm3plus.tsv"
-        targets["consortium"] = load_target(path)
+        targets["consortium"] = load_target(path, trait_type=trait_type)
     path = DATA / "panukb" / f"{cfg['panukb']}_hm3plus.tsv"
-    targets["panukb"] = load_target(path, n_eff=cfg["panukb_n"])
+    targets["panukb"] = load_target(
+        path, n_eff=cfg["panukb_n"], trait_type=trait_type)
 
     print(f"  {trait}: {cfg['pgs']}, targets = {', '.join(targets)}", flush=True)
     per_block, totals = sweep(cfg["pgs"], targets)
 
-    den = float(per_block["v"].sum())
-    m_total = int(per_block["m"].sum())
+    den = {name: float(values.sum()) for name, values in per_block["v"].items()}
     n_variants = totals["w_total"]
     w_frac = totals["w_matched"] / totals["w_total"]
     score = dict(id=cfg["pgs"], name=cfg["score_name"],
@@ -240,50 +293,39 @@ def build_records(trait, cfg, commit, date):
     paired = "consortium" in targets
     if paired:
         num_ref = float(per_block["u"]["consortium"].sum())
+        den_ref = den["consortium"]
         records.append(dict(
             trait=trait, score=score,
             target=dict(gwas=cfg["consortium_gwas"], cohort=cfg["consortium_cohort"],
                         ancestry="EUR", **targets["consortium"][2],
-                        overlap="none (declared)"),
+                        overlap="none (declared)", trait_type=trait_type),
             ld_ref=LD_REF,
-            metrics=_metrics(num_ref, den, w_frac, zfrac("consortium")),
-            overlap=dict(role="reference"),
+            metrics=_metrics(
+                num_ref, den_ref, w_frac, zfrac("consortium"),
+                totals["n_variants_scored"]["consortium"], trait_type),
+            overlap=dict(
+                role="reference", status="not_applicable",
+                method=OVERLAP_METHOD,
+            ),
             date=date, ppb_commit=commit))
 
     num_ov = float(per_block["u"]["panukb"].sum())
-    overlap = dict(role="suspect" if paired else "suspect-unpaired")
+    den_ov = den["panukb"]
     if paired:
-        # Dual-target detector: the signal cancels in u_target - u_reference,
-        # leaving the flat per-variant overlap term. Jackknife by chromosome.
-        est = overlap_slope(
-            per_block["u"]["panukb"], per_block["u"]["consortium"],
-            per_block["m"], per_block["v"], per_block["v"],
-            groups=per_block["chrom"])
-        overlap.update(gamma=est.gamma, gamma_se=est.se, z=est.z,
-                       m_total=m_total,
-                       reference=f"{cfg['consortium_gwas'].split(' (')[0]} "
-                                 f"(R² {num_ref * num_ref / den:.4f})")
-        if abs(est.z) >= Z_DETECT:
-            num_corr = correct_numerator(num_ov, est.gamma, m_total)
-            overlap["corrected_r2"] = num_corr * num_corr / den
-        else:
-            # The uniform overlap term is invisible here. Low-coverage scores are
-            # the documented failure mode: shrinkage projects the noise fit onto
-            # the same variants that carry signal, so the flat term vanishes and
-            # overlap is unidentifiable by shape alone (docs/OVERLAP.md).
-            coverage = n_variants / m_total
-            overlap["note"] = (
-                f"no detectable uniform overlap term (z = {est.z:.2f}); score covers "
-                f"{coverage:.0%} of the LD reference — detector blind by construction "
-                f"for shrunk/low-coverage scores, so this is an upper bound, "
-                f"not a corrected measurement")
+        reference = (f"{cfg['consortium_gwas'].split(' (')[0]} "
+                     f"(R2 {num_ref * num_ref / den_ref:.4f})")
+        overlap = _unavailable_overlap("suspect", reference)
+    else:
+        overlap = _unavailable_overlap("suspect-unpaired")
     records.append(dict(
         trait=trait, score=score,
         target=dict(gwas="Pan-UK Biobank (2020)", cohort="UK Biobank",
                     ancestry="EUR", **targets["panukb"][2],
-                    overlap="in-sample"),
+                    overlap="in-sample", trait_type=trait_type),
         ld_ref=LD_REF,
-        metrics=_metrics(num_ov, den, w_frac, zfrac("panukb")),
+        metrics=_metrics(
+            num_ov, den_ov, w_frac, zfrac("panukb"),
+            totals["n_variants_scored"]["panukb"], trait_type),
         overlap=overlap, date=date, ppb_commit=commit))
     return records
 
