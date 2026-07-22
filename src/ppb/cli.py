@@ -24,9 +24,11 @@ def _cmd_evaluate(args) -> int:
         weights_variants, weights,
         bundle["variants"], bundle["z"],
         var_y=bundle["var_y"],
+        weight_scale=args.weight_scale,
+        genotype_sd=bundle["genotype_sd"],
         remove_ambiguous=not args.keep_ambiguous,
     )
-    text = json.dumps(result.to_dict(), indent=2)
+    text = json.dumps(result.to_dict(), indent=2, allow_nan=False)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             fh.write(text + "\n")
@@ -47,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
         "evaluate", help="evaluate PGS weights against a benchmark bundle")
     ev.add_argument("--weights", required=True, help="PGS weights file (TSV/CSV)")
     ev.add_argument("--bundle", required=True, help="benchmark bundle (.npz)")
+    ev.add_argument(
+        "--weight-scale", required=True, choices=("dosage", "standardized"),
+        help=("scale of the submitted weights: ordinary per-dosage weights "
+              "need a bundle carrying target genotype_sd; standardized weights "
+              "already multiply the standardized genotypes represented by LD"))
     ev.add_argument("--out", default=None, help="write JSON result here (default: stdout)")
     ev.add_argument("--keep-ambiguous", action="store_true",
                     help="keep strand-ambiguous palindromic SNPs (dropped by default)")

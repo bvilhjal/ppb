@@ -60,11 +60,21 @@ class VariantTable:
         self.pos = np.asarray(self.pos)
         self.a1 = np.char.upper(np.asarray(self.a1, dtype=str))
         self.a2 = np.char.upper(np.asarray(self.a2, dtype=str))
+        if not all(a.ndim == 1 for a in (self.chrom, self.pos, self.a1, self.a2)):
+            raise ValueError("variant fields must be 1-D")
         n = self.chrom.shape[0]
         if not (self.pos.shape[0] == self.a1.shape[0] == self.a2.shape[0] == n):
             raise ValueError("chrom, pos, a1, a2 must have equal length")
-        if self.chrom.ndim != 1:
-            raise ValueError("variant fields must be 1-D")
+        try:
+            numeric_pos = np.asarray(self.pos, dtype=np.float64)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("variant positions must be finite integers") from exc
+        if (not np.isfinite(numeric_pos).all()
+                or not np.equal(numeric_pos, np.floor(numeric_pos)).all()):
+            raise ValueError("variant positions must be finite integers")
+        for chrom in self.chrom:
+            if isinstance(chrom, (float, np.floating)) and not np.isfinite(chrom):
+                raise ValueError("chromosome labels must be finite")
 
     @property
     def n(self) -> int:
@@ -107,19 +117,24 @@ def _orient(t1, t2, r1, r2):
 
 
 def harmonize_to(reference: VariantTable, target: VariantTable, value,
-                 *, remove_ambiguous: bool = True):
+                 *, remove_ambiguous: bool = True, return_mask: bool = False):
     """Align ``target``'s ``value`` onto ``reference`` order.
 
     Returns ``(aligned, report)`` where ``aligned`` is a length ``reference.n``
     array (0 where ``reference`` had no matching target variant) with signs
     flipped for allele swaps / strand flips, and ``report`` is a
-    :class:`HarmonizeReport`. Strand-ambiguous palindromic SNPs are dropped when
-    ``remove_ambiguous`` (the default), since strand cannot be resolved from
-    alleles alone.
+    :class:`HarmonizeReport`. With ``return_mask=True``, a third boolean array
+    marks the reference variants that genuinely matched. This distinguishes a
+    matched value of zero from a missing variant and lets callers form a joint
+    intersection across inputs. Strand-ambiguous palindromic SNPs are dropped
+    when ``remove_ambiguous`` (the default), since strand cannot be resolved
+    from alleles alone.
     """
     value = np.asarray(value, dtype=np.float64)
     if value.shape != (target.n,):
         raise ValueError(f"value has shape {value.shape}, expected ({target.n},)")
+    if not np.isfinite(value).all():
+        raise ValueError("value must contain only finite numbers")
 
     pos_index: dict = {}
     for j in range(reference.n):
@@ -162,4 +177,6 @@ def harmonize_to(reference: VariantTable, target: VariantTable, value,
         n_reference=reference.n, n_target=target.n, n_matched=n_matched,
         n_sign_flipped=n_sign, n_strand_flipped=n_strand,
         n_ambiguous_removed=n_ambig, n_mismatch=n_mismatch, n_unmatched=n_unmatched)
+    if return_mask:
+        return aligned, report, used
     return aligned, report

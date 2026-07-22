@@ -105,6 +105,21 @@ def test_value_length_mismatch_raises():
         harmonize_to(ref, tgt, [1.0, 2.0])
 
 
+def test_return_mask_distinguishes_matched_zero_from_missing():
+    ref = _ref()
+    tgt = VariantTable([1], [100], ["A"], ["G"])
+    aligned, _, mask = harmonize_to(ref, tgt, [0.0], return_mask=True)
+    assert np.allclose(aligned, 0.0)
+    assert mask.tolist() == [True, False, False, False]
+
+
+def test_nonfinite_harmonization_value_raises():
+    ref = _ref()
+    tgt = VariantTable([1], [100], ["A"], ["G"])
+    with pytest.raises(ValueError, match="finite"):
+        harmonize_to(ref, tgt, [np.nan])
+
+
 def test_evaluate_matches_prealigned_r2():
     """End-to-end: harmonizing swapped + reordered inputs recovers the same R^2
     as evaluating already-aligned vectors."""
@@ -137,3 +152,34 @@ def test_evaluate_matches_prealigned_r2():
     assert res.weights_report["n_matched"] == m
     assert res.weights_report["n_sign_flipped"] == 1
     assert res.weights_report["n_ambiguous_removed"] == 0
+
+
+def test_evaluate_uses_joint_weight_sumstat_intersection():
+    """A missing target statistic must remove its weight from the denominator."""
+    ref = VariantTable([1, 1], [10, 20], ["A", "A"], ["G", "C"])
+    weights_tbl = ref
+    sumstats_tbl = VariantTable([1], [10], ["A"], ["G"])
+    res = evaluate(
+        DenseLD(np.eye(2)), ref, weights_tbl, [1.0, 1.0],
+        sumstats_tbl, [0.5])
+    assert res.r2 == pytest.approx(0.25)
+    assert res.n_variants_scored == 1
+
+
+def test_dosage_weights_are_scaled_by_target_genotype_sd():
+    ref = VariantTable([1, 1], [10, 20], ["A", "A"], ["G", "C"])
+    z = np.array([0.2, 0.1])
+    res = evaluate(
+        DenseLD(np.eye(2)), ref, ref, [1.0, 1.0], ref, z,
+        weight_scale="dosage", genotype_sd=[0.5, 2.0])
+    expected = r2(np.array([0.5, 2.0]), z, DenseLD(np.eye(2)))
+    assert res.r2 == pytest.approx(expected)
+    assert res.weight_scale == "dosage"
+
+
+def test_dosage_weights_require_valid_target_genotype_sd():
+    ref = VariantTable([1], [10], ["A"], ["G"])
+    with pytest.raises(ValueError, match="require.*genotype_sd"):
+        evaluate(
+            DenseLD(np.eye(1)), ref, ref, [1.0], ref, [0.1],
+            weight_scale="dosage")

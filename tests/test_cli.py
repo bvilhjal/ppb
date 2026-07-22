@@ -59,8 +59,11 @@ def test_bundle_roundtrip(tmp_path):
     variants = VariantTable([1, 1], [10, 20], ["A", "C"], ["G", "T"])
     z = np.array([0.1, -0.2])
     D = np.array([[1.0, 0.3], [0.3, 1.0]])
-    write_bundle(tmp_path / "b.npz", variants, z, D=D)
+    genotype_sd = np.array([0.7, 0.9])
+    write_bundle(tmp_path / "b.npz", variants, z, D=D, genotype_sd=genotype_sd)
     b = read_bundle(tmp_path / "b.npz")
+    assert b["bundle_version"] == 2
+    assert np.allclose(b["genotype_sd"], genotype_sd)
     assert b["variants"].n == 2
     assert np.allclose(b["z"], z)
     assert np.allclose(b["ld"].quad([1.0, 1.0]), np.array([1, 1]) @ D @ np.array([1, 1]))
@@ -68,7 +71,8 @@ def test_bundle_roundtrip(tmp_path):
 
 def test_cli_evaluate_stdout_matches_truth(tmp_path, capsys):
     weights_path, bundle_path, truth = _fixture(tmp_path)
-    rc = main(["evaluate", "--weights", str(weights_path), "--bundle", str(bundle_path)])
+    rc = main(["evaluate", "--weights", str(weights_path), "--bundle", str(bundle_path),
+               "--weight-scale", "standardized"])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert abs(out["r2"] - truth) <= 1e-9
@@ -80,7 +84,8 @@ def test_cli_evaluate_writes_json_file(tmp_path):
     weights_path, bundle_path, truth = _fixture(tmp_path, seed=2)
     out_path = tmp_path / "result.json"
     rc = main(["evaluate", "--weights", str(weights_path),
-               "--bundle", str(bundle_path), "--out", str(out_path)])
+               "--bundle", str(bundle_path), "--weight-scale", "standardized",
+               "--out", str(out_path)])
     assert rc == 0
     result = json.loads(out_path.read_text(encoding="utf-8"))
     assert abs(result["r2"] - truth) <= 1e-9
@@ -92,3 +97,44 @@ def test_read_weights_ragged_row_errors_with_line_number(tmp_path):
                  encoding="utf-8")
     with pytest.raises(ValueError, match="line 3"):
         read_weights(p)
+
+
+def test_read_weights_rejects_nonfinite_weight(tmp_path):
+    p = tmp_path / "w.tsv"
+    p.write_text(
+        "chr\tpos\ta1\ta2\tweight\n1\t100\tA\tG\tnan\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="line 2.*finite"):
+        read_weights(p)
+
+
+def test_bundle_rejects_nonfinite_inputs(tmp_path):
+    variants = VariantTable([1], [10], ["A"], ["G"])
+    with pytest.raises(ValueError, match="z.*finite"):
+        write_bundle(tmp_path / "bad.npz", variants, [np.nan], D=np.eye(1))
+    with pytest.raises(ValueError, match="var_y"):
+        write_bundle(tmp_path / "bad.npz", variants, [0.1], D=np.eye(1), var_y=0)
+
+
+def test_cli_dosage_scale_uses_bundle_genotype_sd(tmp_path, capsys):
+    variants = VariantTable([1, 1], [10, 20], ["A", "A"], ["G", "C"])
+    z = np.array([0.2, 0.1])
+    bundle = tmp_path / "bundle.npz"
+    write_bundle(bundle, variants, z, D=np.eye(2), genotype_sd=[0.5, 2.0])
+    weights = tmp_path / "weights.tsv"
+    weights.write_text(
+        "chr\tpos\ta1\ta2\teffect_weight\n"
+        "1\t10\tA\tG\t1\n1\t20\tA\tC\t1\n", encoding="utf-8")
+    assert main([
+        "evaluate", "--weights", str(weights), "--bundle", str(bundle),
+        "--weight-scale", "dosage"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["r2"] == pytest.approx(
+        ((np.array([0.5, 2.0]) @ z) ** 2) / (0.5 ** 2 + 2.0 ** 2))
+    assert result["weight_scale"] == "dosage"
+
+
+def test_cli_dosage_scale_rejects_bundle_without_genotype_sd(tmp_path):
+    weights_path, bundle_path, _ = _fixture(tmp_path)
+    with pytest.raises(ValueError, match="require.*genotype_sd"):
+        main(["evaluate", "--weights", str(weights_path), "--bundle", str(bundle_path),
+              "--weight-scale", "dosage"])

@@ -47,6 +47,31 @@ def test_adjust_standardizes_outputs():
     assert abs(ya.mean()) < 1e-8 and abs(ya.std() - 1) < 1e-8
 
 
+def test_adjust_rejects_phenotype_explained_by_covariates():
+    rng = np.random.default_rng(31)
+    C = rng.standard_normal(200)
+    X = rng.standard_normal((200, 3))
+    y = 3.0 + 2.0 * C
+    with pytest.raises(ValueError, match="phenotype residuals.*near-zero"):
+        adjust(X, y, C)
+
+
+def test_adjust_rejects_genotype_explained_by_covariates():
+    rng = np.random.default_rng(32)
+    C = rng.standard_normal(200)
+    X = np.column_stack([C, rng.standard_normal(200)])
+    y = rng.standard_normal(200)
+    with pytest.raises(ValueError, match="genotype residuals.*near-zero"):
+        adjust(X, y, C)
+
+
+def test_covariate_utilities_reject_nonfinite_inputs():
+    with pytest.raises(ValueError, match="finite"):
+        residualize([1.0, np.nan])
+    with pytest.raises(ValueError, match="finite"):
+        adjust(np.array([[0.0], [np.inf]]), np.array([0.0, 1.0]))
+
+
 def test_principal_components_recover_ancestry_axis():
     rng = np.random.default_rng(4)
     X, labels = simulate_structured_genotypes(2000, [30, 30, 30], fst=0.3,

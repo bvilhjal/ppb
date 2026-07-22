@@ -100,3 +100,25 @@ def test_mse_rejects_a_negative_quadratic_form_but_allows_zero():
     with pytest.raises(ValueError, match="negative"):
         mse(np.ones(3), z, _Neg())
     assert mse(np.zeros(3), z, _Zero(), var_y=2.0) == pytest.approx(2.0)
+
+
+def test_nonunit_phenotype_variance_is_coherent_in_r2_and_mse():
+    """y=2x has var(y)=4, z=cov(x,y)=2 and the perfect score has w=2."""
+    ld = DenseLD(np.eye(1))
+    assert r2([2.0], [2.0], ld, var_y=4.0) == pytest.approx(1.0)
+    assert mse([2.0], [2.0], ld, var_y=4.0) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("var_y", [0.0, -1.0, np.nan, np.inf])
+def test_estimators_reject_invalid_phenotype_variance(var_y):
+    ld = DenseLD(np.eye(1))
+    with pytest.raises(ValueError, match="var_y"):
+        r2([1.0], [0.1], ld, var_y=var_y)
+    with pytest.raises(ValueError, match="var_y"):
+        mse([1.0], [0.1], ld, var_y=var_y)
+
+
+@pytest.mark.parametrize("weights,z", [([np.nan], [0.1]), ([1.0], [np.inf])])
+def test_estimators_reject_nonfinite_vectors(weights, z):
+    with pytest.raises(ValueError, match="finite"):
+        r2(weights, z, DenseLD(np.eye(1)))

@@ -103,15 +103,21 @@ human-readable single-target tables).
 ## Command line
 
 ```bash
-ppb evaluate --weights weights.tsv --bundle benchmark.npz [--out result.json]
+ppb evaluate --weights weights.tsv --bundle benchmark.npz \
+  --weight-scale dosage [--out result.json]
 ```
 
 - **weights**: a TSV/CSV with chromosome, position, effect allele, other allele,
   and weight (PGS Catalog column names recognised; `#` comment lines skipped).
+- **weight scale**: this must be explicit. Use `dosage` for ordinary PGS Catalog
+  per-allele weights; the bundle must then carry target-cohort empirical
+  `genotype_sd`, and PPB converts `w_j` to `w_j * genotype_sd_j`. Use
+  `standardized` only when the file already contains weights for the
+  standardized genotypes represented by the bundle LD.
 - **bundle**: an `.npz` with the target-ancestry variant table (`chrom, pos, a1,
   a2`), summary statistics `z`, and an LD reference (dense `D` or low-rank `U`).
-  Build one with `ppb.write_bundle(...)`. (A per-ancestry bundle schema carrying
-  allele frequencies and per-variant `n` is on the v0.1 roadmap.)
+  Version-2 bundles may also carry `genotype_sd`; build one with
+  `ppb.write_bundle(..., genotype_sd=target_sd)`.
 
 The command harmonizes the weights to the bundle's variants and prints a JSON
 `EvaluationResult` with `R²`, `MSE`, and harmonization counts.

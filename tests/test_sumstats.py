@@ -35,6 +35,10 @@ def test_standardized_marginal_validation():
         standardized_marginal([0.1], [0.0], 1000)       # se must be > 0
     with pytest.raises(ValueError):
         zstat_to_corr([1.0], 2)                          # n must exceed 2
+    with pytest.raises(ValueError, match="finite"):
+        standardized_marginal([np.nan], [1.0], 1000)
+    with pytest.raises(ValueError, match="finite"):
+        zstat_to_corr([1.0], np.inf)
 
 
 def test_uniform_N_biases_r2_but_per_variant_n_corrects_it():
