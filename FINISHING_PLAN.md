@@ -11,7 +11,7 @@ preprint and successor repository.
 Revised: 2026-07-20 — **first real-data runs** (within-ancestry anchor only):
 bigsnpr HM3+ European LD reference converted to the block-diagonal int8 store
 (`ppb.ldref`), and public PGS Catalog scores evaluated against non-overlapping
-consortium GWAS across 6 traits (R² 0.025-0.21, consistent with the
+consortium GWAS across 6 traits (R² 0.025–0.252, consistent with the
 literature); the overlapping-cohort (in-sample) failure mode demonstrated
 quantitatively on the same scores. See `docs/REAL_DATA.md`. Still no real
 cross-ancestry result.
@@ -172,11 +172,13 @@ not a repackaging (Gate D).
   matrices to quantization error.
 - First real-data evaluations done (within-ancestry anchor, Phase-1/2
   overlap): public PGS Catalog `portability-ldpred2` scores vs six
-  non-overlapping consortium GWAS — R² 0.21 (height), 0.10 (LDL), 0.056 (BMI),
+  non-overlapping consortium GWAS — R² 0.252 (height), 0.110 (LDL), 0.065 (BMI),
   0.044 (T2D), 0.042 (breast cancer), 0.025 (CAD) — plus the in-sample
   (overlapping-cohort) failure mode quantified (same scores vs Pan-UKB GWAS:
-  severe inflation). Binary-trait values are standardized summary-statistic
-  approximations, not liability-scale R²; the final-weight overlap basis is
+  severe inflation). Height, LDL, and BMI retain 88.6–92.1% of score weights on
+  exact target support and are therefore restricted-score evaluations.
+  Binary-trait values are standardized summary-statistic approximations, not
+  liability-scale R²; the final-weight overlap basis is
   unavailable, so no corrected value is claimed. Details and provenance in
   `docs/REAL_DATA.md`.
 

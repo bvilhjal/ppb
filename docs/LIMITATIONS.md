@@ -71,6 +71,12 @@ utility, causality, or individual privacy.
   not corrected estimates. Even an eligible positive fit can reflect shared
   stratification or relatedness rather than literal participant overlap. See
   [`OVERLAP.md`](OVERLAP.md).
+- **Incomplete target-summary support changes the score being evaluated.** A
+  missing target association cannot be treated as a zero while its weight stays
+  in `wᵀDw`. PPB now restricts both quadratic forms to the exact joint support
+  and records `metrics.n_variants_scored`. The GIANT/GLGC demonstrations retain
+  only 88.6–92.1% of score weights, so those results apply to restricted scores,
+  not the complete PGS Catalog scores.
 - **Binary-trait output is not liability-scale R².** The beta/SE-to-correlation
   conversion for case/control GWAS yields a standardized summary-statistic
   approximation whose scale depends on the supplied effective sample size and

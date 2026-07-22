@@ -40,14 +40,14 @@ cross-ancestry result.
 
 **Table 1. Non-overlapping within-ancestry estimates**
 
-| trait | score (PGS Catalog) | target GWAS | N used | R² statistic |
-|---|---|---|---:|---:|
-| height | PGS002146 | GIANT 2014 (Wood) | median 252k (50.0k–253k) | 0.211 |
-| LDL | PGS002150 | GLGC 2013 (Teslovich) | median 89.9k (50.0k–173k) | 0.100 |
-| BMI | PGS002161 | GIANT 2015 (Locke) | median 234k (50.0k–322k) | 0.056 |
-| T2D | PGS002026 | DIAGRAM 2017 (Scott) | 88.8k | 0.044 |
-| breast cancer | PGS002015 | BCAC 2017 (Michailidou) | 255k | 0.042 |
-| CAD | PGS002048 | CARDIoGRAMplusC4D 2015 (Nikpay) | 163k | 0.025 |
+| trait | score (PGS Catalog) | target GWAS | N used | score support | R² statistic |
+|---|---|---|---:|---:|---:|
+| height | PGS002146 | GIANT 2014 (Wood) | median 252k (50.0k–253k) | 91.8% | 0.252 |
+| LDL | PGS002150 | GLGC 2013 (Teslovich) | median 89.9k (50.0k–173k) | 88.6% | 0.110 |
+| BMI | PGS002161 | GIANT 2015 (Locke) | median 234k (50.0k–322k) | 92.1% | 0.065 |
+| T2D | PGS002026 | DIAGRAM 2017 (Scott) | 88.8k | 99.9% | 0.044 |
+| breast cancer | PGS002015 | BCAC 2017 (Michailidou) | 255k | 100.0% | 0.042 |
+| CAD | PGS002048 | CARDIoGRAMplusC4D 2015 (Nikpay) | 163k | 99.9% | 0.025 |
 
 `N used` is the sample-size input actually supplied to
 `ppb.standardized_marginal`, as recorded in the results registry. The GIANT and
@@ -55,6 +55,11 @@ GLGC files carry per-variant `N`, so the table reports its median and range; no
 single `n_eff` exists for those rows. Case/control studies use a trait-level
 effective size (for example, T2D 88,810 and CAD 163,123). Published headline or
 total sample sizes are not substituted for the values fed to the estimator.
+`Score support` is the fraction of non-zero score weights retained on the joint
+weight/target-summary-statistic support. The height, BMI, and LDL estimates
+therefore describe explicitly restricted scores, not the complete catalog
+scores; treating missing target associations as zero while retaining their
+weights in the denominator produced the former lower values.
 For the quantitative rows, the statistic targets squared correlation under the
 documented standardization. The T2D, breast-cancer, and CAD rows are
 case/control approximations, not liability-scale R².
@@ -65,14 +70,14 @@ case/control approximations, not liability-scale R².
 
 | trait | R² statistic (in-sample) | R² statistic (honest) |
 |---|---:|---:|
-| height | 0.803 | 0.211 |
+| height | 0.803 | 0.252 |
 | T2D | 0.509 | 0.044 |
-| BMI | 0.405 | 0.056 |
+| BMI | 0.405 | 0.065 |
 | asthma | 0.311 | — |
 | SBP | 0.249 | — |
 | CAD (I25) | 0.231 | 0.025 |
 | breast cancer | 0.176 | 0.042 |
-| LDL | 0.148 | 0.100 |
+| LDL | 0.148 | 0.110 |
 | MDD | 0.021 | — |
 
 The contrast exposes the expected failure mode: using the training cohort as the
@@ -83,11 +88,13 @@ block sampling-noise variances, exact support, and a stable identifiable fit. Th
 PGS Catalog LDpred2 files contain final weights but no reconstructible trainer
 operator, so their basis is `basis_unavailable`: every in-sample value in Table 2
 is an upper bound, and none has a defensible corrected R². See
-[`OVERLAP.md`](OVERLAP.md). All runs had 100% weight variants and ≥99.9% z
-variants matched, positive `wᵀz`, and strictly positive `wᵀDw`. The independent
-quantitative magnitudes are consistent with the literature (height ~20-25%, LDL
-~10%, BMI ~5-8%); binary-trait comparisons retain the approximation described
-below.
+[`OVERLAP.md`](OVERLAP.md). All runs matched 100% of weight variants to the LD
+reference and ≥99.9% of target-file variants, with positive `wᵀz` and strictly
+positive `wᵀDw`. Joint score support was 88.6–100.0%; the lower-support
+consortium rows are restricted-score estimates as Table 1 states. The
+independent quantitative magnitudes are consistent with the literature (height
+about 25%, LDL about 11%, BMI about 6%); binary-trait comparisons retain the
+approximation described below.
 
 ## Caveats
 
@@ -100,6 +107,11 @@ below.
   on close relatives of these consortia would still be optimistic. The
   portability-ldpred2 scores are UKBB-trained, so the consortium numbers are
   clean of direct sample overlap.
+- **Incomplete target support:** a missing target association is not evidence of
+  zero association. PPB now uses the exact joint support in both numerator and
+  denominator and records `metrics.n_variants_scored`; where support is below
+  100%, the result applies to the restricted score rather than the full catalog
+  score.
 - The EUR LD reference is from UK Biobank; the consortium GWAS are not — any
   residual LD mismatch is small within EUR and goes the other way from the
   cross-ancestry case (see `docs/CROSS_ANCESTRY.md`).
