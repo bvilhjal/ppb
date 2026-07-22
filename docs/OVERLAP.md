@@ -16,11 +16,10 @@ transportability differences.
 
 For block `b`, the implemented model is
 
-$$
-u_{Rb}=s_b+e_{Rb},\qquad
-u_{Tb}=\alpha s_b+\gamma q_b+e_{Tb}.
-\tag{1}
-$$
+**Equation 1. Shared-noise block model.**
+
+    u_Rb = s_b + e_Rb
+    u_Tb = alpha s_b + gamma q_b + e_Tb.
 
 Here `s_b` is latent genuine signal, `alpha` is a positive target/reference
 signal scale, `gamma` is shared-noise coupling, and `q_b` is the trainer's
@@ -31,12 +30,12 @@ the same moment.
 The implementation profiles the latent signal and minimizes the generalized
 Deming objective
 
-$$
-Q(\alpha,\gamma)=\sum_b
-\frac{\left(u_{Tb}-\alpha u_{Rb}-\gamma q_b\right)^2}
-{\sigma^2_{Tb}+\alpha^2\sigma^2_{Rb}-2\alpha c_{TR,b}}.
-\tag{2}
-$$
+**Equation 2. Generalized Deming objective.**
+
+    Q(alpha, gamma) = sum_b [
+        (u_Tb - alpha u_Rb - gamma q_b)^2
+        / (sigma_Tb^2 + alpha^2 sigma_Rb^2 - 2 alpha c_TR,b)
+    ].
 
 The caller must supply block sampling-noise variances. LD quadratic forms are
 not automatically sampling-noise variances; for marginal correlations they
@@ -54,11 +53,10 @@ intercept also captures shared confounding, not participant overlap uniquely
 For a known linear trainer, let its complete effective operator be `A`, and let
 `K` be the covariance template corresponding to one unit of shared error. Then
 
-$$
-w=A z_{\mathrm{train}},\qquad
-q_b=\mathrm{tr}\left(A_b^\mathsf{T}K_b\right).
-\tag{3}
-$$
+**Equation 3. Linear-trainer overlap basis.**
+
+    w = A z_train
+    q_b = tr(A_b^T K_b).
 
 Variant count is valid only in the special identity-operator normalization. It
 is not a defensible fallback for shrinkage, LD-aware, clumped, thresholded, or
@@ -66,12 +64,12 @@ otherwise selected scores.
 
 For a rerunnable differentiable trainer, the permitted stochastic basis is
 
-$$
-\widehat q_b=\frac{1}{R}\sum_{r=1}^{R}
-\frac{g_{br}^{\mathsf T}\{f(z+\delta g_r)-f(z)\}_b}{\delta},
-\qquad E[g_rg_r^\mathsf T]=K.
-\tag{4}
-$$
+**Equation 4. Stochastic overlap-basis estimate.**
+
+    q_hat_b = (1/R) sum_{r=1}^R [
+        g_br^T {f(z + delta g_r) - f(z)}_b / delta
+    ]
+    E[g_r g_r^T] = K.
 
 This is a generalized-degrees-of-freedom trace estimate; see
 [Ye 1998](https://doi.org/10.1080/01621459.1998.10474094) and
@@ -88,20 +86,18 @@ the basis units determine both `gamma` and the amount subtracted.
 The basis object includes block values, exact score support, provenance, and a
 support hash. The fit owns both the target numerator and total basis:
 
-$$
-U_T=\sum_{b\in S_{\mathrm{score}}}u_{Tb},\qquad
-Q_{\mathrm{total}}=\sum_{b\in S_{\mathrm{score}}}q_b.
-\tag{5}
-$$
+**Equation 5. Target numerator and total basis.**
+
+    U_T = sum_{b in S_score} u_Tb
+    Q_total = sum_{b in S_score} q_b.
 
 A zero-noise block is excluded from fitting. If such a block has nonzero basis
 mass, correction is refused rather than extrapolated. Otherwise the guarded
 correction is
 
-$$
-U_{\mathrm{corr}}=U_T-\widehat\gamma Q_{\mathrm{total}}.
-\tag{6}
-$$
+**Equation 6. Corrected signed numerator.**
+
+    U_corr = U_T - gamma_hat Q_total.
 
 The usual PPB denominator is unchanged. The signed numerator must be inspected
 before squaring; correction is refused if Equation (6) reverses its sign.
