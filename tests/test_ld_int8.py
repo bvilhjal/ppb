@@ -74,6 +74,16 @@ def test_int8_rejects_minus_128():
         LowRankLDInt8(np.array([[-128]], dtype=np.int8), scale=0.01)
 
 
+def test_lr8_rejects_invalid_rank_and_zero_rows():
+    with pytest.raises(ValueError, match="rank must be"):
+        LowRankLDInt8(np.empty((2, 0), dtype=np.int8), scale=0.01)
+    with pytest.raises(ValueError, match="rank must be"):
+        LowRankLDInt8(np.ones((2, 3), dtype=np.int8), scale=0.01)
+    with pytest.raises(ValueError, match="all-zero row"):
+        LowRankLDInt8(
+            np.array([[1, 0], [0, 0]], dtype=np.int8), scale=0.01)
+
+
 def test_lr8_quad_is_invariant_to_scale():
     """Row normalisation divides ``scale`` out, so ``quad`` cannot depend on it.
 
@@ -131,3 +141,17 @@ def test_packed_matches_square_and_halves_the_bytes():
 def test_packed_rejects_a_wrong_length_payload():
     with pytest.raises(ValueError, match="needs"):
         PackedDenseLDInt8(np.zeros(10, dtype=np.int8), 10)   # needs 55, not 10
+
+
+def test_packed_rejects_a_non_unit_diagonal():
+    p8 = np.array([127, 20, 127], dtype=np.int8)
+    p8[2] = 1
+    with pytest.raises(ValueError, match="diagonal"):
+        PackedDenseLDInt8(p8, 2)
+
+
+def test_lowrank_ld_rejects_materially_indefinite_input():
+    C = np.full((3, 3), -0.9)
+    np.fill_diagonal(C, 1.0)
+    with pytest.raises(ValueError, match="positive semi-definite"):
+        lowrank_ld(C)

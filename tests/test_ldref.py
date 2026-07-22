@@ -7,6 +7,7 @@ from ppb.harmonize import VariantTable
 from ppb.ld_backend import (
     BlockDiagonalLD, DenseLD, DenseLDInt8, PackedDenseLDInt8)
 from ppb.ldref import read_ldref, write_ldref
+from scripts.repack_ldref import repack_one
 
 
 def _pd_corr(rng, m):
@@ -86,6 +87,14 @@ def _packed(blocks):
     return [(b.packed(), i) for b, i in blocks]
 
 
+def _replace_npz(path, **updates):
+    """Rewrite a fixture with selected arrays changed (and close it on Windows)."""
+    with np.load(path, allow_pickle=False) as stored:
+        arrays = {name: np.array(stored[name], copy=True) for name in stored.files}
+    arrays.update(updates)
+    np.savez(path, **arrays)
+
+
 def test_v1_layout_is_unchanged_by_v2_support(tmp_path, synth):
     """Square-only references must still be written in the v1 layout so older
     readers keep working; v2 arrays appear only when a packed block does."""
@@ -162,6 +171,11 @@ def test_write_ldref_rejects_asymmetric_and_bad_diagonal_blocks(tmp_path, synth)
     write_ldref(tmp_path / "c.npz", variants,
                 [(DenseLDInt8(baddiag), i0)] + blocks[1:], validate=False)
 
+    # The escape hatch affects writing only. A normal reader must never accept
+    # the resulting corrupt operator.
+    with pytest.raises(ValueError, match="diagonal"):
+        read_ldref(tmp_path / "c.npz")
+
 
 def test_compressed_reference_reads_back_identically(tmp_path, synth):
     variants, blocks, _dense, w, _sizes = synth
@@ -169,3 +183,89 @@ def test_compressed_reference_reads_back_identically(tmp_path, synth):
     write_ldref(raw, variants, _packed(blocks))
     write_ldref(comp, variants, _packed(blocks), compress=True)
     assert read_ldref(comp)["ld"].quad(w) == read_ldref(raw)["ld"].quad(w)
+
+
+def test_packed_reference_rejects_bad_diagonal_on_read(tmp_path, synth):
+    variants, blocks, *_ = synth
+    path = tmp_path / "bad-packed-diagonal.npz"
+    write_ldref(path, variants, _packed(blocks))
+    with np.load(path, allow_pickle=False) as stored:
+        bad = np.array(stored["ld8p"], copy=True)
+    bad[0] = 1
+    _replace_npz(path, ld8p=bad)
+    with pytest.raises(ValueError, match="packed LD.*diagonal"):
+        read_ldref(path)
+
+
+def test_reference_rejects_overlapping_or_gapped_payload_offsets(tmp_path, synth):
+    variants, blocks, *_ = synth
+    path = tmp_path / "bad-offset.npz"
+    write_ldref(path, variants, _packed(blocks))
+    with np.load(path, allow_pickle=False) as stored:
+        offsets = np.array(stored["block_offset"], copy=True)
+
+    overlap = offsets.copy()
+    overlap[1] = overlap[0]
+    _replace_npz(path, block_offset=overlap)
+    with pytest.raises(ValueError, match="offset.*expected.*contiguous"):
+        read_ldref(path)
+
+    write_ldref(path, variants, _packed(blocks))
+    gap = offsets.copy()
+    gap[1] += 1
+    _replace_npz(path, block_offset=gap)
+    with pytest.raises(ValueError, match="offset.*expected.*contiguous"):
+        read_ldref(path)
+
+
+def test_reference_blocks_must_tile_the_variant_table_on_read(tmp_path, synth):
+    variants, blocks, *_ = synth
+    path = tmp_path / "bad-tiles.npz"
+    write_ldref(path, variants, blocks)
+    with np.load(path, allow_pickle=False) as stored:
+        starts = np.array(stored["block_starts"], copy=True)
+    starts[1] += 1
+    _replace_npz(path, block_starts=starts)
+    with pytest.raises(ValueError, match="tile the variant table exactly"):
+        read_ldref(path)
+
+    # A perfectly tiled LD payload still must have the same length as the
+    # variant table; BlockDiagonalLD alone cannot infer a trailing variant.
+    write_ldref(path, variants, blocks)
+    extra = {
+        "chrom": np.append(variants.chrom.astype(str), "2"),
+        "pos": np.append(variants.pos, variants.pos[-1] + 1),
+        "a1": np.append(variants.a1, "A"),
+        "a2": np.append(variants.a2, "G"),
+    }
+    _replace_npz(path, **extra)
+    with pytest.raises(ValueError, match="blocks describe.*variant table"):
+        read_ldref(path)
+
+
+def test_store_rejects_materially_indefinite_d8(tmp_path):
+    variants = VariantTable(
+        np.array(["1"] * 3), np.arange(3),
+        np.array(["A"] * 3), np.array(["G"] * 3))
+    # Equicorrelation -1 has eigenvalues (-1, 2, 2): exact diagonal and
+    # symmetry are not enough to make this a valid LD operator.
+    bad = np.full((3, 3), -127, dtype=np.int8)
+    np.fill_diagonal(bad, 127)
+    block = (DenseLDInt8(bad), np.arange(3))
+    with pytest.raises(ValueError, match="positive semi-definite"):
+        write_ldref(tmp_path / "indefinite.npz", variants, [block])
+
+
+def test_repack_verification_failure_is_fatal(tmp_path, synth, monkeypatch):
+    variants, blocks, *_ = synth
+    src, dst = tmp_path / "source.npz", tmp_path / "packed.npz"
+    write_ldref(src, variants, blocks)
+    original_quad = PackedDenseLDInt8.quad
+
+    def biased_quad(self, w):
+        return original_quad(self, w) + 1.0
+
+    monkeypatch.setattr(PackedDenseLDInt8, "quad", biased_quad)
+    with pytest.raises(RuntimeError, match="verification failed"):
+        repack_one(src, dst, verify=True)
+    assert not dst.exists()

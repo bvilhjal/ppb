@@ -34,7 +34,8 @@ from ppb.ld_backend import DenseLDInt8, PackedDenseLDInt8
 from ppb.ldref import read_ldref, write_ldref
 
 
-def repack_one(src: Path, dst: Path, *, verify=False, compress=False, seed=0):
+def repack_one(src: Path, dst: Path, *, verify=False, compress=False, seed=0,
+               verify_rtol=1e-12, verify_atol=1e-12):
     """Repack one chromosome ``.npz``. Returns a stats dict."""
     ref = read_ldref(src)
     variants, ld = ref["variants"], ref["ld"]
@@ -57,7 +58,14 @@ def repack_one(src: Path, dst: Path, *, verify=False, compress=False, seed=0):
         w = rng.standard_normal(variants.n)
         old = ld.quad(w)
         new = sum(b.quad(w[i]) for b, i in blocks)
-        rel = abs(new - old) / abs(old) if old else 0.0
+        delta = abs(new - old)
+        rel = delta / max(abs(old), np.finfo(float).tiny)
+        if not np.isclose(new, old, rtol=verify_rtol, atol=verify_atol):
+            raise RuntimeError(
+                f"{src.name}: verification failed: old w^T D w={old:.17g}, "
+                f"packed={new:.17g}, absolute difference={delta:.3e}, "
+                f"relative difference={rel:.3e} (rtol={verify_rtol:.3e}, "
+                f"atol={verify_atol:.3e})")
 
     kwargs = {k: ref[k] for k in ("rsid", "af", "pos_hg38") if k in ref}
     write_ldref(dst, variants, blocks, compress=compress, **kwargs)
@@ -77,6 +85,10 @@ def main(argv=None):
                     help="write with savez_compressed")
     ap.add_argument("--verify", action="store_true",
                     help="compare w^T D w before/after on random weights")
+    ap.add_argument("--verify-rtol", type=float, default=1e-12,
+                    help="relative verification tolerance (default: 1e-12)")
+    ap.add_argument("--verify-atol", type=float, default=1e-12,
+                    help="absolute verification tolerance (default: 1e-12)")
     args = ap.parse_args(argv)
 
     src_dir = Path(args.src_dir)
@@ -92,8 +104,14 @@ def main(argv=None):
     worst = 0.0
     for f in files:
         t0 = time.time()
-        s = repack_one(f, out_dir / f.name, verify=args.verify,
-                       compress=args.compress)
+        try:
+            s = repack_one(
+                f, out_dir / f.name, verify=args.verify,
+                compress=args.compress, verify_rtol=args.verify_rtol,
+                verify_atol=args.verify_atol)
+        except RuntimeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         for k in tot:
             tot[k] += s[k]
         if s["rel"] is not None:

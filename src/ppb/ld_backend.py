@@ -166,16 +166,26 @@ class LowRankLDInt8(LDBackend):
         U8 = np.ascontiguousarray(np.asarray(U8, dtype=np.int8))
         if U8.ndim != 2:
             raise ValueError(f"U8 must be 2-D (m, r); got {U8.shape}")
+        if not 1 <= U8.shape[1] <= U8.shape[0]:
+            raise ValueError(
+                f"rank must be in [1, m]; got U8.shape={U8.shape}")
         if np.any(U8 == -128):
             raise ValueError("int8 factor must not contain -128")
         if not np.isfinite(scale) or scale <= 0:
             raise ValueError("scale must be finite and > 0")
+        empty = np.flatnonzero(~(U8 != 0).any(axis=1))
+        if empty.size:
+            raise ValueError(
+                f"U8 has {empty.size} all-zero row(s) (e.g. index "
+                f"{int(empty[0])}); those variants would contribute nothing "
+                "to w^T D w")
         self.U8 = U8
         self.scale = float(scale)
         self.m = U8.shape[0]
         self.rank = U8.shape[1]
-        row_norm = np.sqrt((np.asarray(U8, np.float64) * self.scale) ** 2 @ np.ones(self.rank))
-        row_norm[row_norm == 0.0] = 1.0
+        row_norm = np.sqrt(
+            (np.asarray(U8, np.float64) * self.scale) ** 2
+            @ np.ones(self.rank))
         self.rowscale = np.ascontiguousarray(1.0 / row_norm)   # -> unit-norm rows
 
     @property
@@ -248,12 +258,27 @@ class PackedDenseLDInt8(LDBackend):
         m = int(m)
         if p8.ndim != 1:
             raise ValueError(f"packed LD must be 1-D; got shape {p8.shape}")
+        if m < 1:
+            raise ValueError(f"packed LD size m must be >= 1; got {m}")
         expected = m * (m + 1) // 2
         if p8.size != expected:
             raise ValueError(
                 f"packed LD for m={m} needs {expected} entries; got {p8.size}")
         if np.any(p8 == -128):
             raise ValueError("int8 LD must not contain -128")
+        # np.triu_indices() stores each row's diagonal first. A corrupt packed
+        # diagonal cannot be repaired or inferred from the missing triangle and
+        # changes even a one-variant self term, so reject it at the backend
+        # boundary rather than relying on a particular file reader.
+        diag_idx = np.arange(m, dtype=np.intp)
+        diag_idx = diag_idx * m - diag_idx * (diag_idx - 1) // 2
+        bad = np.flatnonzero(p8[diag_idx] != 127)
+        if bad.size:
+            i = int(bad[0])
+            raise ValueError(
+                f"packed LD has {bad.size} diagonal entry/entries != 127 "
+                f"(e.g. index {i} = {int(p8[diag_idx[i]])}); the int8 LD "
+                "diagonal must dequantise to exactly 1")
         self.p8 = p8
         self.m = m
 
@@ -348,6 +373,15 @@ def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
             f"index {int(weak[0])}, diagonal {diag[weak[0]]!r}); no unit "
             "diagonal can be reconstructed for them -- drop them first")
     evals, evecs = np.linalg.eigh(corr)
+    # Tiny negative eigenvalues arise from floating-point roundoff, but silently
+    # clipping a genuinely indefinite matrix manufactures a different LD
+    # operator. Permit numerical dust only; a correlation input with material
+    # negative curvature is invalid and must be repaired upstream.
+    psd_tol = 1e-8 * max(1.0, float(np.max(np.abs(evals))))
+    if evals[0] < -psd_tol:
+        raise ValueError(
+            "corr must be positive semi-definite; smallest eigenvalue is "
+            f"{float(evals[0]):.6g} (tolerance {-psd_tol:.6g})")
     evals = np.maximum(evals[::-1], 0.0)
     evecs = evecs[:, ::-1]
     total = float(evals.sum())
