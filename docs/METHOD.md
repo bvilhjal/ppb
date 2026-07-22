@@ -26,6 +26,8 @@ The performance measure is the squared Pearson correlation between the observed
 phenotype and the polygenic-score prediction, expressed using only summary-level
 inputs:
 
+**Equation 1. Core summary-statistic estimator.**
+
     R^2 = (w^T z)^2 / (w^T D w)
 
 Symbols (all on standardized scales):
@@ -94,10 +96,10 @@ so `D` never needs to be materialised densely. `D` is stored **block-diagonal**
 itself takes caller-supplied blocks) and each block uses one of two int8
 representations from `ldpred3/ld_repr.py`:
 
-- **D8** — a dense int8 block (`round(corr * 127)`, dequantised by `/127`).
-  ldpred3's `PackedSymmetricInt8LD` stores only the upper triangle and
-  memory-maps it; **ppb's `DenseLDInt8` stores the full square array and loads
-  it into RAM** (see "Implementation gaps" below).
+- **D8** — `round(corr * 127)`, dequantised by `/127`, represented either as a
+  full-square `DenseLDInt8` block or a losslessly packed-upper-triangle
+  `PackedDenseLDInt8` block. The v2 reference uses the packed form, halving the
+  int8 payload without changing the represented matrix.
 - **LR8** — `LowRankLDInt8`: an int8 low-rank factor with `R ~= U U^T`, `U` shape
   `(m, r)`, rows unit-norm so the LD diagonal is 1. ldpred3 selects this for large
   blocks (>= ~1500); ppb implements it as a backend but does not store it — the
@@ -111,11 +113,13 @@ The block quadratic form is then, per block `b`:
 Total `w^T D w = sum_b (block quadratic form)`. This is O(sum k_b * r_b) time and
 int8 (~1 byte/entry) memory — the efficiency win.
 
-**PSD by construction (correctness bonus).** A low-rank `R = U U^T` is positive
-semi-definite, so `w^T D w = ||U^T w||^2 >= 0` always. A block-diagonal of PSD
-blocks is PSD. This *removes* the negative-denominator failure that a raw
-cM-banded truncation (non-PSD) would introduce, so no ad-hoc clamping is needed
-on the production path.
+**PSD is representation-specific.** A low-rank `R = U U^T` is positive
+semi-definite, so LR8 guarantees `w^T D w = ||U^T w||^2 >= 0`. D8 does not:
+rounding a PSD correlation matrix entrywise can introduce negative eigenvalues.
+The LD-reference reader rejects materially indefinite modest blocks, where an
+exact eigendecomposition is practical, and the estimator rejects any negative
+quadratic form it encounters. Large D8 blocks still carry no proof of PSD; use
+LR8 when that guarantee is required. No denominator is silently clamped.
 
 ldpred3 additionally applies **linear shrinkage toward the identity** to large
 blocks (`shrink_ld_blocks`: `D_a = (1-a) D + a I`, with an MP-motivated intensity
@@ -134,11 +138,12 @@ denominator and *inflates* R².
 numba `@njit(parallel=True)` kernels in `ppb/_kernels.py` (the same scalar-loop
 int8 sweep pattern ldpred3 uses, written independently — no code copied).
 
-**Implemented in `ppb/ld_backend.py`:** `DenseLDInt8` (D8, `round(corr*127)`,
-diagonal dequantises to exactly 1) and `LowRankLDInt8` (LR8, int8 factor with a
-global `scale` and per-row rescaling to restore the unit diagonal), plus
-`quantize_lowrank`. Both are ~8x smaller than float64 and agree with the float
-path to within quantisation (~1-2%); LR8 stays PSD, so `w^T D w >= 0`.
+**Implemented in `ppb/ld_backend.py`:** `DenseLDInt8` and
+`PackedDenseLDInt8` (D8, with a diagonal that dequantises to exactly 1), and
+`LowRankLDInt8` (LR8, an int8 factor with a global `scale` and per-row
+normalisation), plus `quantize_lowrank`. Square D8 and LR8 use about one eighth
+the float64 storage; packed D8 uses about one sixteenth. Only LR8 is PSD by
+construction.
 
 ### On-disk LD store: what is wired up, and why LR8 is not
 
@@ -155,6 +160,8 @@ The `.npz` LD-reference format (`ppb/ldref.py`) is versioned:
 `scripts/repack_ldref.py` converts v1 to packed v2. Measured on the shipped
 reference (1,444,196 variants in 431 blocks; block sizes min 216, median 1,901,
 mean 3,351, max 17,304), per chr22 and scaling with `sum_b m_b^2`:
+
+**Table 1. Measured LD-reference storage layouts.**
 
 | layout | in memory | on disk | read (chr22) | note |
 |---|---|---|---|---|
@@ -184,6 +191,8 @@ would differ in the last digit or two.
 Measured genome-wide against the float bigsnpr source (diagonal forced to 1 in
 both, so this isolates quantisation), for the six real PGS Catalog scores of
 `docs/REAL_DATA.md`:
+
+**Table 2. Genome-wide D8 quantisation error.**
 
 | trait | error in `w^T D w` | error in R² |
 |---|---:|---:|
