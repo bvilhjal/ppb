@@ -10,6 +10,8 @@ records, one per (score × target GWAS) evaluation.
 
 ## Record schema
 
+**Table 1. Result-record fields.**
+
 | field | meaning |
 |---|---|
 | `trait` | trait label (short key) |
@@ -38,6 +40,15 @@ records, one per (score × target GWAS) evaluation.
 
 ## Rules for records
 
+- A result pack is a non-empty, strict-JSON array of objects. `NaN`,
+  `Infinity`, booleans in numeric fields, and non-finite numeric values are
+  invalid. The leaderboard loader rejects malformed pack structure even when
+  it is run outside CI.
+- `trait`, `ld_ref`, the score labels, the target labels, and
+  `target.n_eff_basis` are required non-empty strings. `score.n_variants` and
+  `target.n_eff` are positive integers; recorded metrics are finite real
+  numbers. `metrics.den` is positive, while R² and match fractions lie in
+  `[0, 1]`.
 - Every record must declare `target.overlap`; in-sample records are displayed
   as **upper bounds**, never as accuracy measurements.
 - `suspect` records must carry the detector fit and the corrected R² when the
@@ -55,6 +66,13 @@ records, one per (score × target GWAS) evaluation.
   number is well defined — record the median, the basis, and the range. (The
   published N can exceed every per-variant value in the HM3+-filtered file:
   GIANT BMI publishes 339,224 against a per-variant maximum of 322,153.)
+- `target.n_eff_range` is present exactly when `target.n_eff_basis` is
+  `"median of the per-variant N column"`. It contains two positive integers,
+  and the recorded median lies within that inclusive range.
+- `date` is a non-future ISO date (`YYYY-MM-DD`) and `ppb_commit` is a 7–40
+  character lowercase hexadecimal Git object id. A versioned evaluation is
+  identified by trait, score id, target GWAS/cohort/ancestry, date, and commit;
+  that identity must be unique across all packs.
 - Records are immutable once merged; corrections land as new packs.
 
 ## Generating a pack

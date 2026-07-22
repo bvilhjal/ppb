@@ -7,6 +7,7 @@ Run from anywhere:  python scripts/build_leaderboard.py
 """
 import html
 import json
+import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,10 +19,45 @@ ROOT = Path(__file__).resolve().parent.parent
 _PGS_ID = re.compile(r"^PGS\d{6}$")
 
 
-def load_records():
+def _reject_nonfinite_constant(value):
+    raise ValueError(f"non-finite JSON constant {value!r}")
+
+
+def _reject_nonfinite_numbers(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("non-finite JSON number")
+    if isinstance(value, list):
+        for item in value:
+            _reject_nonfinite_numbers(item)
+    elif isinstance(value, dict):
+        for item in value.values():
+            _reject_nonfinite_numbers(item)
+
+
+def load_records(root=ROOT):
+    """Load strict JSON result packs and reject unsafe top-level shapes."""
     records = []
-    for path in sorted(ROOT.glob("results/*.json")):
-        for rec in json.loads(path.read_text(encoding="utf-8")):
+    root = Path(root)
+    result_dir = root / "results" if (root / "results").is_dir() else root
+    for path in sorted(result_dir.glob("*.json")):
+        try:
+            data = json.loads(
+                path.read_text(encoding="utf-8"),
+                parse_constant=_reject_nonfinite_constant,
+            )
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise ValueError(f"{path.name}: invalid JSON: {exc}") from exc
+        if not isinstance(data, list):
+            raise ValueError(f"{path.name}: top level must be a JSON array")
+        if not data:
+            raise ValueError(f"{path.name}: result pack must not be empty")
+        try:
+            _reject_nonfinite_numbers(data)
+        except ValueError as exc:
+            raise ValueError(f"{path.name}: invalid JSON: {exc}") from exc
+        for i, rec in enumerate(data):
+            if not isinstance(rec, dict):
+                raise ValueError(f"{path.name}: record {i} must be a JSON object")
             rec["_pack"] = path.name
             records.append(rec)
     return records
