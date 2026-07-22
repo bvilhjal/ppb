@@ -107,7 +107,7 @@ SCALE_LABEL = {
 }
 
 
-def row(rec):
+def row(rec, include_legacy=False):
     m, ov, sc, tg = rec["metrics"], rec["overlap"], rec["score"], rec["target"]
     role = ov.get("role", "reference")
     status = ov.get("status", "unknown")
@@ -119,20 +119,24 @@ def row(rec):
     z = fmt(ov.get("gamma_z"), 1) if ov.get("gamma_z") is not None else "—"
     ref = esc(ov.get("reference", "—"))
     note = f'<br><small>{esc(ov["note"])}</small>' if ov.get("note") else ""
-    legacy = ov.get("legacy_unidentified")
-    if legacy:
-        parts = []
-        if legacy.get("z") is not None:
-            parts.append(f"z={fmt(legacy['z'], 1)}")
-        if legacy.get("corrected_r2") is not None:
-            parts.append(f"old corrected R²={fmt(legacy['corrected_r2'])}")
-        detail = " · ".join(parts) if parts else "diagnostic retained"
-        legacy_cell = (
-            f'<abbr title="{esc(legacy.get("warning", "unidentified legacy model"))}">'
-            f"legacy v0 (unidentified)</abbr><br><small>{detail}</small>")
-    else:
-        legacy_cell = "—"
+    legacy_cell = ""
+    if include_legacy:
+        legacy = ov.get("legacy_unidentified")
+        if legacy:
+            parts = []
+            if legacy.get("z") is not None:
+                parts.append(f"z={fmt(legacy['z'], 1)}")
+            if legacy.get("corrected_r2") is not None:
+                parts.append(f"old corrected R²={fmt(legacy['corrected_r2'])}")
+            detail = " · ".join(parts) if parts else "diagnostic retained"
+            value = (
+                f'<abbr title="{esc(legacy.get("warning", "unidentified legacy model"))}">'
+                f"legacy v0 (unidentified)</abbr><br><small>{detail}</small>")
+        else:
+            value = "—"
+        legacy_cell = f"<td>{value}</td>"
     scale = SCALE_LABEL.get(m.get("scale"), esc(m.get("scale", "undeclared")))
+    support = m["n_variants_scored"] / sc["n_variants"]
     # n_eff means different things per target; expose its basis rather than
     # letting a bare number read as one comparable quantity across rows.
     basis = tg.get("n_eff_basis", "")
@@ -145,7 +149,7 @@ def row(rec):
         f'<tr style="background:{color}">'
         f"<td>{esc(rec['trait'])}</td>"
         f"<td>{score_link(sc['id'])}"
-        f"<br><small>{esc(sc['name'])}</small></td>"
+        f"<br><small>{esc(sc['name'])} · {support:.1%} target support</small></td>"
         f"<td>{esc(tg['gwas'])}<br><small>{esc(tg['cohort'])} · {n_eff}</small></td>"
         f"<td>{esc(tg['ancestry'])}</td>"
         f'<td data-sort="{m["r2"]:.6f}"><b>{m["r2"]:.4f}</b>'
@@ -153,13 +157,21 @@ def row(rec):
         f"<td>{label}{note}</td>"
         f"<td>{z}</td>"
         f"<td>{corrected}</td>"
-        f"<td>{legacy_cell}</td>"
+        f"{legacy_cell}"
         f"<td><small>{ref}</small></td>"
         "</tr>")
 
 
 def build(records):
-    rows = "\n".join(row(r) for r in records)
+    records = list(records)
+    include_legacy = any(
+        r.get("overlap", {}).get("legacy_unidentified") for r in records)
+    rows = "\n".join(row(r, include_legacy=include_legacy) for r in records)
+    legacy_note = (
+        " Historical v0 values in this pack are shown solely as unidentified "
+        "legacy diagnostics." if include_legacy else "")
+    legacy_header = (
+        "<th>Legacy v0 (unidentified)</th>" if include_legacy else "")
     # Packs may be generated at different commits; list every one represented.
     commits = sorted({str(r.get("ppb_commit", "?")) for r in records})
     commit = esc(", ".join(commits)) if commits else "?"
@@ -188,8 +200,8 @@ def build(records):
 its declared scale is shown per row, and binary values are not liability-scale R&sup2;.
 Every evaluation declares its training/target sample overlap; in-sample rows are <b>upper bounds</b>.
 A correction is displayed only for a basis-aware fit whose status is <code>correctable</code>.
-Historical v0 values remain visible solely as unidentified legacy diagnostics
-(<a href="https://github.com/bvilhjal/ppb/blob/main/docs/OVERLAP.md">method</a>).</p>
+<a href="https://github.com/bvilhjal/ppb/blob/main/docs/OVERLAP.md">Method details</a>.
+{legacy_note}</p>
 <p class="legend">
  <span class="chip" style="background:#e8f5e9">reference — declared non-overlapping target</span>
  <span class="chip" style="background:#fff8e1">upper bound — paired with a reference</span>
@@ -200,7 +212,7 @@ Historical v0 values remain visible solely as unidentified legacy diagnostics
 <th onclick="srt(this,2)">Target GWAS</th><th onclick="srt(this,3)">Anc.</th>
 <th onclick="srt(this,4,1)">R&sup2; (declared scale)</th><th onclick="srt(this,5)">Status</th>
 <th onclick="srt(this,6,1)">current γ z</th><th onclick="srt(this,7,1)">validated R&sup2; correction</th>
-<th>Legacy v0 (unidentified)</th><th>reference (R&sup2;)</th></tr></thead><tbody>
+{legacy_header}<th>reference (R&sup2;)</th></tr></thead><tbody>
 {rows}
 </tbody></table>
 <footer>Generated {now} from <a href="https://github.com/bvilhjal/ppb/tree/main/results">results/</a>

@@ -23,20 +23,20 @@
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 1.8622804350997695,
-   "den": 16.451729617751347,
-   "r2": 0.21080387895588398,
+   "den": 13.766053753532804,
+   "r2": 0.2519304719455542,
    "w_match": 1.0,
    "z_match": 0.9999217380256639,
+   "n_variants_scored": 846752,
    "scale": "quantitative correlation R2"
   },
   "overlap": {
    "role": "reference",
-   "method": "scaled_signal_eiv_v1",
    "status": "not_applicable",
-   "note": "Declared non-overlapping reference; correction not applicable."
+   "method": "scaled_signal_eiv_v1"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "height",
@@ -51,41 +51,33 @@
    "cohort": "UK Biobank",
    "ancestry": "EUR",
    "n_eff": 419596,
-   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "n_eff_basis": "trait-level sample size",
    "overlap": "in-sample",
    "trait_type": "quantitative"
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 3.6349880790063205,
-   "den": 16.451729617751347,
-   "r2": 0.8031458479758347,
+   "den": 16.447539552592715,
+   "r2": 0.8033504520398129,
    "w_match": 1.0,
    "z_match": 0.9994865899527886,
+   "n_variants_scored": 922214,
    "scale": "quantitative correlation R2"
   },
   "overlap": {
    "role": "suspect",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "reference": "GIANT 2014 (R² 0.2108)",
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused.",
-   "legacy_unidentified": {
-    "method": "fixed_signal_variant_count_v0",
-    "warning": "Unidentified: fixed alpha=1 and used LD-reference variant count as the sensitivity basis; retained for historical reproducibility only.",
-    "gamma": 6.297817245675309e-07,
-    "gamma_se": 5.1494722665773405e-08,
-    "z": 12.23002459213404,
-    "m_total": 1444196,
-    "corrected_r2": 0.45151065971658116
-   }
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound",
+   "reference": "GIANT 2014 (R2 0.2519)"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "BMI",
@@ -111,20 +103,20 @@
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 0.014304884208551787,
-   "den": 0.0036883554551039527,
-   "r2": 0.055479932645024044,
+   "den": 0.0031659342933593607,
+   "r2": 0.06463485759931628,
    "w_match": 1.0,
    "z_match": 0.9999188959302991,
+   "n_variants_scored": 911664,
    "scale": "quantitative correlation R2"
   },
   "overlap": {
    "role": "reference",
-   "method": "scaled_signal_eiv_v1",
    "status": "not_applicable",
-   "note": "Declared non-overlapping reference; correction not applicable."
+   "method": "scaled_signal_eiv_v1"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "BMI",
@@ -139,41 +131,33 @@
    "cohort": "UK Biobank",
    "ancestry": "EUR",
    "n_eff": 419163,
-   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "n_eff_basis": "trait-level sample size",
    "overlap": "in-sample",
    "trait_type": "quantitative"
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
-   "num": 0.03864139009146392,
-   "den": 0.0036883554551039527,
-   "r2": 0.404830024214302,
+   "num": 0.03864139009146393,
+   "den": 0.0036869320456772727,
+   "r2": 0.404986316455529,
    "w_match": 1.0,
    "z_match": 0.9994865899527886,
+   "n_variants_scored": 989611,
    "scale": "quantitative correlation R2"
   },
   "overlap": {
    "role": "suspect",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "reference": "GIANT 2015 (R² 0.0555)",
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused.",
-   "legacy_unidentified": {
-    "method": "fixed_signal_variant_count_v0",
-    "warning": "Unidentified: fixed alpha=1 and used LD-reference variant count as the sensitivity basis; retained for historical reproducibility only.",
-    "gamma": 1.3330778821951783e-08,
-    "gamma_se": 1.0848479530982528e-09,
-    "z": 12.2881540992726,
-    "m_total": 1444196,
-    "corrected_r2": 0.10192576857202001
-   }
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound",
+   "reference": "GIANT 2015 (R2 0.0646)"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "LDL",
@@ -199,20 +183,20 @@
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 0.0889514103103386,
-   "den": 0.07909158886233228,
-   "r2": 0.10004039000873462,
+   "den": 0.07221944462504884,
+   "r2": 0.10955987597630824,
    "w_match": 1.0,
    "z_match": 0.9999221233797191,
+   "n_variants_scored": 318867,
    "scale": "quantitative correlation R2"
   },
   "overlap": {
    "role": "reference",
-   "method": "scaled_signal_eiv_v1",
    "status": "not_applicable",
-   "note": "Declared non-overlapping reference; correction not applicable."
+   "method": "scaled_signal_eiv_v1"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "LDL",
@@ -227,41 +211,33 @@
    "cohort": "UK Biobank",
    "ancestry": "EUR",
    "n_eff": 400223,
-   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "n_eff_basis": "trait-level sample size",
    "overlap": "in-sample",
    "trait_type": "quantitative"
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 0.10827686117709273,
-   "den": 0.07909158886233228,
-   "r2": 0.14823167463192738,
+   "den": 0.07909069549811301,
+   "r2": 0.14823334897394,
    "w_match": 1.0,
    "z_match": 0.9994872871631355,
+   "n_variants_scored": 359894,
    "scale": "quantitative correlation R2"
   },
   "overlap": {
    "role": "suspect",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "reference": "GLGC 2013 (R² 0.1000)",
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused.",
-   "legacy_unidentified": {
-    "method": "fixed_signal_variant_count_v0",
-    "warning": "Unidentified: fixed alpha=1 and used LD-reference variant count as the sensitivity basis; retained for historical reproducibility only.",
-    "gamma": 4.984437507079846e-12,
-    "gamma_se": 6.808518209526914e-10,
-    "z": 0.007320884447522372,
-    "m_total": 1444196,
-    "note": "no detectable uniform overlap term (z = 0.01); score covers 25% of the LD reference — detector blind by construction for shrunk/low-coverage scores, so this is an upper bound, not a corrected measurement"
-   }
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound",
+   "reference": "GLGC 2013 (R2 0.1096)"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "CAD",
@@ -283,20 +259,20 @@
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 0.004416062930830733,
-   "den": 0.0007735255567675866,
-   "r2": 0.025211334827191463,
+   "den": 0.0007723617577224221,
+   "r2": 0.025249323408456453,
    "w_match": 1.0,
    "z_match": 0.9996544726180866,
+   "n_variants_scored": 761293,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "reference",
-   "method": "scaled_signal_eiv_v1",
    "status": "not_applicable",
-   "note": "Declared non-overlapping reference; correction not applicable."
+   "method": "scaled_signal_eiv_v1"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "CAD",
@@ -317,35 +293,27 @@
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
-   "num": 0.013375547868144107,
-   "den": 0.0007735255567675866,
-   "r2": 0.23128554604016557,
+   "num": 0.013375547868144103,
+   "den": 0.0007734545097890176,
+   "r2": 0.23130679116709263,
    "w_match": 1.0,
    "z_match": 0.9995171637135971,
+   "n_variants_scored": 761666,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "suspect",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "reference": "CARDIoGRAMplusC4D 2015 (R² 0.0252)",
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused.",
-   "legacy_unidentified": {
-    "method": "fixed_signal_variant_count_v0",
-    "warning": "Unidentified: fixed alpha=1 and used LD-reference variant count as the sensitivity basis; retained for historical reproducibility only.",
-    "gamma": 2.3041775627466583e-09,
-    "gamma_se": 4.0953946047433053e-10,
-    "z": 5.626265073646259,
-    "m_total": 1444196,
-    "corrected_r2": 0.13051872305889795
-   }
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound",
+   "reference": "CARDIoGRAMplusC4D 2015 (R2 0.0252)"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "T2D",
@@ -366,21 +334,21 @@
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
-   "num": 0.006360823493447967,
-   "den": 0.0009125747032968863,
-   "r2": 0.0443361791299148,
+   "num": 0.006360823493447968,
+   "den": 0.0009122330222742241,
+   "r2": 0.04435278544722208,
    "w_match": 1.0,
    "z_match": 0.9998416762157918,
+   "n_variants_scored": 830352,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "reference",
-   "method": "scaled_signal_eiv_v1",
    "status": "not_applicable",
-   "note": "Declared non-overlapping reference; correction not applicable."
+   "method": "scaled_signal_eiv_v1"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "T2D",
@@ -402,34 +370,26 @@
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 0.02154927106833115,
-   "den": 0.0009125747032968863,
-   "r2": 0.5088581591170197,
+   "den": 0.0009122790948744392,
+   "r2": 0.5090230458918138,
    "w_match": 1.0,
    "z_match": 0.9995305131567933,
+   "n_variants_scored": 830492,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "suspect",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "reference": "DIAGRAM 2017 (R² 0.0443)",
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused.",
-   "legacy_unidentified": {
-    "method": "fixed_signal_variant_count_v0",
-    "warning": "Unidentified: fixed alpha=1 and used LD-reference variant count as the sensitivity basis; retained for historical reproducibility only.",
-    "gamma": 6.279906780775493e-09,
-    "gamma_se": 1.2442712183387516e-09,
-    "z": 5.04705621107262,
-    "m_total": 1444196,
-    "corrected_r2": 0.17066742661708542
-   }
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound",
+   "reference": "DIAGRAM 2017 (R2 0.0444)"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "BrCa",
@@ -450,21 +410,21 @@
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
-   "num": 0.006381519204488711,
-   "den": 0.0009654423769303014,
-   "r2": 0.042181479009387034,
+   "num": 0.006381519204488713,
+   "den": 0.0009654423313826278,
+   "r2": 0.04218148099942641,
    "w_match": 1.0,
    "z_match": 0.9996091398953458,
+   "n_variants_scored": 488605,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "reference",
-   "method": "scaled_signal_eiv_v1",
    "status": "not_applicable",
-   "note": "Declared non-overlapping reference; correction not applicable."
+   "method": "scaled_signal_eiv_v1"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "BrCa",
@@ -485,35 +445,27 @@
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
-   "num": 0.013026340608239609,
-   "den": 0.0009654423769303014,
-   "r2": 0.17575937590537571,
+   "num": 0.013026340608239605,
+   "den": 0.0009654152217575122,
+   "r2": 0.17576431966026415,
    "w_match": 1.0,
    "z_match": 0.999575810303484,
+   "n_variants_scored": 488448,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "suspect",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "reference": "BCAC 2017 (R² 0.0422)",
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused.",
-   "legacy_unidentified": {
-    "method": "fixed_signal_variant_count_v0",
-    "warning": "Unidentified: fixed alpha=1 and used LD-reference variant count as the sensitivity basis; retained for historical reproducibility only.",
-    "gamma": 3.5739962262425773e-10,
-    "gamma_se": 2.28636990021997e-10,
-    "z": 1.5631749813968097,
-    "m_total": 1444196,
-    "note": "no detectable uniform overlap term (z = 1.56); score covers 34% of the LD reference — detector blind by construction for shrunk/low-coverage scores, so this is an upper bound, not a corrected measurement"
-   }
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound",
+   "reference": "BCAC 2017 (R2 0.0422)"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "SBP",
@@ -528,31 +480,32 @@
    "cohort": "UK Biobank",
    "ancestry": "EUR",
    "n_eff": 396663,
-   "n_eff_basis": "trait-level effective N (4/(1/n_case + 1/n_ctrl) for binary traits)",
+   "n_eff_basis": "trait-level sample size",
    "overlap": "in-sample",
    "trait_type": "quantitative"
   },
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 2.365729308043414,
-   "den": 22.50185074345069,
-   "r2": 0.24872065959127912,
+   "den": 22.495076773737388,
+   "r2": 0.2487955571447345,
    "w_match": 1.0,
    "z_match": 0.9994872871631355,
+   "n_variants_scored": 936666,
    "scale": "quantitative correlation R2"
   },
   "overlap": {
    "role": "suspect-unpaired",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused."
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound; no independent reference target is available"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "asthma",
@@ -574,24 +527,25 @@
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 0.01653432767962976,
-   "den": 0.0008804847836027373,
-   "r2": 0.3104925796658832,
+   "den": 0.0008802707914631721,
+   "r2": 0.31056805981595315,
    "w_match": 1.0,
    "z_match": 0.999515176036442,
+   "n_variants_scored": 793088,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "suspect-unpaired",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused."
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound; no independent reference target is available"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  },
  {
   "trait": "MDD",
@@ -613,23 +567,24 @@
   "ld_ref": "bigsnpr HM3+ EUR (figshare 21305061; ppb int8 blocks)",
   "metrics": {
    "num": 0.002032510635086759,
-   "den": 0.00019695069438799563,
-   "r2": 0.020975297876342884,
+   "den": 0.0001968524094988683,
+   "r2": 0.02098577046761793,
    "w_match": 1.0,
    "z_match": 0.9995507270338845,
+   "n_variants_scored": 807041,
    "scale": "standardized logistic-summary approximation (not liability R2)"
   },
   "overlap": {
    "role": "suspect-unpaired",
-   "method": "scaled_signal_eiv_v1",
    "status": "basis_unavailable",
+   "method": "scaled_signal_eiv_v1",
    "basis": {
     "kind": "unavailable",
-    "provenance": "PGS Catalog final LDpred2 weights; trainer operator unavailable"
+    "provenance": "only final PGS Catalog LDpred2 weights are available; the trainer sensitivity operator cannot be reconstructed"
    },
-   "note": "Final LDpred2 weights do not identify the trainer sensitivity basis; correction refused."
+   "note": "correction refused: only final LDpred2 weights are available, so the trainer sensitivity basis cannot be reconstructed; this in-sample estimate remains an upper bound; no independent reference target is available"
   },
-  "date": "2026-07-21",
-  "ppb_commit": "aa4c293"
+  "date": "2026-07-22",
+  "ppb_commit": "69d3ce6"
  }
 ]

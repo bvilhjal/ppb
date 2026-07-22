@@ -28,11 +28,11 @@ records, one per (score × target GWAS) evaluation.
 | `target.n_eff_range` | `[min, max]` of the per-variant `N` column, when `n_eff` is a median over a varying column |
 | `target.overlap` | `"none (declared)"` \| `"in-sample"` |
 | `ld_ref` | LD reference id/version |
-| `metrics.num`, `metrics.den` | `wᵀz`, `wᵀDw` over the LD-ref variants |
+| `metrics.num`, `metrics.den` | `wᵀz`, `wᵀDw` over the target-specific joint weight/summary-statistic support |
 | `metrics.r2` | registry R² from Equation 1 |
 | `metrics.scale` | `"quantitative correlation R2"` \| `"standardized logistic-summary approximation (not liability R2)"` |
 | `metrics.w_match`, `metrics.z_match` | harmonized-variant fractions |
-| `metrics.n_variants_scored` | optional count of non-zero weights on the target-specific joint `w`/`z` support |
+| `metrics.n_variants_scored` | count of non-zero weights on the target-specific joint `w`/`z` support |
 | `overlap.role` | `"reference"` (declared non-overlapping) \| `"suspect"` (paired with a reference) \| `"suspect-unpaired"` (upper bound, no reference) |
 | `overlap.method` | current contract: `"scaled_signal_eiv_v1"` |
 | `overlap.status` | fit/correction eligibility from Table 2 |
@@ -43,7 +43,7 @@ records, one per (score × target GWAS) evaluation.
 | `overlap.corrected_r2` | basis-aware correction; permitted only when `status == "correctable"` |
 | `overlap.reference` | label + R² of the reference evaluation |
 | `overlap.note` | reason a correction is not applicable or was refused |
-| `overlap.legacy_unidentified` | quarantined pre-v1 slope fields, retained for audit only and never treated as a current correction |
+| `overlap.legacy_unidentified` | optional quarantined pre-v1 slope fields, retained for audit only and never treated as a current correction |
 | `date`, `ppb_commit` | provenance |
 
 **Equation 1. Registry score metric.**
@@ -92,8 +92,8 @@ R²_corrected = num_corrected² / metrics.den
 - `target.trait_type` and `metrics.scale` must agree exactly: quantitative
   traits use `"quantitative correlation R2"`; binary traits use
   `"standardized logistic-summary approximation (not liability R2)"`.
-  `metrics.n_variants_scored`, when present, is a positive integer no larger
-  than `score.n_variants`.
+  `metrics.n_variants_scored` is a positive integer no larger than
+  `score.n_variants`.
 - Every record must declare `target.overlap`; in-sample records are displayed
   as **upper bounds**, never as accuracy measurements.
 - Every record uses `overlap.method == "scaled_signal_eiv_v1"` and declares a
@@ -105,12 +105,15 @@ R²_corrected = num_corrected² / metrics.den
   carry the finite current-fit fields needed to verify Equation 2. Every other
   fit status fails closed. Every refusal status (all except `correctable` and
   `not_applicable`) must explain the refusal in `overlap.note`.
-- `overlap.legacy_unidentified` is never current evidence. It records the old
+- When present, `overlap.legacy_unidentified` is never current evidence. It
+  records the old
   `fixed_signal_variant_count_v0` calculation, which fixed the signal scale
   at one and substituted LD-reference variant count for a trainer-sensitivity
   basis.
   Its numbers remain finite and auditable, but the leaderboard labels them
   legacy and never displays their `corrected_r2` as a validated correction.
+  The exact-support baseline does not carry these obsolete values; they remain
+  available in repository history at commit `dcd4fc3`.
 - `metrics.num` and `metrics.den` must be recorded with enough significant
   digits to reproduce `metrics.r2` — a reader must be able to recompute the
   headline number. Rounding both to 4 decimals leaves small-`den` traits with
@@ -128,10 +131,11 @@ R²_corrected = num_corrected² / metrics.den
   identified by trait, score id, target GWAS/cohort/ancestry, date, and commit;
   that identity must be unique across all packs.
 - Records are immutable once merged; corrections land as new packs. The
-  documented exception is the 2026-07-22 in-place migration of
-  `baseline-2026-07.json`: it only declared metric scales and quarantined the
-  pre-v1 overlap fields under `legacy_unidentified`; the metric and legacy
-  numerical values were unchanged.
+  documented exception is the 2026-07-22 repair of the unfinished baseline:
+  commit `dcd4fc3` first quarantined the pre-v1 overlap fields, then the full
+  real-data regeneration replaced the metrics with exact-support evaluations
+  and removed those obsolete fields from the current pack. Both states remain
+  auditable in Git history.
 
 ## Generating a pack
 

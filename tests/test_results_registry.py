@@ -105,7 +105,10 @@ def test_record_has_required_fields(name, rec):
         "n_eff_basis", "overlap",
     ):
         assert key in rec["target"], f"{name}: missing 'target.{key}'"
-    for key in ("num", "den", "r2", "scale", "w_match", "z_match"):
+    for key in (
+        "num", "den", "r2", "scale", "w_match", "z_match",
+        "n_variants_scored",
+    ):
         assert key in rec["metrics"], f"{name}: missing 'metrics.{key}'"
     for key in ("role", "method", "status"):
         assert key in rec["overlap"], f"{name}: missing 'overlap.{key}'"
@@ -175,12 +178,11 @@ def test_counts_and_sample_sizes_are_positive_integers(name, rec):
         f"{name}: score.n_variants must be a positive integer"
     assert _positive_int(rec["target"]["n_eff"]), \
         f"{name}: target.n_eff must be a positive integer"
-    n_scored = rec["metrics"].get("n_variants_scored")
-    if n_scored is not None:
-        assert _positive_int(n_scored), \
-            f"{name}: metrics.n_variants_scored must be a positive integer"
-        assert n_scored <= rec["score"]["n_variants"], \
-            f"{name}: metrics.n_variants_scored exceeds score.n_variants"
+    n_scored = rec["metrics"]["n_variants_scored"]
+    assert _positive_int(n_scored), \
+        f"{name}: metrics.n_variants_scored must be a positive integer"
+    assert n_scored <= rec["score"]["n_variants"], \
+        f"{name}: metrics.n_variants_scored exceeds score.n_variants"
     for key in ("n_blocks", "n_groups"):
         if rec["overlap"].get(key) is not None:
             assert _positive_int(rec["overlap"][key]), \
@@ -472,9 +474,30 @@ def test_leaderboard_labels_scales_and_quarantines_legacy_values():
     rendered = build(load_records())
     assert "binary approximation (not liability R²)" in rendered
     assert "A correction is displayed only for a basis-aware fit" in rendered
-    assert "legacy v0 (unidentified)" in rendered
-    assert "old corrected R²=" in rendered
     assert "validated R&sup2; correction" in rendered
+    assert "91.8% target support" in rendered
+    assert "Legacy v0 (unidentified)" not in rendered
+    assert "old corrected R²=" not in rendered
+
+    legacy_rec = copy.deepcopy(RECORDS[1][1])
+    legacy = {
+        "method": LEGACY_METHOD,
+        "warning": "synthetic unidentified legacy model",
+        "gamma": 1e-7,
+        "gamma_se": 5e-8,
+        "z": 2.0,
+        "m_total": 1000,
+    }
+    old_num = legacy_rec["metrics"]["num"] - legacy["gamma"] * legacy["m_total"]
+    legacy["corrected_r2"] = old_num ** 2 / legacy_rec["metrics"]["den"]
+    legacy_rec["overlap"]["legacy_unidentified"] = legacy
+
+    test_legacy_overlap_diagnostics_are_quarantined_but_auditable(
+        "synthetic", legacy_rec)
+    rendered_legacy = build([legacy_rec])
+    assert "Legacy v0 (unidentified)" in rendered_legacy
+    assert "legacy v0 (unidentified)" in rendered_legacy
+    assert "old corrected R²=" in rendered_legacy
 
 
 @pytest.mark.parametrize(
