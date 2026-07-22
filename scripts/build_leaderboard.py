@@ -80,21 +80,59 @@ def fmt(v, nd=4):
     return f"{v:.{nd}f}" if isinstance(v, (int, float)) else "—"
 
 
-STATUS = {
-    "reference": ("reference", "#e8f5e9"),
-    "suspect": ("overlap suspect", "#fff8e1"),
-    "suspect-unpaired": ("upper bound", "#ffebee"),
+ROLE_STYLE = {
+    "reference": "#e8f5e9",
+    "suspect": "#fff8e1",
+    "suspect-unpaired": "#ffebee",
+}
+
+STATUS_LABEL = {
+    "not_applicable": "not applicable",
+    "basis_unavailable": "basis unavailable",
+    "insufficient_data": "insufficient data",
+    "excluded_basis": "incomplete basis",
+    "nonidentifiable": "not identifiable",
+    "weak_identification": "weak identification",
+    "heterogeneous": "heterogeneous",
+    "unstable": "unstable",
+    "not_detected": "not detected",
+    "sign_reversal": "sign reversal refused",
+    "correctable": "correctable",
+}
+
+SCALE_LABEL = {
+    "quantitative correlation R2": "quantitative correlation R²",
+    "standardized logistic-summary approximation (not liability R2)":
+        "binary approximation (not liability R²)",
 }
 
 
 def row(rec):
     m, ov, sc, tg = rec["metrics"], rec["overlap"], rec["score"], rec["target"]
     role = ov.get("role", "reference")
-    label, color = STATUS.get(role, (esc(role), "#fff"))
-    corrected = fmt(ov.get("corrected_r2")) if ov.get("corrected_r2") is not None else "—"
-    z = fmt(ov.get("z"), 1) if ov.get("z") is not None else "—"
+    status = ov.get("status", "unknown")
+    color = ROLE_STYLE.get(role, "#fff")
+    prefix = "reference" if role == "reference" else "upper bound"
+    label = f"{prefix} · {STATUS_LABEL.get(status, esc(status))}"
+    corrected = (fmt(ov.get("corrected_r2"))
+                 if status == "correctable" else "—")
+    z = fmt(ov.get("gamma_z"), 1) if ov.get("gamma_z") is not None else "—"
     ref = esc(ov.get("reference", "—"))
     note = f'<br><small>{esc(ov["note"])}</small>' if ov.get("note") else ""
+    legacy = ov.get("legacy_unidentified")
+    if legacy:
+        parts = []
+        if legacy.get("z") is not None:
+            parts.append(f"z={fmt(legacy['z'], 1)}")
+        if legacy.get("corrected_r2") is not None:
+            parts.append(f"old corrected R²={fmt(legacy['corrected_r2'])}")
+        detail = " · ".join(parts) if parts else "diagnostic retained"
+        legacy_cell = (
+            f'<abbr title="{esc(legacy.get("warning", "unidentified legacy model"))}">'
+            f"legacy v0 (unidentified)</abbr><br><small>{detail}</small>")
+    else:
+        legacy_cell = "—"
+    scale = SCALE_LABEL.get(m.get("scale"), esc(m.get("scale", "undeclared")))
     # n_eff means different things per target; expose its basis rather than
     # letting a bare number read as one comparable quantity across rows.
     basis = tg.get("n_eff_basis", "")
@@ -110,10 +148,12 @@ def row(rec):
         f"<br><small>{esc(sc['name'])}</small></td>"
         f"<td>{esc(tg['gwas'])}<br><small>{esc(tg['cohort'])} · {n_eff}</small></td>"
         f"<td>{esc(tg['ancestry'])}</td>"
-        f'<td data-sort="{m["r2"]:.6f}"><b>{m["r2"]:.4f}</b></td>'
+        f'<td data-sort="{m["r2"]:.6f}"><b>{m["r2"]:.4f}</b>'
+        f"<br><small>{scale}</small></td>"
         f"<td>{label}{note}</td>"
         f"<td>{z}</td>"
         f"<td>{corrected}</td>"
+        f"<td>{legacy_cell}</td>"
         f"<td><small>{ref}</small></td>"
         "</tr>")
 
@@ -144,21 +184,23 @@ def build(records):
  a {{ color: #1565c0; }}
 </style></head><body>
 <h1>PPB leaderboard — polygenic-score accuracy from summary statistics</h1>
-<p class="sub">R&sup2; = (w&#7488;z)&sup2; / (w&#7488;Dw), computed without individual-level data.
-Every evaluation declares its training/target sample overlap; in-sample rows are <b>upper bounds</b>,
-never accuracy measurements. Overlap z &gt; 2 flags detected training/target overlap
+<p class="sub">R&sup2; = (w&#7488;z)&sup2; / (w&#7488;Dw), computed without individual-level data;
+its declared scale is shown per row, and binary values are not liability-scale R&sup2;.
+Every evaluation declares its training/target sample overlap; in-sample rows are <b>upper bounds</b>.
+A correction is displayed only for a basis-aware fit whose status is <code>correctable</code>.
+Historical v0 values remain visible solely as unidentified legacy diagnostics
 (<a href="https://github.com/bvilhjal/ppb/blob/main/docs/OVERLAP.md">method</a>).</p>
 <p class="legend">
  <span class="chip" style="background:#e8f5e9">reference — declared non-overlapping target</span>
- <span class="chip" style="background:#fff8e1">overlap suspect — paired with a reference</span>
- <span class="chip" style="background:#ffebee">upper bound — no reference / sparse score</span>
+ <span class="chip" style="background:#fff8e1">upper bound — paired with a reference</span>
+ <span class="chip" style="background:#ffebee">upper bound — no reference</span>
 </p>
 <table id="lb"><thead><tr>
 <th onclick="srt(this,0)">Trait</th><th onclick="srt(this,1)">Score</th>
 <th onclick="srt(this,2)">Target GWAS</th><th onclick="srt(this,3)">Anc.</th>
-<th onclick="srt(this,4,1)">R&sup2;</th><th onclick="srt(this,5)">Status</th>
-<th onclick="srt(this,6,1)">overlap z</th><th onclick="srt(this,7,1)">R&sup2; corrected</th>
-<th>reference (R&sup2;)</th></tr></thead><tbody>
+<th onclick="srt(this,4,1)">R&sup2; (declared scale)</th><th onclick="srt(this,5)">Status</th>
+<th onclick="srt(this,6,1)">current γ z</th><th onclick="srt(this,7,1)">validated R&sup2; correction</th>
+<th>Legacy v0 (unidentified)</th><th>reference (R&sup2;)</th></tr></thead><tbody>
 {rows}
 </tbody></table>
 <footer>Generated {now} from <a href="https://github.com/bvilhjal/ppb/tree/main/results">results/</a>
