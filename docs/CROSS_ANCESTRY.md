@@ -37,15 +37,19 @@ part of the European-only original.
 The PPB identity is ancestry-agnostic in *form*. For a fixed PGS `w` (trained in
 any ancestry A) evaluated in a **target ancestry B**:
 
+**Equation 1. Target-ancestry predictive accuracy.**
+
 $$R^2_B = \frac{(w_B^\top z_B)^2}{w_B^\top D_B\, w_B}$$
 
 with **both** `z_B` and `D_B` from ancestry B:
+
+**Table 1. Inputs and their required scale.**
 
 | input | definition | source |
 |---|---|---|
 | `z_B` | target-trait marginal correlations in B, `r_{B,j} = t_{B,j}/√(t_{B,j}²+n_{B,j}−2)` | **B GWAS** of the trait |
 | `D_B` | LD (genotype correlation) matrix in B, ideally from a panel independent of the `z_B` sample | **B reference panel** |
-| `w_B` | weights on B's standardized scale | per-allele β from A, rescaled to B's empirical genotype SDs (`sd_B/sd_A`) |
+| `w_B` | weights on B's standardized-genotype scale | dosage weight `b_j` times empirical `sd_B,j`; only an already A-standardized weight uses `w_A,j × sd_B,j / sd_A,j` |
 
 **Not required:** cross-population genetic correlation `r_g`, the discovery LD
 `D_A`, discovery frequencies `p_A`, or `var(y_B)` (it cancels on the correlation
@@ -63,6 +67,11 @@ genotype SD and the residual does **not** cancel. Operational rule: standardize
 all three with the same **empirical B genotype SDs** (in-sample B moments), not
 the `2p(1−p)` formula. (In the simulation harness everything is within-cohort
 standardized, so this is automatic and the identity is exact to machine precision.)
+
+The public evaluator makes the convention explicit: `weight_scale="dosage"`
+requires a bundle carrying empirical `genotype_sd` and applies `b_j × sd_B,j`;
+`weight_scale="standardized"` promises that the submitted weights already match
+the standardized genotypes represented by `D_B`.
 
 > **Known deviation in the current real-data path.** `scripts/regenerate_results.py`
 > (and the older `scripts/eval_*.py`) put `w` on the standardized scale with
