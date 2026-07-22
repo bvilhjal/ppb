@@ -17,7 +17,16 @@ from .evaluate import EvaluationResult, evaluate
 from .harmonize import HarmonizeReport, VariantTable, harmonize_to
 from .io import read_bundle, read_weights, write_bundle
 from .ldref import read_ldref, write_ldref
-from .overlap import OverlapEstimate, block_products, correct_numerator, overlap_slope
+from .overlap import (
+    OverlapBasis,
+    OverlapEstimate,
+    OverlapFit,
+    block_products,
+    correct_numerator,
+    correct_overlap_numerator,
+    fit_overlap,
+    overlap_slope,
+)
 from .ld_backend import (
     BlockDiagonalLD,
     DenseLD,
@@ -41,7 +50,9 @@ __all__ = [
     "evaluate", "EvaluationResult",
     "read_weights", "read_bundle", "write_bundle",
     "read_ldref", "write_ldref",
-    "block_products", "overlap_slope", "correct_numerator", "OverlapEstimate",
+    "block_products", "OverlapBasis", "OverlapFit", "fit_overlap",
+    "correct_overlap_numerator",
+    "overlap_slope", "correct_numerator", "OverlapEstimate",
     "residualize", "adjust", "principal_components",
     "pumas_r2", "subsample_sumstats",
     "standardized_marginal", "zstat_to_corr",
