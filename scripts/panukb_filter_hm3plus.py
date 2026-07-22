@@ -14,6 +14,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 import rdata
+import numpy as np
 
 from pathlib import Path
 DATA = str(Path(__file__).resolve().parent.parent / "data")
@@ -39,26 +40,54 @@ def load_refset():
 def filter_trait(trait, fname, refset):
     src = f"{DATA}/panukb/{fname}"
     dst = f"{DATA}/panukb/{trait}_hm3plus.tsv"
+    tmp = f"{dst}.part.{os.getpid()}"
     n_in = n_kept = 0
-    with gzip.open(src, "rt") as fh, open(dst, "w") as out:
-        header = fh.readline().rstrip("\n").split("\t")
-        col = {h: i for i, h in enumerate(header)}
-        ic, ip = col["chr"], col["pos"]
-        ir, ia = col["ref"], col["alt"]
-        ib, ise = col["beta_EUR"], col["se_EUR"]
-        iaf = col["af_EUR"] if "af_EUR" in col else col["af_controls_EUR"]
-        ilc = col["low_confidence_EUR"]
-        out.write("chrom\tpos\ta1\ta2\tbeta\tse\taf\n")
-        for ln in fh:
-            n_in += 1
-            r = ln.rstrip("\n").split("\t")
-            if r[ilc] == "true" or r[ib] == "NA" or r[ise] == "NA":
-                continue
-            pos = int(r[ip])
-            if (r[ic], pos) in refset:
-                out.write(f"{r[ic]}\t{pos}\t{r[ia]}\t{r[ir]}\t{r[ib]}\t{r[ise]}\t{r[iaf]}\n")
-                n_kept += 1
+    try:
+        with gzip.open(src, "rt") as fh, open(tmp, "w") as out:
+            header = fh.readline().rstrip("\n").split("\t")
+            col = {h: i for i, h in enumerate(header)}
+            ic, ip = col["chr"], col["pos"]
+            ir, ia = col["ref"], col["alt"]
+            ib, ise = col["beta_EUR"], col["se_EUR"]
+            iaf = col["af_EUR"] if "af_EUR" in col else col["af_controls_EUR"]
+            ilc = col["low_confidence_EUR"]
+            out.write("chrom\tpos\ta1\ta2\tbeta\tse\taf\n")
+            for ln in fh:
+                n_in += 1
+                r = ln.rstrip("\n").split("\t")
+                if r[ilc] == "true" or r[ib] == "NA" or r[ise] == "NA":
+                    continue
+                try:
+                    pos = int(r[ip])
+                    beta, se, af = float(r[ib]), float(r[ise]), float(r[iaf])
+                except (ValueError, IndexError):
+                    continue
+                if not (np.isfinite(beta) and np.isfinite(se) and se > 0
+                        and np.isfinite(af) and 0 <= af <= 1):
+                    continue
+                if (r[ic], pos) in refset:
+                    out.write(
+                        f"{r[ic]}\t{pos}\t{r[ia]}\t{r[ir]}\t{beta}\t{se}\t{af}\n")
+                    n_kept += 1
+        if n_kept == 0:
+            raise ValueError(f"{trait}: filtering produced no variants")
+        os.replace(tmp, dst)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
     print(f"{trait}: kept {n_kept}/{n_in} -> {dst}", flush=True)
+
+
+def valid_output(path):
+    """True only for a completed filtered file with its header and a data row."""
+    try:
+        if os.path.getsize(path) == 0:
+            return False
+        with open(path) as fh:
+            return (fh.readline().rstrip("\n") ==
+                    "chrom\tpos\ta1\ta2\tbeta\tse\taf" and bool(fh.readline()))
+    except OSError:
+        return False
 
 
 if __name__ == "__main__":
@@ -67,7 +96,7 @@ if __name__ == "__main__":
     traits = sys.argv[1:] or [t for t, f in FILES.items()]
     for trait in traits:
         dst = f"{DATA}/panukb/{trait}_hm3plus.tsv"
-        if os.path.exists(dst):
+        if valid_output(dst):
             print(f"{trait}: already done, skipping", flush=True)
             continue
         filter_trait(trait, FILES[trait], refset)
