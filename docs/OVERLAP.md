@@ -56,7 +56,7 @@ For a known linear trainer, let its complete effective operator be `A`, and let
 
 $$
 w=A z_{\mathrm{train}},\qquad
-q_b=\mathrm{tr}\!\left(A_b^\mathsf{T}K_b\right).
+q_b=\mathrm{tr}\left(A_b^\mathsf{T}K_b\right).
 \tag{3}
 $$
 
