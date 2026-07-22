@@ -16,11 +16,11 @@ transportability differences.
 
 For block `b`, the implemented model is
 
-\[
+$$
 u_{Rb}=s_b+e_{Rb},\qquad
 u_{Tb}=\alpha s_b+\gamma q_b+e_{Tb}.
 \tag{1}
-\]
+$$
 
 Here `s_b` is latent genuine signal, `alpha` is a positive target/reference
 signal scale, `gamma` is shared-noise coupling, and `q_b` is the trainer's
@@ -31,12 +31,12 @@ the same moment.
 The implementation profiles the latent signal and minimizes the generalized
 Deming objective
 
-\[
+$$
 Q(\alpha,\gamma)=\sum_b
 \frac{\left(u_{Tb}-\alpha u_{Rb}-\gamma q_b\right)^2}
 {\sigma^2_{Tb}+\alpha^2\sigma^2_{Rb}-2\alpha c_{TR,b}}.
 \tag{2}
-\]
+$$
 
 The caller must supply block sampling-noise variances. LD quadratic forms are
 not automatically sampling-noise variances; for marginal correlations they
@@ -54,11 +54,11 @@ intercept also captures shared confounding, not participant overlap uniquely
 For a known linear trainer, let its complete effective operator be `A`, and let
 `K` be the covariance template corresponding to one unit of shared error. Then
 
-\[
+$$
 w=A z_{\mathrm{train}},\qquad
 q_b=\operatorname{tr}\!\left(A_b^\mathsf{T}K_b\right).
 \tag{3}
-\]
+$$
 
 Variant count is valid only in the special identity-operator normalization. It
 is not a defensible fallback for shrinkage, LD-aware, clumped, thresholded, or
@@ -66,12 +66,12 @@ otherwise selected scores.
 
 For a rerunnable differentiable trainer, the permitted stochastic basis is
 
-\[
+$$
 \widehat q_b=\frac{1}{R}\sum_{r=1}^{R}
 \frac{g_{br}^{\mathsf T}\{f(z+\delta g_r)-f(z)\}_b}{\delta},
 \qquad E[g_rg_r^\mathsf T]=K.
 \tag{4}
-\]
+$$
 
 This is a generalized-degrees-of-freedom trace estimate; see
 [Ye 1998](https://doi.org/10.1080/01621459.1998.10474094) and
@@ -88,20 +88,20 @@ the basis units determine both `gamma` and the amount subtracted.
 The basis object includes block values, exact score support, provenance, and a
 support hash. The fit owns both the target numerator and total basis:
 
-\[
+$$
 U_T=\sum_{b\in S_{\mathrm{score}}}u_{Tb},\qquad
 Q_{\mathrm{total}}=\sum_{b\in S_{\mathrm{score}}}q_b.
 \tag{5}
-\]
+$$
 
 A zero-noise block is excluded from fitting. If such a block has nonzero basis
 mass, correction is refused rather than extrapolated. Otherwise the guarded
 correction is
 
-\[
+$$
 U_{\mathrm{corr}}=U_T-\widehat\gamma Q_{\mathrm{total}}.
 \tag{6}
-\]
+$$
 
 The usual PPB denominator is unchanged. The signed numerator must be inspected
 before squaring; correction is refused if Equation (6) reverses its sign.
