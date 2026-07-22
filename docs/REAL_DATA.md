@@ -4,9 +4,13 @@ First run of ppb on real data: public PGS Catalog scores evaluated against real
 GWAS summary statistics with the bigsnpr HapMap3+ European LD reference
 (see the README "LD reference (real data)" section). This exercises the whole
 stack — `read_ldref`, `harmonize_to`, `standardized_marginal`, per-variant `n`,
-and the genome-wide estimator `R² = (wᵀz)² / (wᵀDw)` accumulated across
-chromosomes. It is a **within-ancestry (EUR→EUR) anchor**, the A = B special
-case; it is not a cross-ancestry result.
+and the genome-wide estimator in Equation 1 accumulated across chromosomes. It
+is a **within-ancestry (EUR→EUR) anchor**, the A = B special case; it is not a
+cross-ancestry result.
+
+**Equation 1. Genome-wide summary-statistic accuracy**
+
+    R² = (wᵀz)² / (wᵀDw).
 
 ## Setup
 
@@ -32,9 +36,11 @@ case; it is not a cross-ancestry result.
 
 ## Results
 
-### Honest R² (non-overlapping consortium targets)
+### Non-overlapping consortium targets
 
-| trait | score (PGS Catalog) | target GWAS | N used | R² |
+**Table 1. Non-overlapping within-ancestry estimates**
+
+| trait | score (PGS Catalog) | target GWAS | N used | R² statistic |
 |---|---|---|---:|---:|
 | height | PGS002146 | GIANT 2014 (Wood) | median 252k (50.0k–253k) | 0.211 |
 | LDL | PGS002150 | GLGC 2013 (Teslovich) | median 89.9k (50.0k–173k) | 0.100 |
@@ -49,10 +55,15 @@ GLGC files carry per-variant `N`, so the table reports its median and range; no
 single `n_eff` exists for those rows. Case/control studies use a trait-level
 effective size (for example, T2D 88,810 and CAD 163,123). Published headline or
 total sample sizes are not substituted for the values fed to the estimator.
+For the quantitative rows, the statistic targets squared correlation under the
+documented standardization. The T2D, breast-cancer, and CAD rows are
+case/control approximations, not liability-scale R².
 
 ### Same scores, overlapping Pan-UKB targets (in-sample failure mode)
 
-| trait | R² (in-sample) | R² (honest) |
+**Table 2. Uncorrected in-sample statistics and independent anchors**
+
+| trait | R² statistic (in-sample) | R² statistic (honest) |
 |---|---:|---:|
 | height | 0.803 | 0.211 |
 | T2D | 0.509 | 0.044 |
@@ -64,23 +75,27 @@ total sample sizes are not substituted for the values fed to the estimator.
 | LDL | 0.148 | 0.100 |
 | MDD | 0.021 | — |
 
-The overlap contrast is the expected behaviour of the estimator: with the
-training cohort as target it recovers the in-sample fit (up to 15× inflation),
-with an independent target it measures the score's real accuracy. This failure
-mode is detectable and approximately correctable from the score weights alone —
-see [`OVERLAP.md`](OVERLAP.md) (`ppb.overlap`; polygenic scores detected at
-z = 5-12 here; sparse scores are flagged as upper bounds). All runs had
-100% weight variants and ≥99.9% z variants matched, positive `wᵀz`, and
-strictly positive `wᵀDw`. The magnitudes are consistent with the literature
-(height ~20-25%, LDL ~10%, BMI ~5-8%, CAD/T2D ~3-5%).
+The contrast exposes the expected failure mode: using the training cohort as the
+target can produce a severely inflated statistic, whereas an independent target
+measures out-of-sample association. The correction has not been removed, but it
+now requires a trainer-specific sensitivity basis, an independent reference,
+block sampling-noise variances, exact support, and a stable identifiable fit. The
+PGS Catalog LDpred2 files contain final weights but no reconstructible trainer
+operator, so their basis is `basis_unavailable`: every in-sample value in Table 2
+is an upper bound, and none has a defensible corrected R². See
+[`OVERLAP.md`](OVERLAP.md). All runs had 100% weight variants and ≥99.9% z
+variants matched, positive `wᵀz`, and strictly positive `wᵀDw`. The independent
+quantitative magnitudes are consistent with the literature (height ~20-25%, LDL
+~10%, BMI ~5-8%); binary-trait comparisons retain the approximation described
+below.
 
 ## Caveats
 
-- **Binary traits:** R² is on the standardized-latent scale (approximation,
-  not liability R²). DIAGRAM T2D used n_eff = 88.8k (balanced case/control
-  effective); Privé's pipeline uses 72.1k, which rescales R² by a constant
-  ~1.2×. Pan-UKB binary GWAS are SAIGE logistic; the z→correlation mapping is
-  approximate.
+- **Binary traits:** the reported number is a standardized summary-statistic
+  approximation, **not liability-scale R²**. DIAGRAM T2D used n_eff = 88.8k
+  (balanced case/control effective); Privé's pipeline uses 72.1k, which rescales
+  the statistic by a constant ~1.2×. Pan-UKB binary GWAS are SAIGE logistic, so
+  the z→correlation mapping is model- and prevalence-dependent.
 - **Honest ≠ unbiased:** consortium targets are UKBB-free, but scores trained
   on close relatives of these consortia would still be optimistic. The
   portability-ldpred2 scores are UKBB-trained, so the consortium numbers are
@@ -100,12 +115,16 @@ python scripts/regenerate_results.py --out results/<pack>.json   # all 15 evalua
 
 `regenerate_results.py` is the reproducible path and the one that produces the
 results registry: it sweeps each score against **both** its targets in a single
-pass over the LD reference, runs the overlap detector, and writes the JSON
-records at full precision (~5.5 min per trait, ~35 min for all nine). The older
-`scripts/eval_consortium.py` / `scripts/eval_panukb.py` print the same R² values
-as a human-readable table rounded to four decimals; do not transcribe registry
-numbers from them — at `wᵀDw ≈ 8e-4` four decimals leaves one significant figure
-and `r2` can no longer be recomputed from the recorded `num`/`den`.
+pass over the LD reference and writes the JSON records at full precision (~5.5
+min per trait, ~35 min for all nine). It records the current final-weight overlap
+basis as unavailable and does not manufacture a corrected statistic from variant
+count. Future scores with a documented linear operator or stable rerunnable
+trainer can use the retained basis-aware correction. The older
+`scripts/eval_consortium.py` / `scripts/eval_panukb.py` are human-readable
+diagnostics, not the publication path; they do not replace the registry's strict
+joint-support and provenance checks. Do not transcribe rounded numbers from them
+— at `wᵀDw ≈ 8e-4` four decimals leaves one significant figure and `r2` can no
+longer be recomputed from the recorded `num`/`den`.
 
 Scripts resolve `data/` relative to the repository root. PGS Catalog weights
 (`data/pgs_weights/`) are downloaded directly from the PGS Catalog FTP

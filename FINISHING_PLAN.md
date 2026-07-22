@@ -16,21 +16,30 @@ literature); the overlapping-cohort (in-sample) failure mode demonstrated
 quantitatively on the same scores. See `docs/REAL_DATA.md`. Still no real
 cross-ancestry result.
 
-Revised: 2026-07-20 — **Gate-D overlap detector added** (`ppb.overlap`):
-detects and approximately corrects training-target sample overlap from the PGS
-weights alone (no training summary statistics), via the uniform per-variant
-noise-fit term recovered by a dual-target block regression; validated in
-simulation (`experiments/overlap_detection.py`) and on the real-data
-evaluations (polygenic scores: z = 5-12; sparse scores are blind by
-construction and are flagged as upper bounds). Method note:
-`docs/OVERLAP.md`.
+Revised: 2026-07-22 — **Gate-D overlap correction retained and redesigned**
+(`ppb.overlap`): the fit separates target/reference signal scale from shared
+noise and requires a trainer-specific sensitivity basis on the exact score
+support. Identification, stability, heterogeneity, and sign gates fail closed.
+The current final LDpred2 artifacts do not preserve a reconstructible trainer
+operator, so they are `basis_unavailable` upper bounds and must not carry a
+headline corrected R². The controlled physical simulation deliberately records
+the current weak-identification boundary rather than declaring a false recovery.
+Method note: `docs/OVERLAP.md`.
 
-Revised: 2026-07-20 — **stage-1 leaderboard**: versioned results registry
+Revised: 2026-07-22 — **scientific and publication-path hardening**: PUMAS-style
+repeated learning now refits every pseudo-training split with signal-dependent
+dense Gaussian moments; evaluator scaling/support and finite-value checks are
+explicit; LD stores and result packs receive strict structural and provenance
+validation. Binary summary-statistic R² remains an approximation, not
+liability-scale R².
+
+Revised: 2026-07-22 — **stage-1 leaderboard**: versioned results registry
 (`results/`, schema in `results/schema.md`) + static site generator
 (`scripts/build_leaderboard.py`) + GitHub Pages workflow. Baselines only;
-in-sample rows are displayed as upper bounds with the overlap-detector fit
-alongside. This is the "first leaderboard from reviewed result files" — no
-submission service before the protocol survives external beta (unchanged).
+in-sample rows are displayed as upper bounds, and only overlap fits satisfying
+the new basis-aware gates may be corrected. This is the "first leaderboard from
+reviewed result files" — no submission service before the protocol survives
+external beta (unchanged).
 
 ## Objective
 
@@ -41,11 +50,14 @@ polygenic score in a *target ancestry* — using only summary-level data
 individual-level test records.
 
 The within-ancestry summary-statistic evaluator of Witteveen et al. (2022) is the
-**foundation and validation anchor**: cross-ancestry evaluation is the *same*
-identity `R² = (wᵀz)²/(wᵀDw)` with the target-population moments (`z_B`, `D_B`)
-supplied for the target ancestry B. The project's new scientific contribution is
-turning that estimator into a portability-measurement tool and benchmark, and
-validating it across ancestries.
+**foundation and validation anchor**: cross-ancestry evaluation uses Equation 1
+with the target-population moments (`z_B`, `D_B`) supplied for target ancestry B.
+The project's new scientific contribution is turning that estimator into a
+portability-measurement tool and benchmark, and validating it across ancestries.
+
+**Equation 1. Target-ancestry summary-statistic accuracy**
+
+    R²_B = (wᵀz_B)² / (wᵀD_Bw).
 
 ## Project focus (decided 2026-07-18)
 
@@ -107,31 +119,39 @@ resolves to the **free-threaded** build (`*_cp314t`), under which numpy/MKL matm
 hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out of
 `njit`.
 
-## Current state (2026-07-21)
+## Current state (2026-07-22)
 
-**Built and green (CI on Python 3.11/3.12):**
+**Built and tested locally (CI targets Python 3.11/3.12):**
 
 - Core estimator (`r2`, `mse`) and LD backends: dense, block-diagonal, low-rank
-  (LR8) and int8 (D8/LR8, ~8× smaller), all validated against individual-level
-  truth to ~1e-9.
+  (LR8), and int8 (D8/LR8, ~8× smaller), validated against individual-level
+  truth at representation-appropriate tolerances. The LD loader now checks exact
+  tiling/coverage, offsets, dtypes, annotations, packed diagonals, LR8 zero rows,
+  and low-rank definiteness; large D8 blocks are not claimed to have a universal
+  PSD certificate.
 - Allele harmonization (`harmonize`), covariate/PC adjustment (`covariates`),
   per-variant sample sizes (`sumstats`), a CLI (`ppb evaluate`) and `.npz` bundle
-  format.
+  format. Evaluation requires an explicit dosage/standardized weight scale, uses
+  coherent joint weight/summary-statistic support, and rejects non-finite inputs
+  and degenerate residual covariates.
 - Simulation harness: block-AR(1) LD, diploid genotypes, Balding-Nichols
   two-population structure.
 - Validated demonstrations (all encoded as tests): within-ancestry LD-reference
   behaviour (Fig. S1), cross-method concordance/ranking (Fig. 1 / Table 1 style),
   PC adjustment removing stratification, per-variant-N correction, PUMAS-style
-  single-GWAS subsampling agreement, and **cross-ancestry portability**
-  (`experiments/cross_ancestry.py`).
-- Training/target sample-overlap detection and numerator correction
-  (`ppb.overlap`, Gate D) — validated in simulation and applied to the
-  real-data evaluations; the sparse-score blind spot is documented and the
-  affected evaluations are reported as upper bounds (`docs/OVERLAP.md`).
+  repeated learning that refits each pseudo-training split, and **cross-ancestry
+  portability** (`experiments/cross_ancestry.py`).
+- Basis-aware training/target shared-noise detection and guarded numerator
+  correction (`ppb.overlap`, Gate D). Correction requires an identified trainer
+  basis; the current LDpred2 final weights fail closed as `basis_unavailable`, and
+  the physical simulation documents a weak-identification boundary
+  (`docs/OVERLAP.md`).
 - Stage-1 leaderboard: the versioned results registry (`results/`, schema
   enforced by `tests/test_results_registry.py`) regenerated end-to-end from
   source data by `scripts/regenerate_results.py`, rendered to a static site by
-  `scripts/build_leaderboard.py`.
+  `scripts/build_leaderboard.py`. Pack validation rejects non-finite metrics,
+  malformed structures, inconsistent identities, and incomplete provenance before
+  deployment.
 
 **Historical starting point (for provenance):** this repo began as a single
 ~1.4 MB notebook (now `archive/PPB.ipynb`); the working legacy code/data live in
@@ -155,15 +175,20 @@ not a repackaging (Gate D).
   non-overlapping consortium GWAS — R² 0.21 (height), 0.10 (LDL), 0.056 (BMI),
   0.044 (T2D), 0.042 (breast cancer), 0.025 (CAD) — plus the in-sample
   (overlapping-cohort) failure mode quantified (same scores vs Pan-UKB GWAS:
-  up to 15× inflation). Details and provenance in `docs/REAL_DATA.md`.
+  severe inflation). Binary-trait values are standardized summary-statistic
+  approximations, not liability-scale R²; the final-weight overlap basis is
+  unavailable, so no corrected value is claimed. Details and provenance in
+  `docs/REAL_DATA.md`.
 
 ## Stewardship and provenance
 
-This continues and extends work that traces to Menno Witteveen's project, led here
-by an existing senior author of the original preprint. It is a stewardship
-continuation of the within-ancestry method **and** a new cross-ancestry extension;
-neither claims to replace the original or to attribute the cross-ancestry
-direction to the original authors. The project will:
+This repository is an attempt to finish and extend Menno Witteveen's unfinished
+project after he left science, led here by an existing senior author of the
+original preprint. It is a stewardship continuation of the within-ancestry method
+**and** a new cross-ancestry extension; preserving the record does not imply
+Witteveen's endorsement, ownership of later changes, or current involvement, and
+the cross-ancestry direction is not attributed to the original authors. The
+project will:
 
 - preserve the original repositories, history, licences, copyright, and citations,
   keeping code (MIT), the preprint manuscript (CC-BY), and the UK-Biobank-derived

@@ -28,10 +28,10 @@ For a quantitative phenotype, each paired score is evaluated as
 
 Squaring a noisy validation numerator gives a positive finite-validation bias.
 ``pumas_r2`` exposes the paper-style raw statistic and a conditional plug-in
-correction.  The correction is exact for weights independent of the pseudo
-split; with fitted weights it is an approximation.  For binary phenotypes,
-Equation 3 is only an approximate and less interpretable performance measure,
-as Zhao et al. explicitly note.
+correction.  Within this plug-in working model the correction is exact for
+weights independent of the pseudo split; with fitted weights it is an
+approximation.  For binary phenotypes, Equation 3 is only an approximate and
+less interpretable performance measure, as Zhao et al. explicitly note.
 """
 
 from __future__ import annotations
@@ -219,11 +219,11 @@ def pumas_r2(
     pseudo-validation numerators.  ``'conditional'`` subtracts
     ``N_train / (N N_val) * w.T @ V @ w`` before dividing by the denominator in
     Equation 3.  Corrected estimates can be negative; clipping them would simply
-    reintroduce positive null bias.  The default ``'auto'`` uses this exact
-    conditional correction for independent weights and the paper-style raw
-    statistic for fitted weights.  Applying ``'conditional'`` to fitted weights
-    is allowed only as an explicit approximation because ``w(z_train)`` and the
-    paired validation noise are dependent.
+    reintroduce positive null bias.  The default ``'auto'`` uses the correction
+    implied by this plug-in working model for independent weights and the
+    paper-style raw statistic for fitted weights.  Applying ``'conditional'``
+    to fitted weights is allowed only as an explicit approximation because
+    ``w(z_train)`` and the paired validation noise are dependent.
     """
     z_full, D, var_y = _inputs(z_full, D, var_y)
     n_full = _positive_int(n_full, "n_full")

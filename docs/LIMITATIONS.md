@@ -11,6 +11,8 @@ A tool (and planned benchmark) that measures the **cross-ancestry portability** 
 from **summary-level information only** (target-ancestry GWAS summary statistics +
 a matched LD reference), without individual-level test records:
 
+**Equation 1. Target-ancestry summary-statistic accuracy**
+
     R²_B = (wᵀ z_B)² / (wᵀ D_B w),   with z_B, D_B from the target ancestry B.
 
 The within-ancestry case (`A = B`) is the special case and validation anchor; it
@@ -52,16 +54,37 @@ utility, causality, or individual privacy.
   for six real scores) — individual blocks are ~0.1–0.2%, but summing 431 blocks
   averages independent rounding down. The residual is *not* common-mode across
   scores, so it does not cancel in ratios or rankings; it is simply small (worst
-  pairwise ratio error 0.022%). See [`METHOD.md`](METHOD.md).
+  pairwise ratio error 0.022%). The loader now validates block coverage, offsets,
+  dtypes, annotations, packed diagonals, and low-rank definiteness. D8
+  quantization can perturb positive semidefiniteness, however, and full PSD is
+  not certified for every large D8 block. See [`METHOD.md`](METHOD.md).
 - **Training/target sample overlap — the dominant failure mode for a
   benchmark.** The estimator assumes `w` was trained independently of the target
-  GWAS's noise. When it was not, the numerator is inflated additively — up to
-  **15×** in the real-data demonstration (height R² 0.80 against an in-sample
-  Pan-UKB target vs 0.21 against non-overlapping GIANT). It is detectable and
-  approximately correctable from `(w, z, D)` alone for dense scores, but
-  **undetectable for strongly shrunk / low-coverage scores**, which must be
-  reported as upper bounds rather than corrected. Every result record must
-  declare its overlap status. See [`OVERLAP.md`](OVERLAP.md).
+  GWAS's noise. When it was not, the numerator is inflated additively — by more
+  than tenfold for T2D in the real-data demonstration (0.509 against an in-sample
+  Pan-UKB target vs 0.044 against non-overlapping DIAGRAM). The retained correction
+  is deliberately basis-aware: it needs an independent reference target, a
+  reconstructible trainer-sensitivity basis on the exact score support, supplied
+  block sampling-noise variances, and an identifiable, stable fit. Final weights
+  alone do not identify that basis. The published LDpred2 artifacts therefore
+  fail closed as `basis_unavailable`; their in-sample values are upper bounds,
+  not corrected estimates. Even an eligible positive fit can reflect shared
+  stratification or relatedness rather than literal participant overlap. See
+  [`OVERLAP.md`](OVERLAP.md).
+- **Binary-trait output is not liability-scale R².** The beta/SE-to-correlation
+  conversion for case/control GWAS yields a standardized summary-statistic
+  approximation whose scale depends on the supplied effective sample size and
+  regression model. It is useful as a diagnostic or within-protocol comparison,
+  but it is not a calibrated liability-scale accuracy estimate.
+- **PUMAS is a dense Gaussian extension, not a bit-exact reimplementation.** Each
+  pseudo-training draw is now refitted and evaluated on its paired
+  pseudo-validation draw using the signal-dependent full-LD moment covariance.
+  The covariance still plugs in the observed full-sample signal and does not
+  reproduce the paper's LD-pruned, per-SNP-standard-error implementation. The
+  conditional finite-validation correction is exact within this plug-in working
+  model only for weights independent of the pseudo split; applying it to refitted
+  weights is an explicit approximation. Binary-trait output is less interpretable
+  still.
 - **The estimate is not bounded by 1.** `(wᵀz)²/(wᵀDw)` equals a squared
   correlation only when `z` and `D` describe the same sample as the phenotype.
   With a mismatched LD reference, overlap, or a `z` on an inconsistent gauge it
@@ -80,7 +103,8 @@ utility, causality, or individual privacy.
   overestimated (~+4.5%), hypothesised to stem from assortative mating — a
   modelling limitation, not a bug.
 - **Scope.** v0.1 is the **simulation-validated** cross-ancestry portability
-  estimator plus the within-ancestry Witteveen anchor (continuous traits). The
+  estimator plus the within-ancestry Witteveen anchor (quantitative traits are the
+  interpretable primary use; binary outputs remain approximate). The
   estimator is ancestry-agnostic — given target-ancestry summary statistics and a
   matched LD reference it measures cross-ancestry (portability) R² (see
   [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md)) — but this is **validated in simulation
@@ -103,7 +127,11 @@ utility, causality, or individual privacy.
 
 Genotypes and phenotype are standardized (mean 0, variance 1); with standardized
 `y`, `var_y = 1`. Weights and summary statistics must be harmonized to the LD
-reference's variants and effect-allele orientation (`ppb.harmonize`).
+reference's variants and effect-allele orientation (`ppb.harmonize`). The CLI
+requires the input weight scale explicitly: dosage-scale weights need the target
+bundle's empirical `genotype_sd`, while already standardized weights must be
+declared as such. Evaluation uses the joint weight/summary-statistic support and
+rejects non-finite values rather than mixing numerator and denominator supports.
 
 Population structure is controlled by residualizing genotypes and phenotype on
 fixed covariates (sex, age, principal components) before forming `z` and `D`

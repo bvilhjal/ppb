@@ -7,6 +7,8 @@ predictive accuracy (R²) in a *target ancestry* — from **summary-level data o
 (target-ancestry GWAS summary statistics + a matched LD reference), without
 individual-level test records. The estimator is
 
+**Equation 1. Target-ancestry summary-statistic accuracy**
+
 ```
 R²_B = (wᵀ z_B)² / (wᵀ D_B w)
 ```
@@ -26,7 +28,10 @@ the validation anchor.
   Prediction* (bioRxiv 2022,
   [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)). The
   cross-ancestry direction is **new to this project** and is not attributed to that
-  paper (which is European-only).
+  paper (which is European-only). This repository is an attempt to finish and
+  extend Witteveen's unfinished project after he left science; preserving that
+  provenance does not imply his endorsement, ownership of later changes, or
+  current involvement.
 
 > **Status:** early development. The estimator, LD backends, harmonization, and the
 > cross-ancestry method are **validated in simulation against individual-level
@@ -36,7 +41,9 @@ the validation anchor.
 > [`docs/REAL_DATA.md`](docs/REAL_DATA.md)). It has **not** been run on real
 > cross-ancestry data. See [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the
 > roadmap and [`docs/METHOD.md`](docs/METHOD.md) / [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)
-> for the specification and scope.
+> for the specification and scope. Input harmonization, weight scaling, LD
+> structure, and result-pack provenance are validated explicitly; invalid or
+> non-finite inputs fail rather than being silently ranked.
 
 ## Install
 
@@ -60,13 +67,19 @@ acc_B = r2(w, z_B, DenseLD(D_B))     # predictive R² of w in ancestry B
 The estimator is ancestry-agnostic in form — within-ancestry is `z`/`D` from the
 same population. It only needs `wᵀz` and `wᵀDw`, so `D` is never materialised
 densely (dense, block-diagonal, low-rank, and int8 D8/LR8 backends are provided;
-the low-rank factor is PSD, so `wᵀDw ≥ 0`).
+the low-rank factor is PSD, so `wᵀDw ≥ 0`). The LD loader validates block tiling,
+offsets, dtypes, annotations, packed diagonals, and low-rank definiteness. D8
+quantization is checked where tractable but is not a blanket PSD certificate for
+every large block; see [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 Supporting pieces for real summary statistics: allele harmonization
 (`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
 sizes (`ppb.standardized_marginal`), PUMAS-style single-GWAS subsampling
-(`ppb.subsample_sumstats`), and detection/correction of training-target sample
-overlap (`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)).
+that refits each pseudo-training split (`ppb.subsample_sumstats` / `ppb.pumas_r2`),
+and basis-aware detection/correction of training-target sample overlap
+(`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)). Overlap correction is
+fail-closed: it requires a reconstructible trainer-sensitivity basis and an
+identifiable, stable block fit. Final weights alone are not such a basis.
 
 ## LD reference (real data)
 
@@ -120,7 +133,9 @@ ppb evaluate --weights weights.tsv --bundle benchmark.npz \
   `ppb.write_bundle(..., genotype_sd=target_sd)`.
 
 The command harmonizes the weights to the bundle's variants and prints a JSON
-`EvaluationResult` with `R²`, `MSE`, and harmonization counts.
+`EvaluationResult` with `R²`, `MSE`, and harmonization counts. For case/control
+GWAS, this summary-statistic `R²` is an approximation on the chosen standardized
+scale; it is **not** liability-scale `R²`.
 
 ## Experiments
 
@@ -128,8 +143,9 @@ The command harmonizes the weights to the bundle's variants and prints a JSON
 cross-ancestry portability measurement (`cross_ancestry.py`), the within-ancestry
 LD-reference behaviour (`figure_s1.py`), cross-method concordance
 (`benchmark_methods.py`), PC adjustment (`pc_adjustment.py`), per-variant N
-(`per_variant_n.py`), PUMAS agreement (`pumas_agreement.py`), training-target
-sample-overlap detection/correction (`overlap_detection.py`, see
+(`per_variant_n.py`), PUMAS-style repeated-learning agreement
+(`pumas_agreement.py`), and basis-aware training-target sample-overlap analysis
+(`overlap_detection.py`, see
 [`docs/OVERLAP.md`](docs/OVERLAP.md)), and the negative
 result on LD-based transferability reweighting (`transferability.py`, see
 [`docs/TRANSFERABILITY.md`](docs/TRANSFERABILITY.md)). See
@@ -148,11 +164,15 @@ A static leaderboard is generated from the versioned results registry in
 `scripts/build_leaderboard.py` and published to GitHub Pages by the
 `leaderboard` workflow (enable Pages with source "GitHub Actions" in repo
 settings). It shows maintainer-run baselines only — every evaluation declares
-its training/target overlap, in-sample rows are marked as **upper bounds**,
-and dense-score suspects carry the overlap-detector fit and corrected R²
-(`docs/OVERLAP.md`). External submissions enter as reviewed result packs via
-pull request; there is deliberately no submission service yet
-(`FINISHING_PLAN.md`, Gate D).
+its training/target overlap, and in-sample rows are marked as **upper bounds**.
+The current final LDpred2 weights do not preserve a reconstructible training
+operator, so their overlap basis is `basis_unavailable` and they do not receive a
+headline corrected `R²`. Correction remains available for future scores whose
+trainer basis passes the identification and stability gates in
+[`docs/OVERLAP.md`](docs/OVERLAP.md). The registry rejects malformed,
+non-finite, or provenance-incomplete packs before rendering. External submissions
+enter as reviewed result packs via pull request; there is deliberately no
+submission service yet (`FINISHING_PLAN.md`, Gate D).
 
 ## License
 

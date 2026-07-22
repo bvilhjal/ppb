@@ -2,9 +2,10 @@
 
 Validated demonstrations, each encoded as a test. Some reproduce within-ancestry
 results from Witteveen et al. (2022) — `figure_s1.py`, `benchmark_methods.py`,
-`pc_adjustment.py`, `per_variant_n.py`; `pumas_agreement.py` demonstrates PUMAS
-(Zhao et al. 2021); and **`cross_ancestry.py` is this project's new cross-ancestry
-portability method, which is NOT from that European-only paper.** These are not
+`pc_adjustment.py`, `per_variant_n.py`; `pumas_agreement.py` tests a PUMAS-style
+dense Gaussian extension (Zhao et al. 2021); and **`cross_ancestry.py` is this
+project's new cross-ancestry portability method, which is NOT from that
+European-only paper.** These are not
 part of the installable `ppb` package; run them from the repo root with the `ppb`
 env's Python.
 
@@ -25,6 +26,8 @@ python experiments/figure_s1.py --n-phenos 1000
 ```
 
 Observed (1000 simulated phenotypes, h² ∈ [0.1, 0.9], m=300, n=2000, seed=0):
+
+**Table 1. LD-reference behavior in the Figure S1 simulation**
 
 | PGS       | LD ref | mean % bias | corr(est, true) |
 |-----------|--------|------------:|----------------:|
@@ -69,6 +72,8 @@ python experiments/benchmark_methods.py --n-reps 20
 
 Observed (m=400, n=2500, h²=0.5, 20 reps × 3 architectures):
 
+**Table 2. Exact and compressed-LD agreement with individual-level accuracy**
+
 | LD reference | Pearson | Spearman | mean % bias |
 |--------------|--------:|---------:|------------:|
 | exact        |  0.975  |  0.974   |    +0.19    |
@@ -96,6 +101,8 @@ python experiments/pc_adjustment.py --n-reps 10
 
 Observed (mean over replicates):
 
+**Table 3. Effect of PC adjustment in the structure simulation**
+
 | scenario            | R² unadjusted | R² PC-adjusted |
 |---------------------|--------------:|---------------:|
 | null + confound     |      ~0.09    |     ~0.0003    |
@@ -106,13 +113,27 @@ preserving genuine genetic prediction — encoded in `tests/test_covariates.py`.
 The per-draw spurious R² is noisy (a 2-population axis is low-rank), so the
 result is averaged over replicates.
 
-## `pumas_agreement.py` — PUMAS (single-GWAS subsampling) agrees with PPB
+## `pumas_agreement.py` — PUMAS-style repeated learning compared with PPB
 
-PUMAS (Zhao et al. 2021) and PPB compute the same summary-statistic prediction
-R². PPB uses a genuinely held-out target cohort; PUMAS manufactures a
-pseudo-validation set by subsampling one GWAS's summary statistics
-(`ppb.subsample_sumstats` / `ppb.pumas_r2`), needing no separate cohort. This
-experiment shows both, and the individual-level truth, agree across PGS methods.
+PPB uses a genuinely held-out target cohort. The PUMAS-style path instead draws
+paired pseudo-training and pseudo-validation summary statistics from one GWAS,
+refits each data-derived score with `fit(z_train)`, and evaluates it on the paired
+`z_val` (`ppb.subsample_sumstats` / `ppb.pumas_r2`). An independent fixed score is
+accepted through a separate API so weights trained on the full input GWAS cannot
+masquerade as independent.
+
+The sampler uses the signal-dependent full-LD covariance in Equation 1.
+
+**Equation 1. Dense Gaussian moment covariance**
+
+    V = var_y D + z_full z_fullᵀ.
+
+This is a dense Gaussian extension of the moments in Zhao et al. (2021), with
+the observed full-sample signal plugged in; it is not their LD-pruned,
+per-SNP-standard-error implementation. The default finite-validation bias
+correction is exact within this plug-in working model only for independent fixed
+weights. For refitted weights the default is the raw pseudo-validation statistic;
+the conditional correction is available only as an explicit approximation.
 
 Run:
 
@@ -122,24 +143,37 @@ python experiments/pumas_agreement.py
 
 Observed:
 
+**Table 4. Seeded repeated-learning comparison**
+
 | arch      | method   | individual | PPB (exact) | PUMAS  |
 |-----------|----------|-----------:|------------:|-------:|
-| sparse    | causal   |   0.5002   |   0.5002    | 0.5027 |
-| sparse    | marginal |   0.3509   |   0.3509    | 0.3508 |
-| sparse    | pT       |   0.3758   |   0.3758    | 0.3752 |
-| polygenic | marginal |   0.3505   |   0.3505    | 0.3509 |
+| sparse    | causal   |   0.5091   |   0.5091    | 0.5040 |
+| sparse    | marginal |   0.3200   |   0.3200    | 0.3008 |
+| sparse    | pT       |   0.3611   |   0.3611    | 0.3482 |
+| polygenic | causal   |   0.5066   |   0.5066    | 0.5269 |
+| polygenic | marginal |   0.3482   |   0.3482    | 0.3221 |
+| polygenic | pT       |   0.3230   |   0.3230    | 0.3111 |
 
 PPB with exact target cross-products equals the individual-level R² by
-construction; PUMAS recovers it from a single GWAS. So PUMAS is the
-internal-cross-validation cousin of PPB's external benchmark — same estimator,
-different source of the validation data. Encoded in `tests/test_pumas.py`.
+construction. In this seeded run the PUMAS-style values are within 0.027 of the
+individual repeated-learning averages. That is a useful agreement check, not a
+claim of bit-exact PUMAS reproduction. The remaining plug-in, dense-Gaussian,
+Monte Carlo, fitted-weight bias, and binary-trait limitations are explicit in
+`ppb.pumas`; for a binary phenotype this statistic is not liability-scale R².
+Encoded in `tests/test_pumas.py`.
 
 ## `per_variant_n.py` — per-variant sample sizes; uniform N biases R²
 
 In a meta-analysis each variant has its own sample size `n_j`. The standardized
-marginal correlation is recovered per variant via
-`r_j = t_j / √(t_j² + n_j − 2)` (`ppb.standardized_marginal`). Using a single
-uniform `N` instead shrinks every low-`n` variant and biases R² **downward**.
+marginal correlation is recovered per variant with Equation 2
+(`ppb.standardized_marginal`).
+
+**Equation 2. Per-variant standardized marginal correlation**
+
+    r_j = t_j / √(t_j² + n_j − 2).
+
+Using a single uniform `N` instead shrinks every low-`n` variant and biases R²
+**downward**.
 
 Run:
 
@@ -148,6 +182,8 @@ python experiments/per_variant_n.py
 ```
 
 Observed (individual-level R² = 0.332):
+
+**Table 5. Per-variant versus uniform sample-size conversion**
 
 | n_j range   | individual | per-variant n | uniform N |
 |-------------|-----------:|--------------:|----------:|
@@ -177,6 +213,8 @@ python experiments/cross_ancestry.py --rg 0.8
 
 Observed (m=500, n=20000, F_ST=0.25, h²=0.5):
 
+**Table 6. Cross-ancestry portability and reference mismatch**
+
 | | r_g = 1.0 | r_g = 0.8 |
 |---|---|---|
 | portability R²_B/R²_A | 0.998 | **0.648** |
@@ -195,11 +233,13 @@ summary statistics are irreducibly required.** Encoded in
 
 When the score's training data overlaps the target GWAS, `w` fits the shared
 noise and the numerator `wᵀz` is inflated (the benchmark's Gate-D failure
-mode). For a near-linear trainer the overlap term is uniform per variant,
-recoverable from `(w, z, D)` alone with the dual-target block detector
-(`ppb.overlap_slope`), and subtractable (`ppb.correct_numerator`). Sparse
-scores hide overlap by construction (projected onto signal variants) and must
-be flagged as upper bounds. Method note: [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
+mode). The retained detector now fits genuine target/reference signal scale and
+shared-noise coupling jointly. Correction additionally requires a declared
+trainer-sensitivity basis on the exact score support, block sampling-noise
+variances, and stable identification. A known linear operator can supply that
+basis; a rerunnable differentiable trainer can estimate it. Final weights alone
+cannot, so the method fails closed as `basis_unavailable` instead of substituting
+variant count. Method note: [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
 
 Run:
 
@@ -207,25 +247,43 @@ Run:
 python experiments/overlap_detection.py
 ```
 
-Observed (dense score; corrected vs honest anchor; sparse = known blind spot):
+Observed (known marginal-score basis, five replicates per overlap fraction):
 
-| overlap | γ̂ | γ_true | R² naive | R² corrected | R² honest |
-|---:|---:|---:|---:|---:|---:|
-| 0% | ~0 | 0 | 0.074 | 0.076 | 0.075 |
-| 25% | 5.8e-05 | 6.3e-05 | 0.163 | 0.080 | 0.077 |
-| 100% | 2.3e-04 | 2.5e-04 | 0.616 | 0.102 | 0.088 |
+**Table 7. Seeded basis-aware overlap diagnostics**
 
-Encoded in `tests/test_overlap.py`.
+| overlap | γ̂ | γ_true | fit status | correction |
+|---:|---:|---:|---|---|
+| 0% | −1.18e-05 | 0 | `weak_identification` | refused |
+| 25% | 5.82e-05 | 6.25e-05 | `weak_identification` | refused |
+| 100% | 1.91e-04 | 2.50e-04 | `weak_identification` | refused |
+
+The overlap direction is visible, but the diffuse signal and basis remain too
+collinear for a defensible correction (full-overlap VIF 2.76; condition number
+8.9). The thresholded trainer is separately refused because its sensitivity
+operator was not reconstructed. This is the point of fail-closed statistics:
+"looks plausible" is not an identification theorem. Encoded in
+`tests/test_overlap.py`.
 
 ## `transferability.py` — LD-based reweighting does not improve portability (negative result)
 
 Asks whether the two LD matrices `D_A` (discovery) and `D_B` (target) can be
 used to move a PGS onto more transferable variants. They cannot. A per-variant
-LD-concordance score `s_j = cos(D_A row_j, D_B row_j)` (LD-only, no phenotype)
-cannot distinguish a discordant *tag* from a discordant *causal* variant, so
-reweighting by it removes signal; and maximizing `(wᵀz_B)²/(wᵀD_B w)` over `w`
-has optimum `w ∝ D_B⁻¹z_B` — a ridge/BLUP refit in B, i.e. score construction,
-not reweighting. Recorded so the question is not re-litigated. Method note:
+LD-concordance score (Equation 3; LD-only, no phenotype) cannot distinguish a
+discordant *tag* from a discordant *causal* variant, so reweighting by it removes
+signal.
+
+**Equation 3. Per-variant LD concordance**
+
+    s_j = cos(D_A row_j, D_B row_j).
+
+Maximizing the PPB statistic over `w` instead has the optimum in Equation 4 — a
+ridge/BLUP refit in B, i.e. score construction, not reweighting.
+
+**Equation 4. Target-informed optimum**
+
+    argmax_w (wᵀz_B)² / (wᵀD_Bw) ∝ D_B⁻¹z_B.
+
+Recorded so the question is not re-litigated. Method note:
 [`../docs/TRANSFERABILITY.md`](../docs/TRANSFERABILITY.md).
 
 Run:
@@ -235,6 +293,8 @@ python experiments/transferability.py
 ```
 
 Observed (F_ST = 0.3, m = 500), change in realized `R²_B` vs the naive score:
+
+**Table 8. Effect of proposed LD-based reweighting rules**
 
 | reweighting | R²_B vs naive |
 |---|---|
@@ -249,6 +309,8 @@ Encoded in `tests/test_transferability.py`.
 
 Method ranking from `benchmark_methods.py` (mean R², individual-level vs
 PPB-exact) — correctly preserved:
+
+**Table 9. Method ranking in the benchmark simulation**
 
 | method   | individual-level | PPB |
 |----------|-----------------:|----:|
