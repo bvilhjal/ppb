@@ -23,7 +23,12 @@ from __future__ import annotations
 import numpy as np
 
 from .harmonize import VariantTable
-from .ld_backend import BlockDiagonalLD, DenseLDInt8, PackedDenseLDInt8
+from .ld_backend import (
+    BlockDiagonalLD,
+    DenseLDInt8,
+    PackedDenseLDInt8,
+    min_eig_upper_bound,
+)
 
 
 _KIND_SQUARE = 0        # full m x m int8 block, in `ld8`   (the v1 layout)
@@ -42,7 +47,9 @@ def _validate_psd(D8, b):
     eigenvalue below ``-_PSD_TOL`` is large enough to be scientifically unsafe,
     however. Exact eigendecomposition is cubic, hence limited to modest blocks;
     callers needing a PSD guarantee for larger blocks must use LR8. The public
-    estimator still rejects any negative quadratic form it encounters.
+    estimator still rejects any negative quadratic form it encounters, and
+    :func:`_scan_psd` extends *detection* (not certification) to large blocks at
+    write time.
     """
     m = D8.shape[0]
     if m <= _PSD_CHECK_MAX:
@@ -53,6 +60,28 @@ def _validate_psd(D8, b):
                 f"block {b} is materially non-positive semi-definite: "
                 f"smallest eigenvalue {eigmin:.6g} < {-_PSD_TOL:g}; use a "
                 "PSD LD representation such as LR8")
+
+
+def _scan_psd(backend, b, iters):
+    """Lanczos indefiniteness scan for a block too large to decompose exactly.
+
+    The exact check above covers ``m <= 512``, but the shipped HM3+ reference
+    has a median block of 1,901 variants and a maximum of 17,304 -- so without
+    this, most of it is never checked at all. The Lanczos value is an upper
+    bound on the true minimum eigenvalue, which makes this a detector: it can
+    prove a block indefinite, never prove one PSD. Run at write time only; a
+    read pays ``O(m^2 * iters)`` it should not have to.
+    """
+    if backend.m <= _PSD_CHECK_MAX:
+        return None
+    eigmin = min_eig_upper_bound(backend, iters=iters)
+    if eigmin < -_PSD_TOL:
+        raise ValueError(
+            f"block {b} is materially non-positive semi-definite: Lanczos "
+            f"smallest Ritz value {eigmin:.6g} < {-_PSD_TOL:g} (an upper bound "
+            "on its true minimum eigenvalue, so the block is definitely "
+            "indefinite); use a PSD LD representation such as LR8")
+    return eigmin
 
 
 def _validate_square(backend, b):
@@ -92,7 +121,8 @@ def _one_dimensional_integer(data, name):
 
 
 def write_ldref(path, variants: VariantTable, blocks, *, rsid=None, af=None,
-                pos_hg38=None, compress=False, validate=True):
+                pos_hg38=None, compress=False, validate=True,
+                psd_scan=True, psd_scan_iters=48):
     """Write an LD-reference ``.npz``.
 
     ``blocks`` is a sequence of ``(backend, idx)`` pairs -- each backend a
@@ -108,6 +138,12 @@ def write_ldref(path, variants: VariantTable, blocks, *, rsid=None, af=None,
     ``savez_compressed``. ``validate`` runs :func:`_validate_square` on square
     blocks (symmetry, unit diagonal); packed blocks carry only a triangle, so
     symmetry is structural and only the diagonal is checkable.
+
+    ``psd_scan`` additionally runs the Lanczos indefiniteness detector
+    (:func:`_scan_psd`) on blocks above the exact check's ``m <= 512`` ceiling,
+    which is otherwise where most of a real reference lives -- the shipped HM3+
+    blocks have a median size of 1,901. It is a write-time cost because it is
+    ``O(m^2 * psd_scan_iters)`` and readers should not pay it on every load.
     """
     n = variants.n
     starts, sizes, kinds, offsets = [], [], [], []
@@ -119,10 +155,14 @@ def write_ldref(path, variants: VariantTable, blocks, *, rsid=None, af=None,
             kind, payload = _KIND_PACKED, backend.p8
             if validate:
                 _validate_packed(backend, b)
+                if psd_scan:
+                    _scan_psd(backend, b, psd_scan_iters)
         elif isinstance(backend, DenseLDInt8):
             kind, payload = _KIND_SQUARE, backend.D8.ravel()
             if validate:
                 _validate_square(backend, b)
+                if psd_scan:
+                    _scan_psd(backend, b, psd_scan_iters)
         else:
             raise TypeError(
                 "ldref blocks must be DenseLDInt8 or PackedDenseLDInt8; got "

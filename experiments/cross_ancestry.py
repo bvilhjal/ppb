@@ -49,16 +49,30 @@ def _block_sizes(m, bs):
 
 def run(m=500, block_size=50, rho=0.5, fst=0.25, h2=0.5, n_causal=50,
         n_disc=20000, n_test=20000, n_ref=10000, rg=0.8, n_phenos=60,
-        t_crit=4.0, seed=1):
+        t_crit=4.0, seed=1, rho_b=None, block_size_b=None):
+    """One cross-ancestry experiment.
+
+    ``rho_b`` / ``block_size_b`` give ancestry B its own LD architecture. They
+    default to A's, which is the configuration the headline table in
+    ``docs/CROSS_ANCESTRY.md`` reports -- and, importantly, a configuration in
+    which the two ancestries differ *only* in allele frequency. Balding-Nichols
+    supplies per-population frequencies, but the latent haplotype correlation
+    in ``ppb.simulate`` is the same matrix for both, so with the defaults
+    F_ST has no LD channel at all and portability at r_g = 1 is ~1.0. Set these
+    to make the populations differ in LD the way real ones do (different
+    recombination history: different decay, different block boundaries).
+    """
     rng = np.random.default_rng(seed)
+    rho_b = rho if rho_b is None else rho_b
     B = _block_sizes(m, block_size)
+    Bb = B if block_size_b is None else _block_sizes(m, block_size_b)
     fA, fB = bn_freqs(rng, m, fst)                     # per-ancestry allele freqs
     # Genotype cohorts are fixed; phenotypes/effects loop.
-    XAd = simulate_diploid_genotypes(n_disc, B, fA, rho, rng)   # A discovery -> weights
-    XAt = simulate_diploid_genotypes(n_test, B, fA, rho, rng)   # A test -> R2_A truth
-    XBt = simulate_diploid_genotypes(n_test, B, fB, rho, rng)   # B test -> R2_B truth + z_B
-    XBr = simulate_diploid_genotypes(n_ref, B, fB, rho, rng)    # independent B LD ref
-    XAr = simulate_diploid_genotypes(n_ref, B, fA, rho, rng)    # ancestry-A LD (mismatched)
+    XAd = simulate_diploid_genotypes(n_disc, B, fA, rho, rng)    # A discovery -> weights
+    XAt = simulate_diploid_genotypes(n_test, B, fA, rho, rng)    # A test -> R2_A truth
+    XBt = simulate_diploid_genotypes(n_test, Bb, fB, rho_b, rng)  # B test -> R2_B truth + z_B
+    XBr = simulate_diploid_genotypes(n_ref, Bb, fB, rho_b, rng)   # independent B LD ref
+    XAr = simulate_diploid_genotypes(n_ref, B, fA, rho, rng)     # ancestry-A LD (mismatched)
     D_Btest = DenseLD((XBt.T @ XBt) / n_test)
     D_Bref = DenseLD((XBr.T @ XBr) / n_ref)
     D_Aref = DenseLD((XAr.T @ XAr) / n_ref)
@@ -109,12 +123,50 @@ def summarize(rec, rg):
     print(f"  LD-form ratio w^T D_A w / w^T D_B w        = {rec['ratioLD'].mean():.3f}")
 
 
+def ld_divergence(n_phenos=25, seed=1):
+    """How the wrong-ancestry-LD bias depends on the LD the simulation gives it.
+
+    The headline -3% is measured at the default AR(1) rho = 0.5, which decays to
+    r = 0.06 within four variants -- far weaker and shorter-ranged than the real
+    HM3+ reference (median block 1,901 variants). It is therefore a property of
+    the generator, not a transferable magnitude. Rows where B's rho or block
+    boundaries differ from A's are the only ones in which the two ancestries
+    have genuinely different LD architectures.
+    """
+    print(f"\n=== LD-mismatch bias vs the simulated LD (r_g = 1.0, "
+          f"n = {n_phenos} draws) ===")
+    print(f"  {'A LD':>22}  {'B LD':>22}  {'portability':>11}  "
+          f"{'mismatch %bias':>14}  {'LD ratio':>8}")
+    cases = [
+        # (label, kwargs) -- first row is the shipped configuration
+        ("rho 0.5, blocks 100", dict(rho=0.5)),
+        ("rho 0.8, blocks 100", dict(rho=0.8)),
+        ("rho 0.9, blocks 100", dict(rho=0.9)),
+        ("rho 0.9, blocks 100", dict(rho=0.9, rho_b=0.6)),
+        ("rho 0.9, blocks 100", dict(rho=0.9, rho_b=0.6, block_size_b=50)),
+    ]
+    for label, kw in cases:
+        rec = run(m=1000, block_size=100, n_causal=100, rg=1.0, t_crit=0.0,
+                  n_phenos=n_phenos, seed=seed, **kw)
+        b_label = (f"rho {kw.get('rho_b', kw['rho'])}, blocks "
+                   f"{kw.get('block_size_b', 100)}")
+        tb, ta = rec["R2B_true"], rec["R2A_true"]
+        print(f"  {label:>22}  {b_label:>22}  {tb.mean() / ta.mean():11.3f}  "
+              f"{pct_bias(rec['mismatchA'], tb):+14.2f}  "
+              f"{rec['ratioLD'].mean():8.3f}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rg", type=float, default=None, help="run a single r_g (default: 1.0 and 0.8)")
     ap.add_argument("--n-phenos", type=int, default=60)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--ld-divergence", action="store_true",
+                    help="sweep the LD architecture instead of r_g")
     args = ap.parse_args()
+    if args.ld_divergence:
+        ld_divergence(n_phenos=args.n_phenos, seed=args.seed)
+        return
     for rg in ([args.rg] if args.rg is not None else [1.0, 0.8]):
         summarize(run(rg=rg, n_phenos=args.n_phenos, seed=args.seed), rg)
 

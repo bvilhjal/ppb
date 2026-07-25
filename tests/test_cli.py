@@ -138,3 +138,56 @@ def test_cli_dosage_scale_rejects_bundle_without_genotype_sd(tmp_path):
     with pytest.raises(ValueError, match="require.*genotype_sd"):
         main(["evaluate", "--weights", str(weights_path), "--bundle", str(bundle_path),
               "--weight-scale", "dosage"])
+
+
+def test_bundle_summary_statistics_are_not_strand_resolved(tmp_path):
+    """A bundle's z is stored in reference order; matching it against its own
+    variant table has no strand to resolve, so it must not be reported as
+    ambiguous removals. The weights are a submission and are still resolved.
+    """
+    m = 30
+    a1 = np.array(["A"] * m)
+    a2 = np.array(["T" if i % 3 == 0 else "G" for i in range(m)])  # every 3rd palindromic
+    variants = VariantTable(np.array(["1"] * m), np.arange(1, m + 1), a1, a2)
+    bundle = tmp_path / "b.npz"
+    write_bundle(bundle, variants, np.full(m, 0.05), D=np.eye(m))
+
+    weights = tmp_path / "w.tsv"
+    weights.write_text(
+        "chr\tpos\teffect_allele\tother_allele\teffect_weight\n"
+        + "".join(f"1\t{i + 1}\t{a1[i]}\t{a2[i]}\t1.0\n" for i in range(m)),
+        encoding="utf-8")
+
+    out = tmp_path / "r.json"
+    assert main(["evaluate", "--weights", str(weights), "--bundle", str(bundle),
+                 "--weight-scale", "standardized", "--out", str(out)]) == 0
+    result = json.loads(out.read_text(encoding="utf-8"))
+
+    n_palindromic = sum(1 for i in range(m) if i % 3 == 0)
+    assert result["sumstats_report"]["n_ambiguous_removed"] == 0
+    assert result["sumstats_report"]["n_matched"] == m
+    # The weights side still drops them -- an external file's strand is unknown.
+    assert result["weights_report"]["n_ambiguous_removed"] == n_palindromic
+    assert result["n_variants_scored"] == m - n_palindromic
+
+
+def test_mse_is_flagged_uninterpretable_for_dosage_weights(tmp_path):
+    """R^2 is invariant to a global rescale of w; MSE is not. Dosage-scale
+    weights carry an arbitrary scale, so their MSE means nothing and the result
+    must say so rather than emit an equally authoritative-looking number."""
+    m = 8
+    variants = VariantTable(np.array(["1"] * m), np.arange(1, m + 1),
+                            np.array(["A"] * m), np.array(["G"] * m))
+    bundle = tmp_path / "b.npz"
+    write_bundle(bundle, variants, np.full(m, 0.1), D=np.eye(m),
+                 genotype_sd=np.full(m, 0.5))
+    weights = tmp_path / "w.tsv"
+    weights.write_text(
+        "chr\tpos\teffect_allele\tother_allele\teffect_weight\n"
+        + "".join(f"1\t{i + 1}\tA\tG\t1.0\n" for i in range(m)), encoding="utf-8")
+
+    for scale, expected in (("dosage", False), ("standardized", True)):
+        out = tmp_path / f"{scale}.json"
+        assert main(["evaluate", "--weights", str(weights), "--bundle", str(bundle),
+                     "--weight-scale", scale, "--out", str(out)]) == 0
+        assert json.loads(out.read_text(encoding="utf-8"))["mse_interpretable"] is expected

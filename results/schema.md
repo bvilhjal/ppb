@@ -8,6 +8,20 @@ pull requests only (see `FINISHING_PLAN.md`, Gate D and the delivery plan).
 Each `*.json` file here is a **result pack**: a JSON array of evaluation
 records, one per (score × target GWAS) evaluation.
 
+> **These are maintainer-run baselines, and the metric is not
+> competition-safe.** `R² = (wᵀz)²/(wᵀDw)` is maximized at `w ∝ D⁻¹z`, so once
+> a target's `z` and `D` are public the best-scoring submission is a single
+> linear solve on the published bundle — no modelling required. In simulation
+> a plain ridge refit on the released moments reports **1.45×** an honest
+> score's R² at `m/N = 0.05` and **4.4×** at `m/N = 1`, with no improvement in
+> true out-of-sample accuracy; PPB's real regime is `m/N ≈ 6–14`. The ridge
+> parameter also doubles as a plausibility dial: a submission can be tuned to
+> report ~1.35× while staying below 1, so the "R² > 1 means an assumption
+> failed" diagnostic does **not** catch it. Ranking scores here is meaningful
+> only because every entry is a maintainer-run baseline whose provenance is
+> known. A competitive leaderboard requires a hidden target-`z` track
+> (`FINISHING_PLAN.md`, Gate D), not merely reviewed submissions.
+
 ## Record schema
 
 **Table 1. Result-record fields.**

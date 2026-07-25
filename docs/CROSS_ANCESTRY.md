@@ -10,17 +10,43 @@ qualifications folded in) and demonstrated against individual-level truth in
 `experiments/cross_ancestry.py` / `tests/test_cross_ancestry.py`. **Status:
 validated in simulation; not yet run on real cross-ancestry data.**
 
-## Background: from Witteveen et al. to cross-ancestry transferability
+## Background: prior art, then cross-ancestry transferability
 
-The idea originates with **Witteveen et al. (2022)** (bioRxiv, doi:10.1101/
-2022.10.10.510645; senior author Vilhjalmsson). Their contribution: the
-out-of-sample predictive R² of a linear polygenic score can be computed from
-**summary-level data alone** — an LD matrix `D` and marginal GWAS summary
-statistics `z` — via `R² = (wᵀz)²/(wᵀDw)`, with no individual-level test
-genotypes or phenotypes. They released this as a **within-ancestry (European)**
-benchmark so that competing PGS methods could be compared on a shared target
-without anyone sharing individual-level data. That work must be cited as the
-foundation of everything below.
+**The identity is not new, and this project does not claim it.** Evaluating a
+linear score against summary-level moments via `(wᵀz)²/(wᵀDw)` predates the
+work below:
+
+- **lassosum pseudovalidation** (Mak, Porsch, Choi, Zhou & Sham 2017, *Genet
+  Epidemiol* 41:469, [doi:10.1002/gepi.22050](https://doi.org/10.1002/gepi.22050))
+  selects its penalty by maximizing `βᵀr/√(βᵀRβ)` — the square root of this
+  estimator — with `r` from external summary statistics and `R` from a reference
+  panel. It is used there as a *tuning criterion* rather than a reported accuracy.
+- **Quasi-correlation** (Pattee & Pan 2020, *PLOS Comput Biol* 16:e1008271,
+  [doi:10.1371/journal.pcbi.1008271](https://doi.org/10.1371/journal.pcbi.1008271))
+  is the same quantity presented explicitly as a metric that "can be used to
+  evaluate the performance of a polygenic risk score on out-of-sample data" and
+  that "estimates the true correlation" — i.e. this estimand, named and
+  published.
+- **PUMAS** (Zhao et al. 2021) reaches the same estimand by subsampling a single
+  GWAS into pseudo-training/validation splits instead of using an external target.
+
+**Witteveen et al. (2022)** (bioRxiv, doi:10.1101/2022.10.10.510645; senior
+author Vilhjalmsson) is the foundation this repository continues, and its
+contribution is the **shared public artifact**: a released LD reference plus
+target summary statistics for a fixed **within-ancestry (European)** cohort, so
+that competing PGS methods could be compared on a common target without anyone
+sharing individual-level data. A benchmark is a different thing from an
+estimator, and that is what is being stewarded here.
+
+**What this project adds** is therefore not the identity but: the cross-ancestry
+framing and the failure-mode map below; the infrastructure (int8 block LD store,
+tri-panel harmonization, a provenance-checked results registry); and the
+evaluation discipline (exact joint support, fail-closed overlap correction,
+declared gauge). Prior art for the cross-ancestry *application* specifically has
+not been exhaustively surveyed — cross-population construction methods tune on
+target-ancestry data, sometimes with criteria of this family — so treat
+"new to this project" as a claim still to be checked against the literature
+before publication.
 
 This project starts from that idea and makes one observation: the estimator is
 **ancestry-agnostic in form** — the identity holds in *any* population whose
@@ -29,7 +55,7 @@ statistics `z_B` and LD `D_B` therefore turns the same estimator into a
 measurement of **cross-ancestry transferability**: the realized predictive
 accuracy in a target ancestry B of a PGS trained in any ancestry. That reframing
 — from a within-ancestry benchmark into a summary-statistics-based probe of PRS
-portability across ancestries — is this project's new contribution, and is *not*
+portability across ancestries — is what this project pursues, and is *not*
 part of the European-only original.
 
 ## The estimator
@@ -132,6 +158,52 @@ p+T PGS trained in A and evaluated in B (m=500, n=20000, F_ST=0.25, h²=0.5):
 So with B target stats + B LD the estimate is exact/unbiased and recovers the
 portability loss; using ancestry-A LD biases it by the LD-form ratio; and
 substituting ancestry-A sumstats does not estimate `R²_B` at all.
+
+The **+57.7%** figure is arithmetic, not a measured effect size: substituting
+`z_A` estimates `R²_A`, so the overstatement is `R²_A/R²_B − 1 = 1/0.648 − 1 =
++54.3%` plus the LD term. It is fully determined by the `r_g` and `F_ST` chosen
+here, and scales as `1/portability − 1` — quote it that way rather than as a
+number the method discovered.
+
+### What this table does *not* show: LD-driven portability loss
+
+**Both ancestries have the same LD architecture above.** `ppb.simulate` draws
+haplotypes with latent correlation `rho**|i-j|` — the *same* matrix for both
+populations — and Balding-Nichols differs them only in allele frequency. So
+`F_ST` has no LD channel at all, which is why **portability is 0.998 at
+r_g = 1.0**: ancestry divergence by itself costs nothing here, and every bit of
+loss in the table comes from the `r_g` knob. Real portability loss is driven
+substantially by LD and MAF divergence at `r_g ≈ 1` (Wang et al. 2020; Ding et
+al. 2023), so this demonstration validates the estimator's *algebra* — never in
+doubt, it is an identity — without exercising the mechanism the project exists
+to measure.
+
+`run()` takes `rho_b` and `block_size_b` to give ancestry B its own LD decay and
+block boundaries. Sweeping them (`python experiments/cross_ancestry.py
+--ld-divergence`, r_g = 1.0 throughout, m = 1000, dense weights, 25 draws):
+
+**Table 2. Wrong-ancestry-LD bias against the simulated LD architecture.**
+
+| A LD | B LD | portability at r_g = 1 | mismatch % bias | LD-form ratio |
+|---|---|---:|---:|---:|
+| ρ 0.5, blocks 100 *(shipped)* | ρ 0.5, blocks 100 | 1.001 | −3.17 | 1.034 |
+| ρ 0.8, blocks 100 | ρ 0.8, blocks 100 | 0.963 | −10.66 | 1.113 |
+| ρ 0.9, blocks 100 | ρ 0.9, blocks 100 | 0.920 | −13.70 | 1.154 |
+| ρ 0.9, blocks 100 | **ρ 0.6, blocks 100** | **0.780** | **−64.74** | 2.844 |
+| ρ 0.9, blocks 100 | **ρ 0.6, blocks 50** | **0.771** | **−65.30** | 2.883 |
+
+Two conclusions. **The −3.0% headline is a property of the generator, not a
+transferable magnitude** — it is measured at AR(1) ρ = 0.5, which decays to
+r = 0.06 within four variants, against a real HM3+ reference whose blocks have a
+median of 1,901 variants. Stronger LD alone takes it to −13.7%; genuinely
+divergent LD takes it past −60%. And **LD divergence produces real portability
+loss with `r_g` held at 1** (1.001 → 0.780), which is the mechanism the
+shared-LD configuration cannot produce.
+
+Pinned by `tests/test_cross_ancestry.py::test_ld_divergence_dominates_the_mismatch_bias`.
+A defensible number for the mismatch failure mode needs either a coalescent
+simulation with a real population split, or two real ancestry LD panels — the
+latter is Phase-4 work and is the honest place to settle it.
 
 ## Positioning
 

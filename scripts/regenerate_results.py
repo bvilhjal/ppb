@@ -201,8 +201,26 @@ def sweep(pgs, targets):
         ref = read_ldref(DATA / "ldref_hm3_plus" / "npz" / f"ldref_chr{c}.npz")
         w_al, rep_w, w_mask = harmonize_to(
             ref["variants"], w_var, w, return_mask=True)
-        # Put the weights on the standardized-genotype scale the LD is defined on.
-        sd = np.sqrt(2.0 * ref["af"] * (1.0 - ref["af"]))
+        # Put the weights on the standardized-genotype scale the LD is defined
+        # on. Note this is the HWE scale, not empirical genotype SDs -- the
+        # documented deviation in docs/CROSS_ANCESTRY.md, acceptable for this
+        # within-ancestry EUR anchor only.
+        if "af" not in ref:
+            raise ValueError(
+                f"chr{c} LD reference carries no 'af' annotation; the weight "
+                "rescale needs allele frequencies. Reconvert with "
+                "scripts/bigsnpr_ldref_to_ppb.py.")
+        af = np.asarray(ref["af"], dtype=np.float64)
+        # A monomorphic reference variant has no standardized scale: sqrt(2f(1-f))
+        # is 0, which would silently drop that variant's weight instead of
+        # reporting an unusable reference.
+        bad = ~np.isfinite(af) | (af <= 0.0) | (af >= 1.0)
+        if bad.any():
+            raise ValueError(
+                f"chr{c} LD reference has {int(bad.sum())} variant(s) with "
+                f"af outside (0, 1) (e.g. index {int(np.flatnonzero(bad)[0])}); "
+                "they have no standardized-genotype scale")
+        sd = np.sqrt(2.0 * af * (1.0 - af))
         ws = w_al * sd
         w_matched += rep_w.n_matched
 

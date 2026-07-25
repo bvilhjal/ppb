@@ -385,6 +385,36 @@ Public target-ancestry test summary statistics are effectively public test label
 a competitive leaderboard needs open development data and a hidden target-ancestry
 test track with submission limits. v0.1 must not be marketed as competition-ready.
 
+**The exposure is stronger than "labels are public": the metric has a
+closed-form maximizer.** `R² = (wᵀz)²/(wᵀDw)` is maximized at `w ∝ D⁻¹z`,
+giving `zᵀD⁻¹z` — everything needed is in the published bundle, and the optimal
+submission is one linear solve. Measured in simulation (Balding-Nichols B
+target, r_g = 1 so the honest score is at its best, attacker solves
+`(D_ref + λI)⁻¹z_B` on the *released* panel and *released* `z`, truth from a
+fresh 20k cohort):
+
+**Table 2. Closed-form attack on the published bundle.**
+
+| m | N_target | m/N | honest reports | honest true | attack reports | attack true | metric gain |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1000 | 20000 | 0.05 | 0.4112 | 0.3946 | 0.5945 | 0.4342 | 1.45× |
+| 1000 | 4000 | 0.25 | 0.3586 | 0.3872 | 0.7724 | 0.3155 | 2.15× |
+| 1000 | 2000 | 0.50 | 0.4096 | 0.4040 | 1.0612 | 0.2434 | 2.59× |
+| 2000 | 2000 | 1.00 | 0.3767 | 0.3923 | 1.6715 | 0.1492 | 4.44× |
+
+PPB's real regime is `m = 1,444,196` against target GWAS of N ≈ 10⁵, i.e.
+`m/N ≈ 6–14` — off the bottom of that table. And `λ` is a plausibility dial: at
+λ = 1 the same attack reports 1.35× the honest score while staying well below 1,
+so the "R² > 1 means an assumption failed" diagnostic in `docs/LIMITATIONS.md`
+will not catch a tuned submission.
+
+Consequences: the hidden-target-`z` track is a **requirement** for any
+competitive leaderboard, not a refinement; reviewing submitted result packs is
+not a substitute, because a well-formed pack from a `D⁻¹z` refit is
+indistinguishable from an honest one on the recorded fields; and the stage-1
+registry is defensible only because every entry is a maintainer-run baseline
+(stated in `results/schema.md`).
+
 ## Governance
 
 Minimum core team: a scientific lead, a software maintainer, and a data steward.

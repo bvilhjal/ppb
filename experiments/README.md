@@ -225,9 +225,35 @@ Observed (m=500, n=20000, F_ST=0.25, h²=0.5):
 
 With B target stats + B LD the estimate is exact/unbiased and recovers the
 portability loss; ancestry-A LD biases it (the LD-form ratio 1.031); substituting
-ancestry-A sumstats does not estimate R²_B at all (+58%). **Target-ancestry
-summary statistics are irreducibly required.** Encoded in
-`tests/test_cross_ancestry.py`.
+ancestry-A sumstats does not estimate R²_B at all. **Target-ancestry summary
+statistics are irreducibly required.** The +57.7% is `1/portability − 1` — an
+arithmetic consequence of the chosen `r_g`, not a measured effect size.
+
+**Read the mismatch row as conditional on the simulated LD.** Both ancestries
+above share one LD architecture: Balding-Nichols differs their allele
+frequencies, but `ppb.simulate` draws haplotypes with the same latent
+correlation `rho**|i-j|` for both. That is why portability is 0.998 at
+r_g = 1.0 — F_ST has no LD channel, so all loss in Table 6 comes from `r_g`.
+`run()` takes `rho_b` / `block_size_b` to give B its own LD:
+
+```bash
+python experiments/cross_ancestry.py --ld-divergence
+```
+
+**Table 7. Wrong-ancestry-LD bias against the simulated LD (r_g = 1.0)**
+
+| A LD | B LD | portability | mismatch % bias | LD ratio |
+|---|---|---:|---:|---:|
+| ρ 0.5, blocks 100 *(shipped)* | ρ 0.5, blocks 100 | 1.001 | −3.17 | 1.034 |
+| ρ 0.8, blocks 100 | ρ 0.8, blocks 100 | 0.963 | −10.66 | 1.113 |
+| ρ 0.9, blocks 100 | ρ 0.9, blocks 100 | 0.920 | −13.70 | 1.154 |
+| ρ 0.9, blocks 100 | **ρ 0.6, blocks 100** | **0.780** | **−64.74** | 2.844 |
+| ρ 0.9, blocks 100 | **ρ 0.6, blocks 50** | **0.771** | **−65.30** | 2.883 |
+
+So the −3% headline is a property of the generator (AR(1) at ρ = 0.5 decays to
+r = 0.06 in four variants; the real HM3+ blocks have a median of 1,901 variants),
+and genuinely divergent LD produces real portability loss with `r_g` held at 1.
+Both experiments are encoded in `tests/test_cross_ancestry.py`.
 
 ## `overlap_detection.py` — detecting/correcting training-target sample overlap
 

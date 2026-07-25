@@ -22,17 +22,23 @@ _AMBIGUOUS = frozenset([frozenset(("A", "T")), frozenset(("C", "G"))])
 _CHROM_ALIASES = {"23": "X", "24": "Y", "25": "XY", "26": "MT", "M": "MT"}
 
 
-def _norm_chrom(c) -> str:
-    """Canonical chromosome label: drop a ``chr`` prefix, map sex/MT codes.
+def _norm_chrom_array(chrom) -> np.ndarray:
+    """Canonical chromosome labels: drop a ``chr`` prefix, map sex/MT codes.
 
     Lets a ``chr1``/``1`` (or ``X``/``23``) labelling mismatch between inputs
     still match by position -- a common reason real-data runs match nothing.
+    Vectorized and computed once per table: at HM3+ scale the per-element Python
+    string work was a measurable share of a genome-wide harmonization sweep.
     """
-    s = str(c).strip()
-    if s[:3].lower() == "chr":
-        s = s[3:]
-    s = s.upper()
-    return _CHROM_ALIASES.get(s, s)
+    s = np.char.upper(np.char.strip(np.asarray(chrom, dtype=str)))
+    prefixed = np.char.startswith(s, "CHR")
+    if prefixed.any():
+        s = s.astype(object)
+        s[prefixed] = [v[3:] for v in s[prefixed]]
+        s = s.astype(str)
+    for alias, canonical in _CHROM_ALIASES.items():
+        s = np.where(s == alias, canonical, s)
+    return s
 
 
 def _complement(allele: str):
@@ -48,12 +54,24 @@ class VariantTable:
     """A set of variants: chromosome, position, effect allele ``a1``, other ``a2``.
 
     Alleles are upper-cased on construction. All four arrays must be equal length.
+
+    Normalized chromosomes, the allele lists, and the position index are derived
+    once and cached; assigning to a field drops them, so the table stays correct
+    if it is rebuilt in place.
     """
+
+    _CACHES = ("_norm_chrom_cache", "_allele_list_cache", "_position_index_cache")
 
     chrom: np.ndarray
     pos: np.ndarray
     a1: np.ndarray
     a2: np.ndarray
+
+    def __setattr__(self, name, value):
+        if name in {"chrom", "pos", "a1", "a2"}:
+            for key in self._CACHES:
+                self.__dict__.pop(key, None)
+        object.__setattr__(self, name, value)
 
     def __post_init__(self):
         self.chrom = np.asarray(self.chrom)
@@ -79,6 +97,60 @@ class VariantTable:
     @property
     def n(self) -> int:
         return int(self.chrom.shape[0])
+
+    @property
+    def norm_chrom(self) -> np.ndarray:
+        """Canonical chromosome labels, computed once and cached."""
+        cached = self.__dict__.get("_norm_chrom_cache")
+        if cached is None:
+            cached = _norm_chrom_array(self.chrom)
+            self.__dict__["_norm_chrom_cache"] = cached
+        return cached
+
+    def allele_lists(self) -> tuple[list, list]:
+        """``(a1, a2)`` as Python lists, computed once and cached.
+
+        The orientation loop indexes single alleles; going through numpy scalars
+        for each one costs more than the comparison it feeds.
+        """
+        cached = self.__dict__.get("_allele_list_cache")
+        if cached is None:
+            cached = (self.a1.tolist(), self.a2.tolist())
+            self.__dict__["_allele_list_cache"] = cached
+        return cached
+
+    def position_index(self) -> dict:
+        """``(norm_chrom, pos) -> [row indices]``, computed once and cached.
+
+        A reference table is harmonized against repeatedly -- the genome-wide
+        sweep in ``scripts/regenerate_results.py`` matches weights and every
+        target against the same chromosome table -- and rebuilding this map per
+        call was pure repeat work.
+        """
+        cached = self.__dict__.get("_position_index_cache")
+        if cached is None:
+            cached = {}
+            for j, key in enumerate(zip(self.norm_chrom.tolist(),
+                                        self.pos.astype(np.int64).tolist())):
+                cached.setdefault(key, []).append(j)
+            self.__dict__["_position_index_cache"] = cached
+        return cached
+
+
+def same_variants(a: VariantTable, b: VariantTable) -> bool:
+    """True when two tables describe the same variants in the same order.
+
+    Used to recognise that a table is being matched against itself, where there
+    is no orientation to resolve and no strand ambiguity to drop.
+    """
+    if a is b:
+        return True
+    if a.n != b.n:
+        return False
+    return bool(np.array_equal(a.norm_chrom, b.norm_chrom)
+                and np.array_equal(np.asarray(a.pos, dtype=np.int64),
+                                   np.asarray(b.pos, dtype=np.int64))
+                and np.array_equal(a.a1, b.a1) and np.array_equal(a.a2, b.a2))
 
 
 @dataclass
@@ -136,20 +208,23 @@ def harmonize_to(reference: VariantTable, target: VariantTable, value,
     if not np.isfinite(value).all():
         raise ValueError("value must contain only finite numbers")
 
-    pos_index: dict = {}
-    for j in range(reference.n):
-        pos_index.setdefault((_norm_chrom(reference.chrom[j]), int(reference.pos[j])), []).append(j)
+    pos_index = reference.position_index()
 
     aligned = np.zeros(reference.n, dtype=np.float64)
     used = np.zeros(reference.n, dtype=bool)
     n_matched = n_sign = n_strand = n_ambig = n_mismatch = n_unmatched = 0
 
-    for i in range(target.n):
-        candidates = pos_index.get((_norm_chrom(target.chrom[i]), int(target.pos[i])))
+    target_keys = zip(target.norm_chrom.tolist(),
+                      target.pos.astype(np.int64).tolist())
+    target_a1, target_a2 = target.allele_lists()
+    ref_a1, ref_a2 = reference.allele_lists()
+
+    for i, key in enumerate(target_keys):
+        candidates = pos_index.get(key)
         if not candidates:
             n_unmatched += 1
             continue
-        t1, t2 = str(target.a1[i]), str(target.a2[i])
+        t1, t2 = target_a1[i], target_a2[i]
         if remove_ambiguous and frozenset((t1, t2)) in _AMBIGUOUS:
             n_ambig += 1
             continue
@@ -157,7 +232,7 @@ def harmonize_to(reference: VariantTable, target: VariantTable, value,
         for j in candidates:
             if used[j]:
                 continue
-            res = _orient(t1, t2, str(reference.a1[j]), str(reference.a2[j]))
+            res = _orient(t1, t2, ref_a1[j], ref_a2[j])
             if res is None:
                 continue
             sign, strand = res

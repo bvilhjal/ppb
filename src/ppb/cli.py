@@ -27,6 +27,13 @@ def _cmd_evaluate(args) -> int:
         weight_scale=args.weight_scale,
         genotype_sd=bundle["genotype_sd"],
         remove_ambiguous=not args.keep_ambiguous,
+        # R^2 is invariant to a global rescale of w, MSE is not. Ordinary PGS
+        # Catalog weights are in trait units (e.g. cm), so their MSE is not on
+        # the bundle's standardized-phenotype scale and means nothing; only a
+        # submission that declares standardized weights carries the scale MSE
+        # needs. Report which case this run is rather than emitting a number
+        # that looks equally authoritative either way.
+        mse_interpretable=args.weight_scale == "standardized",
     )
     text = json.dumps(result.to_dict(), indent=2, allow_nan=False)
     if args.out:
@@ -36,6 +43,9 @@ def _cmd_evaluate(args) -> int:
               f"{result.n_variants_scored}/{result.n_reference} variants scored)")
     else:
         print(text)
+    if not result.mse_interpretable:
+        print("note: MSE is not interpretable for dosage-scale weights (the "
+              "weight scale is arbitrary); R^2 is unaffected.", file=sys.stderr)
     return 0
 
 

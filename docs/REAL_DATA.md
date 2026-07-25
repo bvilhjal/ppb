@@ -107,6 +107,22 @@ approximation described below.
   on close relatives of these consortia would still be optimistic. The
   portability-ldpred2 scores are UKBB-trained, so the consortium numbers are
   clean of direct sample overlap.
+- **These numbers inherit the source studies' summary-statistic scale.**
+  `R²` is proportional to the *square* of the scale of `z`, and `z` is derived
+  entirely from the reported `beta`, `se` and `n`. Genomic control — applied at
+  study and meta level by GIANT and GLGC — inflates `se` and therefore deflates
+  these estimates by roughly the inflation factor; the `n_eff` choice does the
+  same (the T2D note above is a 1.2× example). No step in this pipeline detects
+  or corrects that, so read every row as conditional on how its source study
+  processed its standard errors. See [`LIMITATIONS.md`](LIMITATIONS.md).
+- **Adjusted `z`, unadjusted `D`.** The target GWAS report covariate-adjusted
+  (partial) correlations; the bigsnpr LD reference is an unadjusted genotype
+  correlation matrix. `METHOD.md` §4 specifies adjusting both. The mismatch is
+  small within a homogeneous EUR sample and is not small in a structured target.
+- **Meta-analysis targets:** GIANT/GLGC `z_j` come from different cohort subsets
+  per variant (N 50.0k–253k), so there is no single population whose squared
+  correlation is being estimated. The registry records the N distribution rather
+  than a headline number for exactly this reason.
 - **Incomplete target support:** a missing target association is not evidence of
   zero association. PPB now uses the exact joint support in both numerator and
   denominator and records `metrics.n_variants_scored`; where support is below

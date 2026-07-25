@@ -15,10 +15,12 @@ from __future__ import annotations
 import numpy as np
 
 from ._kernels import (
+    dense_matvec_int8,
     dense_quad,
     dense_quad_int8,
     lowrank_quad_int8,
     lowrank_quad_par,
+    packed_matvec_int8,
     packed_quad_int8,
 )
 
@@ -130,8 +132,24 @@ class BlockDiagonalLD(LDBackend):
     def quad(self, w) -> float:
         w = self._check(w)
         total = 0.0
-        for backend, idx in self.blocks:
-            total += backend.quad(np.ascontiguousarray(w[idx]))
+        for b, (backend, idx) in enumerate(self.blocks):
+            wb = np.ascontiguousarray(w[idx])
+            qb = backend.quad(wb)
+            # Only the *total* being non-positive is checked downstream, and a
+            # single indefinite block is easily masked by hundreds of positive
+            # ones -- 431 in the shipped reference. That deflates w^T D w and so
+            # inflates R^2, silently, in the one direction this project fails
+            # closed on everywhere else. D8 blocks carry no PSD certificate
+            # (docs/METHOD.md), so check where the signal actually is. The
+            # tolerance admits float rounding on a genuinely PSD block, whose
+            # error is O(eps * m * ||w||^2), and nothing more.
+            if qb < -1e-12 * float(wb @ wb):
+                raise ValueError(
+                    f"block {b} has w^T D_b w = {qb!r} < 0: the LD block is not "
+                    "positive semi-definite, and summing it would understate "
+                    "w^T D w (inflating R^2). Use a PSD representation such as "
+                    "LR8 for this block.")
+            total += qb
         return total
 
 
@@ -227,6 +245,12 @@ class DenseLDInt8(LDBackend):
         w = self._check(w)
         return float(dense_quad_int8(self.D8, w) / _Q8)
 
+    def matvec(self, w) -> np.ndarray:
+        """``D w`` for the dequantised block."""
+        w = self._check(w)
+        out = np.empty(self.m, dtype=np.float64)
+        return dense_matvec_int8(self.D8, w, out) / _Q8
+
     def packed(self) -> "PackedDenseLDInt8":
         """This block as a :class:`PackedDenseLDInt8` (half the bytes, same quad)."""
         return PackedDenseLDInt8.from_dense_int8(self.D8)
@@ -308,6 +332,67 @@ class PackedDenseLDInt8(LDBackend):
     def quad(self, w) -> float:
         w = self._check(w)
         return float(packed_quad_int8(self.p8, w, self.m) / _Q8)
+
+    def matvec(self, w) -> np.ndarray:
+        """``D w`` for the dequantised block."""
+        w = self._check(w)
+        out = np.empty(self.m, dtype=np.float64)
+        return packed_matvec_int8(self.p8, w, self.m, out) / _Q8
+
+
+def min_eig_upper_bound(backend, *, iters: int = 48, seed: int = 0) -> float:
+    """Lanczos estimate of the smallest eigenvalue of an int8 LD block.
+
+    Returns the smallest Ritz value after ``iters`` Lanczos steps with full
+    reorthogonalization. By the Rayleigh-Ritz property this is an **upper
+    bound** on the true smallest eigenvalue, so it is a *detector*, not a
+    certificate: a value below zero proves the block is indefinite, while a
+    value above zero proves nothing. That asymmetry is the useful direction
+    here -- the failure it guards against is an indefinite block silently
+    deflating ``w^T D w``.
+
+    Costs ``O(m^2 * iters)`` matrix-vector products against the int8 payload,
+    which is affordable once at conversion time (seconds for the shipped
+    reference's largest block) but not on every read. Exact eigendecomposition
+    is cubic and remains the right check for modest blocks.
+    """
+    matvec = getattr(backend, "matvec", None)
+    if matvec is None:
+        raise TypeError(
+            f"{type(backend).__name__} has no matvec(); the Lanczos estimate "
+            "needs one (DenseLDInt8 and PackedDenseLDInt8 provide it)")
+    m = backend.m
+    k = max(2, min(int(iters), m))
+    rng = np.random.default_rng(seed)
+    q = rng.standard_normal(m)
+    q /= np.linalg.norm(q)
+
+    Q = np.empty((k, m), dtype=np.float64)
+    alpha = np.empty(k, dtype=np.float64)
+    beta = np.zeros(k, dtype=np.float64)
+    steps = k
+    for i in range(k):
+        Q[i] = q
+        v = np.asarray(matvec(q), dtype=np.float64)
+        alpha[i] = float(q @ v)
+        v -= alpha[i] * q
+        if i:
+            v -= beta[i - 1] * Q[i - 1]
+        # Lanczos loses orthogonality fast in floating point, and a spurious
+        # duplicated Ritz value would be reported as a fresh eigenvalue.
+        v -= Q[:i + 1].T @ (Q[:i + 1] @ v)
+        nrm = float(np.linalg.norm(v))
+        if nrm <= 1e-10 * max(1.0, abs(alpha[i])):
+            steps = i + 1                   # invariant subspace: exact here
+            break
+        beta[i] = nrm
+        q = v / nrm
+
+    T = np.diag(alpha[:steps])
+    if steps > 1:
+        off = beta[:steps - 1]
+        T += np.diag(off, 1) + np.diag(off, -1)
+    return float(np.linalg.eigvalsh(T)[0])
 
 
 def quantize_lowrank(low: LowRankLD) -> LowRankLDInt8:
