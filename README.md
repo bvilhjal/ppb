@@ -93,7 +93,10 @@ that refits each pseudo-training split (`ppb.subsample_sumstats` / `ppb.pumas_r2
 and basis-aware detection/correction of training-target sample overlap
 (`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)). Overlap correction is
 fail-closed: it requires a reconstructible trainer-sensitivity basis and an
-identifiable, stable block fit. Final weights alone are not such a basis.
+identifiable, stable block fit. Final weights alone are not such a basis, but a
+*rerunnable* trainer can supply one stochastically
+(`ppb.estimate_overlap_basis`), and in simulation the correction then returns an
+inflated statistic to its independent anchor.
 
 ## LD reference (real data)
 

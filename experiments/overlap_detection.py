@@ -1,13 +1,25 @@
-"""Basis-aware overlap detection and correction: simulation validation.
+"""Basis-aware overlap detection and correction: where it works, and where it does not.
 
-A training GWAS (n1) and a target GWAS (n2) share a controlled fraction of
-individuals; an independent GWAS (n2) is the honest anchor. For a dense
-(marginal, ``w = z_train``) score the trainer operator and its block basis are
-known exactly.  The detector jointly fits a genuine target/reference signal
-scale and the shared-noise coefficient.  Correction is attempted only when
-those components are identified and stable.  A thresholded score is passed as
-an explicitly unavailable basis and therefore fails closed rather than
-silently substituting variant count.
+A training GWAS and a target GWAS share a controlled fraction of *individuals*;
+an independent GWAS of the same size is the honest anchor. The detector jointly
+fits a genuine target/reference signal scale ``alpha`` and the shared-noise
+coupling ``gamma``, and corrects only when both are identified and stable.
+
+**The identification boundary is a property of the architecture, not of the
+method.** The design has two columns -- the reference signal ``u_R`` and the
+trainer basis ``q`` -- and both are positive and both grow with block size, so
+separating them needs signal variation *at fixed block size*. A diffuse
+architecture has almost none: every block carries a similar amount of signal,
+the columns are collinear, and the fit is correctly refused. A sparse
+architecture has a great deal, and the same code identifies cleanly and recovers
+the coupling. Earlier revisions of this experiment ran only the diffuse corner
+with a *constant* basis (a marginal trainer over equal-sized blocks makes
+``q_b = tr(D_b)`` the block size), which is the least identifiable configuration
+available, and recorded the resulting refusal as the method's operating limit.
+
+Real polygenic traits over the 1.44M-variant HM3+ reference are far sparser than
+the diffuse corner, and its 431 LD blocks range from 216 to 17,304 variants, so
+the realistic regime is the identified one.
 
 Run:
     python experiments/overlap_detection.py
@@ -17,130 +29,170 @@ from __future__ import annotations
 
 import numpy as np
 
-from ppb import DenseLD
-from ppb.overlap import (
-    OverlapBasis,
-    correct_overlap_numerator,
-    fit_overlap,
-)
+from ppb import DenseLD, estimate_overlap_basis
+from ppb.overlap import OverlapBasis, correct_overlap_numerator, fit_overlap
 from ppb.simulate import (draw_effects, marginal_stats, pgs_pthreshold,
-                          population_ld, simulate_diploid_genotypes,
-                          simulate_phenotype)
+                          simulate_diploid_genotypes, simulate_phenotype)
 
-KEYS = ("alpha_null", "gamma_null", "gamma_low", "gamma_low_true",
-        "gamma_full", "gamma_full_true", "r2_naive_full", "r2_corr_full",
-        "r2_honest_full", "correctable_full_fraction", "sparse_status")
+# Heterogeneous block sizes, as a real LD reference has.
+BLOCK_SIZES = (15, 30, 60, 120)
+KEYS = ("diffuse_status", "sparse_null_status", "sparse_low_status",
+        "sparse_full_status", "gamma_full_ratio", "r2_naive_full",
+        "r2_corr_full", "r2_honest_full", "basis_error", "sparse_trainer_status")
 
 
-def _one(rng, frac, sparse, n1, n2, n_ind, m_blocks, bs, rho, h2, n_causal):
-    m = m_blocks * bs
-    sigma = population_ld(m, block_size=bs, rho=rho)
-    maf = rng.uniform(0.05, 0.5, size=m)
-    x = simulate_diploid_genotypes(n1 + n2 + n_ind, [bs] * m_blocks, maf, rho, rng)
-    beta = draw_effects(m, n_causal, rng)
+def _cohorts(rng, n, per_size, rho):
+    """Genotypes for train/target/independent, with heterogeneous LD blocks."""
+    columns, sizes = [], []
+    for block_size in BLOCK_SIZES:
+        maf = rng.uniform(0.05, 0.5, size=block_size * per_size)
+        columns.append(simulate_diploid_genotypes(
+            3 * n, [block_size] * per_size, maf, rho, rng))
+        sizes.extend([block_size] * per_size)
+    x = np.hstack(columns)
+    sizes = np.asarray(sizes)
+    starts = np.concatenate([[0], np.cumsum(sizes)[:-1]])
+    return x, [np.arange(s, s + k) for s, k in zip(starts, sizes)]
+
+
+def _one(rng, frac, causal_frac, *, n, per_size, rho, h2, ridge, thresholded,
+         hutchinson_draws):
+    x, idxs = _cohorts(rng, n, per_size, rho)
+    m = x.shape[1]
+    beta = draw_effects(m, max(10, int(causal_frac * m)), rng)
     y = simulate_phenotype(x, beta, h2, rng)
 
-    i_tr = np.arange(n1)
-    n_ov = int(frac * n2)
-    i_ta = np.concatenate([rng.choice(i_tr, n_ov, replace=False),
-                           np.arange(n1, n1 + n2 - n_ov)])
-    i_in = np.arange(n1 + n2, n1 + n2 + n_ind)
-    z_tr, t_tr = marginal_stats(x[i_tr], y[i_tr])
-    z_ta, _ = marginal_stats(x[i_ta], y[i_ta])
-    z_in, _ = marginal_stats(x[i_in], y[i_in])
-    w = pgs_pthreshold(z_tr, t_tr, 2.5) if sparse else z_tr.copy()
+    i_train = np.arange(n)
+    n_overlap = int(frac * n)
+    i_target = np.concatenate([rng.choice(i_train, n_overlap, replace=False),
+                               np.arange(n, 2 * n - n_overlap)])
+    z_train, t_train = marginal_stats(x[i_train], y[i_train])
+    z_target, _ = marginal_stats(x[i_target], y[i_target])
+    z_indep, _ = marginal_stats(x[2 * n:], y[2 * n:])
 
-    d = DenseLD(np.corrcoef(x.T))  # matched cohort LD -> exact estimator
-    den = d.quad(w)
-    num_naive, num_honest = w @ z_ta, w @ z_in
+    D = np.corrcoef(x.T)
+    blocks = [D[np.ix_(i, i)] for i in idxs]
+    operators = [np.linalg.solve(Db + ridge * np.eye(len(Db)), np.eye(len(Db)))
+                 for Db in blocks]
 
-    u_ta = np.array([w[s:s + bs] @ z_ta[s:s + bs] for s in range(0, m, bs)])
-    u_in = np.array([w[s:s + bs] @ z_in[s:s + bs] for s in range(0, m, bs)])
-    v = np.array([d.quad(np.concatenate([np.zeros(s), w[s:s + bs],
-                                         np.zeros(m - s - bs)]))
-                  for s in range(0, m, bs)])
-    if sparse:
-        basis = OverlapBasis.unavailable(
-            "p-value thresholding operator was not reconstructed")
+    def trainer(values):
+        """Blockwise ridge -- rerunnable, and linear so its basis is checkable."""
+        w = np.zeros_like(values)
+        for A, idx in zip(operators, idxs):
+            w[idx] = A @ values[idx]
+        return w
+
+    analytic = np.array([float(np.trace(A.T @ Db))
+                         for A, Db in zip(operators, blocks)])
+    if thresholded:
+        # Discontinuous selection: the local Jacobian misses the selection
+        # response, and the perturbation-stability gate must say so.
+        w = pgs_pthreshold(z_train, t_train, 2.5)
+        basis = estimate_overlap_basis(
+            lambda values: pgs_pthreshold(
+                values, values / np.sqrt(np.clip(1.0 - values ** 2, 1e-12, None) / n),
+                2.5),
+            z_train, idxs, [np.linalg.cholesky(Db) for Db in blocks],
+            rng=rng, provenance="p+T trainer", support_hash="simulation",
+            n_draws=hutchinson_draws)
     else:
-        basis = OverlapBasis(
-            values=np.full(m_blocks, float(bs)),
-            kind="linear_trace",
-            provenance="simulation: marginal trainer A = I, K = D",
-            support_hash=f"simulation-m{m}-bs{bs}",
-        )
-    fit = fit_overlap(
-        u_ta, u_in, v / n2, v / n_ind, basis=basis,
-        groups=np.arange(m_blocks) % 20)
-    num_corr = correct_overlap_numerator(fit) if fit.can_correct else np.nan
-    return dict(alpha=fit.alpha, gamma=fit.gamma, status=fit.status,
-                vif=fit.vif, condition_number=fit.condition_number,
-                gamma_true=n_ov / (n1 * n2),
-                num_naive=num_naive, num_corr=num_corr,
-                num_honest=num_honest, den=den)
+        w = trainer(z_train)
+        basis = estimate_overlap_basis(
+            trainer, z_train, idxs, [np.linalg.cholesky(Db) for Db in blocks],
+            rng=rng, provenance="blockwise ridge trainer",
+            support_hash="simulation", n_draws=hutchinson_draws)
+
+    u_target = np.array([w[i] @ z_target[i] for i in idxs])
+    u_indep = np.array([w[i] @ z_indep[i] for i in idxs])
+    v = np.array([float(w[i] @ D[np.ix_(i, i)] @ w[i]) for i in idxs])
+    fit = fit_overlap(u_target, u_indep, v / n, v / n, basis=basis,
+                      groups=np.arange(len(idxs)) % 20)
+
+    den = DenseLD(D).quad(w)
+    corrected = correct_overlap_numerator(fit) if fit.can_correct else np.nan
+    return dict(
+        status=fit.status, vif=fit.vif, condition_number=fit.condition_number,
+        alpha=fit.alpha, gamma=fit.gamma, gamma_true=n_overlap / (n * n),
+        basis_error=(abs(basis.values.sum() - analytic.sum()) / abs(analytic.sum())
+                     if basis.available and not thresholded else np.nan),
+        basis_kind=basis.kind,
+        r2_naive=(w @ z_target) ** 2 / den,
+        r2_corrected=corrected ** 2 / den if np.isfinite(corrected) else np.nan,
+        r2_honest=(w @ z_indep) ** 2 / den)
 
 
-def run(n1=4000, n2=4000, n_ind=4000, m_blocks=60, bs=50, rho=0.6, h2=0.3,
-        n_causal=600, reps=5, seed=1000):
-    """Overlap-detection validation across overlap fractions. Returns a dict of
-    scalars (see KEYS) averaged over ``reps`` replicates."""
+def run(n=2500, per_size=15, rho=0.6, h2=0.3, ridge=0.5, reps=2,
+        diffuse_causal=0.20, sparse_causal=0.01, hutchinson_draws=48,
+        seed=1000):
+    """Both regimes plus the discontinuous-trainer case. See KEYS."""
     rng = np.random.default_rng(seed)
-    dense = {f: [_one(rng, f, False, n1, n2, n_ind, m_blocks, bs, rho, h2,
-                      n_causal) for _ in range(reps)]
-             for f in (0.0, 0.25, 1.0)}
-    sparse_full = [_one(rng, 1.0, True, n1, n2, n_ind, m_blocks, bs, rho, h2,
-                        n_causal) for _ in range(reps)]
+    common = dict(n=n, per_size=per_size, rho=rho, h2=h2, ridge=ridge,
+                  thresholded=False, hutchinson_draws=hutchinson_draws)
 
-    def mean(rows, k):
-        values = [r[k] for r in rows if r[k] is not None and np.isfinite(r[k])]
+    def batch(frac, causal):
+        return [_one(rng, frac, causal, **common) for _ in range(reps)]
+
+    diffuse = batch(1.0, diffuse_causal)
+    sparse = {f: batch(f, sparse_causal) for f in (0.0, 0.25, 1.0)}
+    thresholded = _one(rng, 1.0, sparse_causal,
+                       **{**common, "thresholded": True})
+
+    def mean(rows, key):
+        values = [r[key] for r in rows
+                  if r[key] is not None and np.isfinite(r[key])]
         return float(np.mean(values)) if values else np.nan
 
-    def r2(num, den):
-        return num * num / den
-
-    full = dense[1.0]
+    full = sparse[1.0]
     return {
-        "alpha_null": mean(dense[0.0], "alpha"),
-        "gamma_null": mean(dense[0.0], "gamma"),
-        "gamma_low": mean(dense[0.25], "gamma"),
-        "gamma_low_true": mean(dense[0.25], "gamma_true"),
-        "gamma_full": mean(full, "gamma"),
-        "gamma_full_true": mean(full, "gamma_true"),
+        "diffuse_status": tuple(r["status"] for r in diffuse),
+        "diffuse_vif": mean(diffuse, "vif"),
+        "diffuse_gamma_ratio": mean(diffuse, "gamma") / mean(diffuse, "gamma_true"),
+        "sparse_null_status": tuple(r["status"] for r in sparse[0.0]),
+        "sparse_low_status": tuple(r["status"] for r in sparse[0.25]),
+        "sparse_full_status": tuple(r["status"] for r in full),
+        "sparse_vif": mean(full, "vif"),
         "alpha_full": mean(full, "alpha"),
-        "vif_full": mean(full, "vif"),
-        "condition_full": mean(full, "condition_number"),
-        "r2_naive_full": float(np.mean([r2(r["num_naive"], r["den"]) for r in full])),
-        "r2_corr_full": mean(
-            [dict(value=r2(r["num_corr"], r["den"])) for r in full
-             if np.isfinite(r["num_corr"])], "value"),
-        "r2_honest_full": float(np.mean([r2(r["num_honest"], r["den"]) for r in full])),
-        "correctable_full_fraction": float(np.mean([r["status"] == "correctable"
-                                                     for r in full])),
-        "status_null": tuple(r["status"] for r in dense[0.0]),
-        "status_low": tuple(r["status"] for r in dense[0.25]),
-        "status_full": tuple(r["status"] for r in full),
-        "sparse_status": sparse_full[0]["status"],
+        "gamma_full_ratio": mean(full, "gamma") / mean(full, "gamma_true"),
+        "gamma_low_ratio": (mean(sparse[0.25], "gamma")
+                            / mean(sparse[0.25], "gamma_true")),
+        "corrections_at_null": sum(r["status"] == "correctable"
+                                   for r in sparse[0.0]),
+        "r2_naive_full": mean(full, "r2_naive"),
+        "r2_corr_full": mean(full, "r2_corrected"),
+        "r2_honest_full": mean(full, "r2_honest"),
+        "r2_naive_low": mean(sparse[0.25], "r2_naive"),
+        "r2_corr_low": mean(sparse[0.25], "r2_corrected"),
+        "r2_honest_low": mean(sparse[0.25], "r2_honest"),
+        "basis_error": mean(full, "basis_error"),
+        "sparse_trainer_status": thresholded["status"],
+        "sparse_trainer_basis": thresholded["basis_kind"],
     }
 
 
 def main():
     out = run()
-    print("=== basis-aware overlap fit (known dense trainer) ===")
-    print(f"  null alpha        = {out['alpha_null']:.3f}   (truth approximately 1)")
-    print(f"  gamma null        = {out['gamma_null']:+.2e}   (truth 0; {out['status_null']})")
-    print(f"  gamma 25% overlap = {out['gamma_low']:.2e}   (truth {out['gamma_low_true']:.2e})")
-    print(f"  gamma 100%        = {out['gamma_full']:.2e}   "
-          f"(truth {out['gamma_full_true']:.2e}; {out['status_full']})")
-    print(f"  full-overlap ID   = alpha {out['alpha_full']:.3f}, "
-          f"VIF {out['vif_full']:.2f}, condition {out['condition_full']:.1f}")
-    if np.isfinite(out["r2_corr_full"]):
-        print(f"  R2 at 100%: naive {out['r2_naive_full']:.4f} -> "
-              f"corrected {out['r2_corr_full']:.4f} "
-              f"(honest anchor {out['r2_honest_full']:.4f})")
-    else:
-        print("  R2 correction refused by identification/stability gates")
-    print("=== thresholded trainer with unknown sensitivity basis ===")
-    print(f"  status            = {out['sparse_status']} (correction refused)")
+    print("=== Hutchinson basis for a rerunnable trainer ===")
+    print(f"  relative error vs analytic tr(A'K) = {out['basis_error']:.4f}")
+    print("\n=== diffuse architecture (20% causal): the refusal corner ===")
+    print(f"  status = {out['diffuse_status']}, VIF {out['diffuse_vif']:.2f} "
+          f"(gate 2.0); gamma/true {out['diffuse_gamma_ratio']:.2f}")
+    print("  the coupling is nearly right, but signal and basis are collinear,")
+    print("  so the identification gate refuses -- correctly.")
+    print("\n=== sparse architecture (1% causal): identified ===")
+    print(f"  null       {out['sparse_null_status']}  "
+          f"({out['corrections_at_null']} corrections issued; must be 0)")
+    print(f"  25% overlap{out['sparse_low_status']}  "
+          f"gamma/true {out['gamma_low_ratio']:.2f}   "
+          f"R2 {out['r2_naive_low']:.4f} -> {out['r2_corr_low']:.4f} "
+          f"(anchor {out['r2_honest_low']:.4f})")
+    print(f"  100%       {out['sparse_full_status']}  "
+          f"gamma/true {out['gamma_full_ratio']:.2f}   "
+          f"R2 {out['r2_naive_full']:.4f} -> {out['r2_corr_full']:.4f} "
+          f"(anchor {out['r2_honest_full']:.4f})")
+    print(f"  VIF {out['sparse_vif']:.2f}, alpha {out['alpha_full']:.2f}")
+    print("\n=== discontinuous trainer (p+T) ===")
+    print(f"  basis = {out['sparse_trainer_basis']}, fit status = "
+          f"{out['sparse_trainer_status']} (correction refused)")
 
 
 if __name__ == "__main__":

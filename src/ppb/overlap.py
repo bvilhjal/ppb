@@ -97,6 +97,150 @@ class OverlapBasis:
         return self.kind != "unavailable"
 
 
+def estimate_overlap_basis(trainer, z, blocks, noise_sqrt, *, rng,
+                           provenance, support_hash, support=None,
+                           n_draws=32, deltas=(0.01, 0.05, 0.25), scale=None,
+                           max_relative_spread=0.2, min_pattern_correlation=0.9):
+    """Stochastic trainer-sensitivity basis for a rerunnable trainer.
+
+    Implements ``docs/OVERLAP.md`` Equation 4, the generalized-degrees-of-freedom
+    trace estimate (Ye 1998; Hutchinson 1989):
+
+        q_b = (1 / R) sum_r g_br' {f(z + delta g_r) - f(z)}_b / delta,
+        E[g g'] = K.
+
+    ``trainer(z) -> w`` must be rerunnable on perturbed summary statistics.
+    ``blocks`` is a sequence of index arrays; ``noise_sqrt[b]`` is any factor
+    with ``L_b L_b' = K_b`` (for the usual shared-GWAS-noise template ``K = D``,
+    the Cholesky factor of the block LD).
+
+    ``deltas`` are step sizes **as a fraction of** ``norm(z)``: the actual
+    perturbation is ``delta * scale * g`` with
+    ``scale = norm(z) / sqrt(sum_b tr K_b)``, and the difference quotient
+    divides by the same step, so the estimate keeps the units of ``tr(A' K)``.
+    That scaling is not cosmetic -- a step much larger than ``z`` makes *any*
+    trainer look like the identity, which is how a thresholding trainer can
+    otherwise be mistaken for a well-behaved linear one. Pass ``scale``
+    explicitly to override.
+
+    **Fails closed.** A linear trainer's difference quotient is exact at every
+    step, so its estimate is step-free. A trainer with discontinuous model
+    selection -- clumping, thresholding, hard variable selection -- has a local
+    Jacobian that is *also* locally stable but that misses the selection
+    response entirely, which is why a stability check at one small step is not
+    enough. The default ``deltas`` therefore span from a step too small to move
+    any selection boundary to one that moves many; disagreement across that
+    range is the signature of an operator no derivative describes. An
+    :meth:`OverlapBasis.unavailable` is returned (never a number) when the
+    totals disagree by more than ``max_relative_spread`` or the per-block
+    patterns correlate below ``min_pattern_correlation``.
+
+    Costs ``n_draws * len(deltas) + 1`` trainer runs.
+    """
+    if not callable(trainer):
+        raise TypeError("trainer must be callable")
+    z = np.asarray(z, dtype=np.float64)
+    if z.ndim != 1 or z.size == 0 or not np.all(np.isfinite(z)):
+        raise ValueError("z must be a non-empty finite 1-D vector")
+    blocks = [np.ascontiguousarray(np.asarray(idx, dtype=np.intp)) for idx in blocks]
+    if not blocks:
+        raise ValueError("need at least one block")
+    seen = np.zeros(z.size, dtype=bool)
+    for b, idx in enumerate(blocks):
+        if idx.ndim != 1 or idx.size == 0:
+            raise ValueError(f"block {b} index must be a non-empty 1-D array")
+        if idx.min() < 0 or idx.max() >= z.size:
+            raise ValueError(f"block {b} index is out of range for z")
+        if seen[idx].any():
+            raise ValueError("blocks overlap: a variant appears in two blocks")
+        seen[idx] = True
+    factors = [np.asarray(L, dtype=np.float64) for L in noise_sqrt]
+    if len(factors) != len(blocks):
+        raise ValueError(
+            f"noise_sqrt must have one factor per block ({len(blocks)}); "
+            f"got {len(factors)}")
+    for b, (L, idx) in enumerate(zip(factors, blocks)):
+        if L.ndim != 2 or L.shape[0] != idx.size or not np.all(np.isfinite(L)):
+            raise ValueError(
+                f"noise_sqrt[{b}] must be a finite ({idx.size}, r) factor; "
+                f"got shape {L.shape}")
+    deltas = tuple(float(d) for d in deltas)
+    if len(deltas) < 2 or any(not np.isfinite(d) or d <= 0 for d in deltas):
+        raise ValueError(
+            "deltas must be at least two finite positive perturbation scales; "
+            "a single scale cannot detect a step-size artifact")
+    n_draws = int(n_draws)
+    if n_draws < 2:
+        raise ValueError("n_draws must be at least 2 to estimate a Monte-Carlo SE")
+    if scale is None:
+        noise_norm = float(np.sqrt(sum(float(np.sum(L * L)) for L in factors)))
+        if noise_norm <= np.finfo(float).tiny:
+            raise ValueError("noise_sqrt describes a degenerate zero covariance")
+        scale = float(np.linalg.norm(z)) / noise_norm
+    scale = float(scale)
+    if not np.isfinite(scale) or scale <= 0.0:
+        raise ValueError("scale must be finite and strictly positive")
+
+    def _weights(value, source):
+        out = np.asarray(value, dtype=np.float64)
+        if out.shape != z.shape or not np.all(np.isfinite(out)):
+            raise ValueError(f"{source} must return a finite vector of length {z.size}")
+        return out
+
+    base = _weights(trainer(z), "trainer(z)")
+    n_blocks = len(blocks)
+    # per_delta[d][r, b] -- common random draws across deltas, so the comparison
+    # measures step-size sensitivity rather than Monte-Carlo noise.
+    per_delta = {d: np.empty((n_draws, n_blocks)) for d in deltas}
+    for r in range(n_draws):
+        g = np.zeros(z.size, dtype=np.float64)
+        for L, idx in zip(factors, blocks):
+            g[idx] = L @ rng.standard_normal(L.shape[1])
+        for d in deltas:
+            step = d * scale
+            perturbed = _weights(trainer(z + step * g), f"trainer(z + {d} * scale * g)")
+            derivative = (perturbed - base) / step
+            for b, idx in enumerate(blocks):
+                per_delta[d][r, b] = float(g[idx] @ derivative[idx])
+
+    means = {d: per_delta[d].mean(axis=0) for d in deltas}
+    totals = np.array([means[d].sum() for d in deltas])
+    reference = float(np.mean(np.abs(totals)))
+    if reference <= np.finfo(float).tiny:
+        return OverlapBasis.unavailable(
+            f"{provenance}; trainer sensitivity estimated as zero at every "
+            "perturbation scale, so no unit of shared noise is identified")
+    spread = float(np.ptp(totals) / reference)
+
+    pattern = 1.0
+    for i in range(len(deltas)):
+        for j in range(i + 1, len(deltas)):
+            a, b_ = means[deltas[i]], means[deltas[j]]
+            na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b_))
+            if na <= np.finfo(float).tiny or nb <= np.finfo(float).tiny:
+                pattern = 0.0
+            else:
+                pattern = min(pattern, float(np.dot(a, b_) / (na * nb)))
+    if spread > max_relative_spread or pattern < min_pattern_correlation:
+        return OverlapBasis.unavailable(
+            f"{provenance}; trainer sensitivity is not stable in the "
+            f"perturbation scale (total spread {spread:.3f} > "
+            f"{max_relative_spread:g}, or block-pattern correlation "
+            f"{pattern:.3f} < {min_pattern_correlation:g}), which is what a "
+            "discontinuous model-selection step looks like -- the local "
+            "Jacobian does not describe the operator")
+
+    values = np.mean([means[d] for d in deltas], axis=0)
+    draw_totals = np.concatenate([per_delta[d].sum(axis=1) for d in deltas])
+    mc_se = float(np.std(draw_totals, ddof=1) / np.sqrt(draw_totals.size))
+    return OverlapBasis(
+        values=values, kind="jacobian_hutchinson",
+        provenance=(f"{provenance}; Hutchinson GDF, {n_draws} draws x "
+                    f"deltas {deltas} (scale {scale:.4g}), spread {spread:.3f}, "
+                    f"pattern correlation {pattern:.3f}"),
+        support_hash=support_hash, support=support, mc_se=mc_se)
+
+
 @dataclass(frozen=True)
 class OverlapFit:
     """Basis-aware dual-target fit and its correction eligibility."""

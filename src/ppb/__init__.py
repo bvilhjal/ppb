@@ -31,6 +31,7 @@ from .overlap import (
     block_products,
     correct_numerator,
     correct_overlap_numerator,
+    estimate_overlap_basis,
     fit_overlap,
     overlap_slope,
 )
@@ -60,7 +61,7 @@ __all__ = [
     "read_weights", "read_bundle", "write_bundle",
     "read_ldref", "write_ldref",
     "block_products", "OverlapBasis", "OverlapFit", "fit_overlap",
-    "correct_overlap_numerator",
+    "correct_overlap_numerator", "estimate_overlap_basis",
     "overlap_slope", "correct_numerator", "OverlapEstimate",
     "residualize", "adjust", "principal_components",
     "pumas_r2", "subsample_sumstats",

@@ -22,9 +22,7 @@ noise and requires a trainer-specific sensitivity basis on the exact score
 support. Identification, stability, heterogeneity, and sign gates fail closed.
 The current final LDpred2 artifacts do not preserve a reconstructible trainer
 operator, so they are `basis_unavailable` upper bounds and must not carry a
-headline corrected R². The controlled physical simulation deliberately records
-the current weak-identification boundary rather than declaring a false recovery.
-Method note: `docs/OVERLAP.md`.
+headline corrected R². Method note: `docs/OVERLAP.md`.
 
 Revised: 2026-07-22 — **scientific and publication-path hardening**: PUMAS-style
 repeated learning now refits every pseudo-training split with signal-dependent
@@ -40,6 +38,17 @@ in-sample rows are displayed as upper bounds, and only overlap fits satisfying
 the new basis-aware gates may be corrected. This is the "first leaderboard from
 reviewed result files" — no submission service before the protocol survives
 external beta (unchanged).
+
+Revised: 2026-07-25 — **overlap correction salvaged**: the stochastic
+generalized-degrees-of-freedom basis of Equation 4 is implemented
+(`ppb.estimate_overlap_basis`), so a *rerunnable* trainer can supply one, and
+the controlled physical simulation now recovers the coupling and returns an
+inflated statistic to its independent anchor. The earlier "refuses every
+correction" finding was a property of that simulation — a marginal trainer over
+equal-sized blocks makes the basis a constant — not of the method.
+Identification still depends on the genetic architecture: a diffuse trait is
+correctly refused, and the corrected value is an upper bound rather than an
+unbiased estimate. `docs/OVERLAP.md`.
 
 ## Objective
 
@@ -142,10 +151,14 @@ hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out o
   repeated learning that refits each pseudo-training split, and **cross-ancestry
   portability** (`experiments/cross_ancestry.py`).
 - Basis-aware training/target shared-noise detection and guarded numerator
-  correction (`ppb.overlap`, Gate D). Correction requires an identified trainer
-  basis; the current LDpred2 final weights fail closed as `basis_unavailable`, and
-  the physical simulation documents a weak-identification boundary
-  (`docs/OVERLAP.md`).
+  correction (`ppb.overlap`, Gate D), including the stochastic
+  generalized-degrees-of-freedom basis for a rerunnable trainer
+  (`estimate_overlap_basis`, validated against the analytic trace and
+  fail-closed on a discontinuous trainer). Correction requires an identified
+  trainer basis; the current LDpred2 final weights fail closed as
+  `basis_unavailable`. In simulation the correction recovers the coupling and
+  returns an inflated statistic to its independent anchor where the design is
+  identified, and is refused for a diffuse architecture (`docs/OVERLAP.md`).
 - Stage-1 leaderboard: the versioned results registry (`results/`, schema
   enforced by `tests/test_results_registry.py`) regenerated end-to-end from
   source data by `scripts/regenerate_results.py`, rendered to a static site by
