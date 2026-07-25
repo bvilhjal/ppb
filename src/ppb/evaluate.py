@@ -12,21 +12,27 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from .estimator import mse as _mse
-from .estimator import r2 as _r2
-from .harmonize import HarmonizeReport, VariantTable, harmonize_to
+from .estimator import _mse_from_quad, _r2_from_quad, _var_y, _wz
+from .harmonize import HarmonizeReport, VariantTable, harmonize_to, same_variants
 from .ld_backend import LDBackend
 
 
 @dataclass
 class EvaluationResult:
-    """Machine-readable result of one evaluation."""
+    """Machine-readable result of one evaluation.
+
+    ``mse`` is meaningful only when the weights carry an absolute scale. ``R^2``
+    is invariant to a global rescale of ``w``, so the usual per-allele PGS
+    Catalog weights (in trait units, e.g. cm) give a correct ``R^2`` and a
+    meaningless ``MSE``; ``mse_interpretable`` records which case applies.
+    """
 
     r2: float
     mse: float
     n_reference: int
     n_variants_scored: int          # reference variants with a nonzero aligned weight
     weight_scale: str = "standardized"
+    mse_interpretable: bool = True
     weights_report: dict = field(default_factory=dict)
     sumstats_report: dict = field(default_factory=dict)
 
@@ -38,7 +44,8 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
              weights_variants: VariantTable, weights,
              sumstats_variants: VariantTable, z,
              *, var_y: float = 1.0, weight_scale: str = "standardized",
-             genotype_sd=None, remove_ambiguous: bool = True) -> EvaluationResult:
+             genotype_sd=None, remove_ambiguous: bool = True,
+             mse_interpretable: bool = True) -> EvaluationResult:
     """Harmonize weights and summary statistics to ``ld_variants``, then evaluate.
 
     ``ld`` must be an LD backend defined over ``ld_variants`` (same order).
@@ -47,6 +54,13 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
     weights, pass ``weight_scale='dosage'`` and the target-cohort
     ``genotype_sd`` in reference order; each weight is then multiplied by its
     genotype SD before evaluation.
+
+    Strand resolution (and therefore the palindrome drop) applies only to a
+    table that came from somewhere else. When ``sumstats_variants`` *is* the
+    reference table -- the usual case for a bundle, whose ``z`` is stored in
+    reference order by construction -- there is no strand to resolve, so the
+    pass is skipped rather than run and reported as ambiguous removals that
+    never existed. ``weights_variants`` is a submission and is always resolved.
     """
     if ld.m != ld_variants.n:
         raise ValueError(
@@ -55,9 +69,21 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
     w_aligned, wrep, wmask = harmonize_to(
         ld_variants, weights_variants, weights,
         remove_ambiguous=remove_ambiguous, return_mask=True)
-    z_aligned, zrep, zmask = harmonize_to(
-        ld_variants, sumstats_variants, z,
-        remove_ambiguous=remove_ambiguous, return_mask=True)
+    if same_variants(ld_variants, sumstats_variants):
+        z_aligned, _ = _wz(z, z)                    # finite + shape validation
+        if z_aligned.shape != (ld_variants.n,):
+            raise ValueError(
+                f"z has shape {z_aligned.shape}, expected ({ld_variants.n},)")
+        z_aligned = z_aligned.copy()
+        zmask = np.ones(ld_variants.n, dtype=bool)
+        zrep = HarmonizeReport(
+            n_reference=ld_variants.n, n_target=ld_variants.n,
+            n_matched=ld_variants.n, n_sign_flipped=0, n_strand_flipped=0,
+            n_ambiguous_removed=0, n_mismatch=0, n_unmatched=0)
+    else:
+        z_aligned, zrep, zmask = harmonize_to(
+            ld_variants, sumstats_variants, z,
+            remove_ambiguous=remove_ambiguous, return_mask=True)
 
     if weight_scale == "dosage":
         if genotype_sd is None:
@@ -80,12 +106,19 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
     w_aligned[~joint] = 0.0
     z_aligned[~joint] = 0.0
 
+    # w^T D w is the expensive half of the estimator (a sweep over every LD
+    # block); r2 and mse both need exactly this number, so compute it once.
+    var_y = _var_y(var_y)
+    w_checked, wz = _wz(w_aligned, z_aligned)
+    den = ld.quad(w_checked)
+
     return EvaluationResult(
-        r2=_r2(w_aligned, z_aligned, ld, var_y=var_y),
-        mse=_mse(w_aligned, z_aligned, ld, var_y=var_y),
+        r2=_r2_from_quad(wz, den, var_y),
+        mse=_mse_from_quad(wz, den, var_y),
         n_reference=ld_variants.n,
         n_variants_scored=int(np.count_nonzero(w_aligned)),
         weight_scale=weight_scale,
+        mse_interpretable=bool(mse_interpretable),
         weights_report=wrep.to_dict(),
         sumstats_report=zrep.to_dict(),
     )

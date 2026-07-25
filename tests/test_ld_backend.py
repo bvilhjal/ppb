@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from ppb import BlockDiagonalLD, DenseLD, LowRankLD, lowrank_ld, r2
+from ppb.ld_backend import DenseLDInt8, PackedDenseLDInt8, min_eig_upper_bound
 
 TOL = 1e-9
 
@@ -167,3 +168,66 @@ def test_lowrank_ld_max_rank_is_a_hard_cap():
     assert lowrank_ld(C, variance=0.99, max_rank=12).rank <= 12
     with pytest.raises(ValueError, match="max_rank"):
         lowrank_ld(np.eye(50), variance=0.99, max_rank=10)
+
+
+def test_block_diagonal_rejects_negative_block_quadratic_form():
+    """A single indefinite block must fail loudly, not be masked by the others.
+
+    Summing an indefinite block understates w^T D w and so *inflates* R^2, which
+    is the one direction the estimator must never fail silently in. The total
+    stays comfortably positive here, so a check on the sum alone would miss it.
+    """
+    bad = np.array([[1.0, 2.0], [2.0, 1.0]])          # eigenvalues 3 and -1
+    w = np.array([1.0, -1.0])                          # w^T bad w = -2
+    assert DenseLD(bad).quad(w) < 0
+
+    good = np.eye(6)
+    ld = BlockDiagonalLD([(DenseLD(bad), np.array([0, 1])),
+                          (DenseLD(good), np.arange(2, 8))])
+    full = np.concatenate([w, np.ones(6)])
+    assert float(full[2:] @ good @ full[2:]) + float(w @ bad @ w) > 0   # sum is positive
+    with pytest.raises(ValueError, match=r"block 0 has w\^T D_b w"):
+        ld.quad(full)
+
+
+def test_block_diagonal_tolerates_rounding_on_a_psd_block():
+    """The negativity check must not fire on float noise from a PSD block."""
+    d = np.arange(60)
+    corr = 0.95 ** np.abs(d[:, None] - d[None, :])
+    ld = BlockDiagonalLD([(DenseLD(corr), np.arange(60))])
+    rng = np.random.default_rng(0)
+    for _ in range(50):
+        w = rng.standard_normal(60)
+        w -= w.mean()
+        assert ld.quad(w) >= 0.0
+    assert ld.quad(np.zeros(60)) == 0.0
+
+
+def test_min_eig_upper_bound_detects_an_indefinite_block():
+    """Lanczos is a detector for blocks too large to decompose exactly."""
+    d = np.arange(700)
+    psd = PackedDenseLDInt8.from_dense_int8(
+        DenseLDInt8.from_dense(0.9 ** np.abs(d[:, None] - d[None, :])).D8)
+    exact = float(np.linalg.eigvalsh(
+        np.asarray(psd.to_dense_int8(), dtype=np.float64) / 127.0)[0])
+    est = min_eig_upper_bound(psd)
+    # Rayleigh-Ritz: the smallest Ritz value bounds the true minimum from above.
+    assert est >= exact - 1e-9, f"{est} is not an upper bound on {exact}"
+    assert est > -0.1
+
+    indefinite = np.full((700, 700), -0.9)
+    np.fill_diagonal(indefinite, 1.0)
+    bad = PackedDenseLDInt8.from_dense_int8(DenseLDInt8.from_dense(indefinite).D8)
+    assert min_eig_upper_bound(bad) < -0.1
+
+
+def test_int8_matvec_matches_the_dense_product():
+    d = np.arange(120)
+    corr = 0.8 ** np.abs(d[:, None] - d[None, :])
+    square = DenseLDInt8.from_dense(corr)
+    packed = square.packed()
+    rng = np.random.default_rng(1)
+    w = rng.standard_normal(120)
+    expected = (np.asarray(square.D8, dtype=np.float64) / 127.0) @ w
+    assert np.allclose(square.matvec(w), expected, atol=1e-12)
+    assert np.allclose(packed.matvec(w), expected, atol=1e-12)

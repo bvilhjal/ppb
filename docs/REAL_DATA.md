@@ -96,6 +96,43 @@ independent quantitative magnitudes are consistent with the literature (height
 about 25%, LDL about 11%, BMI about 6%); binary-trait comparisons retain the
 approximation described below.
 
+## Uncertainty and negative controls
+
+Two things a point estimate cannot tell you, both computed from the per-block
+`u_b = wᵀ_b z_b` and `v_b = wᵀ_b D_b w_b` that the genome-wide sweep already
+builds — no second pass over the LD reference (`ppb.diagnostics`):
+
+- **`metrics.jackknife`** — a delete-one-block standard error (plus a
+  delete-one-chromosome variant, and the per-chromosome partial sums so a reader
+  can recompute it from the pack). Without it "0.252 vs 0.110" is a comparison
+  with no stated precision, which is not enough for a benchmark whose purpose is
+  ranking. It also captures genomic heterogeneity, which the `1/N` finite-sample
+  term does not, and `max_variance_share` flags an estimate carried by one region.
+- **`metrics.sign_flip_null`** — an exact negative control. Because `D` is
+  block-diagonal, negating every weight in a block flips `u_b` and leaves `v_b`
+  untouched, so the sign-flipped scores are a null family with the same
+  denominator and the same per-block magnitudes. `null_mean = Σu_b²/Σv_b` is the
+  R² this score would report from block noise alone: **read a small value like
+  CAD's 0.025 against that, not against zero.** `z = Σu_b/√(Σu_b²)` measures how
+  coherently the blocks agree, bounded by `√431 = 20.8` on this reference.
+
+A third control needs its own sweep:
+
+```bash
+python scripts/negative_controls.py --out controls.json
+```
+
+It evaluates every score against **every** consortium target. The diagonal
+should dominate. Off-diagonal cells are *not* all expected to be zero — BMI/T2D
+and LDL/CAD are genuinely genetically correlated, and seeing that is itself
+evidence the pipeline responds to real signal — so the expected-correlated pairs
+are declared in the script rather than rationalised afterwards. What must not
+appear is strong signal between traits with no shared aetiology (height × LDL);
+that is an artifact, and the script exits non-zero when it finds one.
+
+None of the three detects a uniformly mis-scaled `z`, which moves the estimate
+and its null together. See the caveat below and [`LIMITATIONS.md`](LIMITATIONS.md).
+
 ## Caveats
 
 - **Binary traits:** the reported number is a standardized summary-statistic
@@ -107,6 +144,22 @@ approximation described below.
   on close relatives of these consortia would still be optimistic. The
   portability-ldpred2 scores are UKBB-trained, so the consortium numbers are
   clean of direct sample overlap.
+- **These numbers inherit the source studies' summary-statistic scale.**
+  `R²` is proportional to the *square* of the scale of `z`, and `z` is derived
+  entirely from the reported `beta`, `se` and `n`. Genomic control — applied at
+  study and meta level by GIANT and GLGC — inflates `se` and therefore deflates
+  these estimates by roughly the inflation factor; the `n_eff` choice does the
+  same (the T2D note above is a 1.2× example). No step in this pipeline detects
+  or corrects that, so read every row as conditional on how its source study
+  processed its standard errors. See [`LIMITATIONS.md`](LIMITATIONS.md).
+- **Adjusted `z`, unadjusted `D`.** The target GWAS report covariate-adjusted
+  (partial) correlations; the bigsnpr LD reference is an unadjusted genotype
+  correlation matrix. `METHOD.md` §4 specifies adjusting both. The mismatch is
+  small within a homogeneous EUR sample and is not small in a structured target.
+- **Meta-analysis targets:** GIANT/GLGC `z_j` come from different cohort subsets
+  per variant (N 50.0k–253k), so there is no single population whose squared
+  correlation is being estimated. The registry records the N distribution rather
+  than a headline number for exactly this reason.
 - **Incomplete target support:** a missing target association is not evidence of
   zero association. PPB now uses the exact joint support in both numerator and
   denominator and records `metrics.n_variants_scored`; where support is below

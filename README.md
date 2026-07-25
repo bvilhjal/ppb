@@ -19,16 +19,22 @@ where `w` are the PGS weights (trained in any ancestry) and **both** `z_B`
 the validation anchor.
 
 - **Measures, does not predict.** Given target-ancestry data it measures realized
-  portability; it cannot forecast portability from discovery-ancestry data alone
-  (substituting discovery-ancestry data — `z_A` and `D_A` — estimates R²_A and
-  overstates R²_B by +58% at r_g=0.8 in simulation).
+  portability; it cannot forecast portability from discovery-ancestry data alone.
+  Substituting discovery-ancestry data — `z_A` and `D_A` — estimates R²_A, so it
+  overstates R²_B by `1/portability − 1` (+58% at the simulation's r_g=0.8).
   See [`docs/CROSS_ANCESTRY.md`](docs/CROSS_ANCESTRY.md).
-- **Foundation.** Built on the within-ancestry summary-statistic evaluator of
+- **Prior art.** The identity itself is **not new to this project or to its
+  foundation**: it is the quasi-correlation of Pattee & Pan (2020) and the square
+  of lassosum's pseudovalidation criterion (Mak et al. 2017); PUMAS reaches the
+  same estimand by subsampling. See [`docs/METHOD.md`](docs/METHOD.md) §1.
+- **Foundation.** Built on the within-ancestry summary-statistic *benchmark* of
   Witteveen et al., *Publicly Available Privacy-preserving Benchmarks for Polygenic
   Prediction* (bioRxiv 2022,
-  [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)). The
-  cross-ancestry direction is **new to this project** and is not attributed to that
-  paper (which is European-only). This repository is an attempt to finish and
+  [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)) —
+  the released LD + summary-statistic artifact for a shared European target. The
+  cross-ancestry direction is **this project's**, not attributed to that paper
+  (which is European-only), and its novelty against the cross-population tuning
+  literature is still to be checked. This repository is an attempt to finish and
   extend Witteveen's unfinished project after he left science; preserving that
   provenance does not imply his endorsement, ownership of later changes, or
   current involvement.
@@ -72,6 +78,14 @@ offsets, dtypes, annotations, packed diagonals, and low-rank definiteness. D8
 quantization is checked where tractable but is not a blanket PSD certificate for
 every large block; see [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
+Block-level uncertainty and negative controls (`ppb.diagnostics`) come free from
+the per-block products a genome-wide sweep already computes: `r2_block_jackknife`
+gives a delete-one-block SE, and `sign_flip_null` gives an exact null — because
+`D` is block-diagonal, negating a whole block's weights flips `wᵀ_b z_b` and
+leaves `wᵀ_b D_b w_b` alone, so the sign-flipped scores share the denominator and
+carry no coherent signal. `scripts/negative_controls.py` adds the score × target
+trait-swap matrix. See [`docs/REAL_DATA.md`](docs/REAL_DATA.md).
+
 Supporting pieces for real summary statistics: allele harmonization
 (`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
 sizes (`ppb.standardized_marginal`), PUMAS-style single-GWAS subsampling
@@ -79,7 +93,10 @@ that refits each pseudo-training split (`ppb.subsample_sumstats` / `ppb.pumas_r2
 and basis-aware detection/correction of training-target sample overlap
 (`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)). Overlap correction is
 fail-closed: it requires a reconstructible trainer-sensitivity basis and an
-identifiable, stable block fit. Final weights alone are not such a basis.
+identifiable, stable block fit. Final weights alone are not such a basis, but a
+*rerunnable* trainer can supply one stochastically
+(`ppb.estimate_overlap_basis`), and in simulation the correction then returns an
+inflated statistic to its independent anchor.
 
 ## LD reference (real data)
 
@@ -165,6 +182,10 @@ A static leaderboard is generated from the versioned results registry in
 `leaderboard` workflow (enable Pages with source "GitHub Actions" in repo
 settings). It shows maintainer-run baselines only — every evaluation declares
 its training/target overlap, and in-sample rows are marked as **upper bounds**.
+It is **not a competition**: `(wᵀz)²/(wᵀDw)` is maximized at `w ∝ D⁻¹z`, so a
+public bundle makes the top-scoring submission a linear solve rather than a
+model (quantified in `FINISHING_PLAN.md`, Gate D). Ranking is meaningful here
+only because every entry is a maintainer-run baseline.
 The current final LDpred2 weights do not preserve a reconstructible training
 operator, so their overlap basis is `basis_unavailable` and they do not receive a
 headline corrected `R²`. Correction remains available for future scores whose

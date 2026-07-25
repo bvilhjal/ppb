@@ -12,6 +12,13 @@ The estimator is ancestry-agnostic in form; supplying target-ancestry ``z`` and
 """
 
 from .covariates import adjust, principal_components, residualize
+from .diagnostics import (
+    BlockJackknife,
+    SignFlipNull,
+    r2_block_jackknife,
+    r2_from_blocks,
+    sign_flip_null,
+)
 from .estimator import mse, r2
 from .evaluate import EvaluationResult, evaluate
 from .harmonize import HarmonizeReport, VariantTable, harmonize_to
@@ -24,6 +31,7 @@ from .overlap import (
     block_products,
     correct_numerator,
     correct_overlap_numerator,
+    estimate_overlap_basis,
     fit_overlap,
     overlap_slope,
 )
@@ -43,6 +51,8 @@ from .sumstats import standardized_marginal, zstat_to_corr
 
 __all__ = [
     "r2", "mse",
+    "r2_from_blocks", "r2_block_jackknife", "BlockJackknife",
+    "sign_flip_null", "SignFlipNull",
     "DenseLD", "LowRankLD", "BlockDiagonalLD", "LDBackend",
     "DenseLDInt8", "LowRankLDInt8", "PackedDenseLDInt8", "quantize_lowrank",
     "lowrank_ld",
@@ -51,7 +61,7 @@ __all__ = [
     "read_weights", "read_bundle", "write_bundle",
     "read_ldref", "write_ldref",
     "block_products", "OverlapBasis", "OverlapFit", "fit_overlap",
-    "correct_overlap_numerator",
+    "correct_overlap_numerator", "estimate_overlap_basis",
     "overlap_slope", "correct_numerator", "OverlapEstimate",
     "residualize", "adjust", "principal_components",
     "pumas_r2", "subsample_sumstats",

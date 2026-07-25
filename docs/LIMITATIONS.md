@@ -102,6 +102,37 @@ utility, causality, or individual privacy.
   scale `√(2f(1−f))` rather than empirical genotype SDs — acceptable for the
   within-ancestry EUR anchor, not for structured or admixed targets (see
   [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md), "gauge self-consistency").
+- **The scale of `z` passes straight through, squared.** The invariance above
+  protects `w` only. If the target summary statistics are off by a factor `c`,
+  then `R² → c²R²` — `z` appears in the numerator alone and nothing cancels it.
+  That scale is set entirely by the reported `(beta, se, n)` triple that
+  `ppb.standardized_marginal` consumes, and real GWAS routinely move it:
+  **genomic control** (applied at study *and* meta level by GIANT and GLGC)
+  inflates `se` and deflates the result; meta-analysis SE handling and SPA/SAIGE
+  standard errors for binary traits do the same; and the analyst's choice of
+  `n_eff` moves it directly — `REAL_DATA.md` records a 1.2× swing for DIAGRAM
+  T2D from that choice alone, on a number quoted to three significant figures.
+  PPB performs **no diagnostic** on the scale of its input `z` and cannot detect
+  a mis-scaled target. Reported values should be read as conditional on the
+  source study's processing; a mean-χ²/LD-score or heritability sanity check
+  against the target is the natural guard and is not implemented.
+- **The real-data path pairs an adjusted `z` with an unadjusted `D`.**
+  [`METHOD.md`](METHOD.md) §4 specifies forming *both* `z` and `D` from
+  covariate-adjusted genotypes. Real GWAS `z` are partial correlations (adjusted
+  for age, sex, PCs, centre) while the shipped bigsnpr LD reference is an
+  unadjusted genotype correlation matrix. Within a homogeneous EUR sample the
+  discrepancy is small, but it is largest exactly where the flagship
+  cross-ancestry application will lean on it — structured targets. Relatedly,
+  `standardized_marginal` uses the no-covariate degrees of freedom `n − 2`
+  rather than `n − k − 2`; immaterial at GWAS N.
+- **A meta-analysis target has no single generating population.** For GIANT
+  height the per-variant `N` runs 50.0k–253k across dozens of contributing
+  cohorts, so each `z_j` is a marginal correlation in a *different* mixture of
+  cohorts while `D` is one panel's LD. The registry records the distribution
+  (`n_eff_basis`, `n_eff_range`) rather than a headline N, but the estimand is
+  then only approximately "the squared correlation in a population" — there is
+  no single population. This compounds with the `z`-scale item above, since
+  cohorts contribute different amounts of genomic-control deflation.
 - **LD reference choice.** Test-set LD is exact; training-set LD is biased for
   data-derived weights; an independent same-population panel is unbiased
   (reproduced in `experiments/figure_s1.py`).

@@ -8,6 +8,20 @@ pull requests only (see `FINISHING_PLAN.md`, Gate D and the delivery plan).
 Each `*.json` file here is a **result pack**: a JSON array of evaluation
 records, one per (score × target GWAS) evaluation.
 
+> **These are maintainer-run baselines, and the metric is not
+> competition-safe.** `R² = (wᵀz)²/(wᵀDw)` is maximized at `w ∝ D⁻¹z`, so once
+> a target's `z` and `D` are public the best-scoring submission is a single
+> linear solve on the published bundle — no modelling required. In simulation
+> a plain ridge refit on the released moments reports **1.45×** an honest
+> score's R² at `m/N = 0.05` and **4.4×** at `m/N = 1`, with no improvement in
+> true out-of-sample accuracy; PPB's real regime is `m/N ≈ 6–14`. The ridge
+> parameter also doubles as a plausibility dial: a submission can be tuned to
+> report ~1.35× while staying below 1, so the "R² > 1 means an assumption
+> failed" diagnostic does **not** catch it. Ranking scores here is meaningful
+> only because every entry is a maintainer-run baseline whose provenance is
+> known. A competitive leaderboard requires a hidden target-`z` track
+> (`FINISHING_PLAN.md`, Gate D), not merely reviewed submissions.
+
 ## Record schema
 
 **Table 1. Result-record fields.**
@@ -33,13 +47,18 @@ records, one per (score × target GWAS) evaluation.
 | `metrics.scale` | `"quantitative correlation R2"` \| `"standardized logistic-summary approximation (not liability R2)"` |
 | `metrics.w_match`, `metrics.z_match` | harmonized-variant fractions |
 | `metrics.n_variants_scored` | count of non-zero weights on the target-specific joint `w`/`z` support |
+| `metrics.jackknife` | delete-one-**block** jackknife: `se`, `n_blocks`, `n_groups`, `max_variance_share` |
+| `metrics.jackknife_chromosome` | the same, deleting whole chromosomes — the more conservative grouping when block sizes are uneven |
+| `metrics.per_chromosome` | `{chrom: [u, v]}` partial sums, so a reader can recompute the chromosome jackknife from the pack alone |
+| `metrics.sign_flip_null` | block-sign-flip negative control: `null_mean`, `z`, `ratio`, `n_blocks`, `z_ceiling` |
+| `metrics.diagnostics_unavailable` | why the block diagnostics were not computed (fewer than 2 LD blocks); mutually exclusive with them |
 | `overlap.role` | `"reference"` (declared non-overlapping) \| `"suspect"` (paired with a reference) \| `"suspect-unpaired"` (upper bound, no reference) |
 | `overlap.method` | current contract: `"scaled_signal_eiv_v1"` |
 | `overlap.status` | fit/correction eligibility from Table 2 |
 | `overlap.basis` | trainer-sensitivity basis kind, provenance, and support hash; unavailable bases say so explicitly |
 | `overlap.alpha`, `overlap.alpha_se` | fitted target/reference cohort-signal scale and jackknife SE |
 | `overlap.gamma`, `overlap.gamma_se`, `overlap.gamma_z` | fitted shared-noise coupling and jackknife evidence |
-| `overlap.q_total`, `overlap.numerator_target` | exact-support quantities used by Equation 2 |
+| `overlap.q_total`, `overlap.numerator_target` | exact-support quantities used by Equation 3 |
 | `overlap.corrected_r2` | basis-aware correction; permitted only when `status == "correctable"` |
 | `overlap.reference` | label + R² of the reference evaluation |
 | `overlap.note` | reason a correction is not applicable or was refused |
@@ -55,7 +74,24 @@ R²_registry = metrics.num² / metrics.den
 For a binary trait, Equation 1 is a standardized logistic-summary
 approximation. It is not observed-scale or liability-scale case/control R².
 
-**Equation 2. Basis-aware numerator correction.**
+**Equation 2. Block-sign-flip null.**
+
+```text
+E[R²_null] = Σ_b u_b² / Σ_b v_b        z = Σ_b u_b / sqrt(Σ_b u_b²)
+```
+
+`D` is block-diagonal, so negating every weight in block `b` sends `u_b → −u_b`
+and leaves `v_b` unchanged. The sign-flipped scores are therefore a family with
+the same denominator and no coherent association, giving an exact null at no
+extra cost. `null_mean` is the R² this score would report from block noise alone
+at its own magnitudes — **read a small R² against that, not against zero**. `z`
+measures how coherently the blocks agree and is bounded by `sqrt(n_blocks)`
+(20.8 on the shipped 431-block reference), so it is a coherence measure on a
+fixed scale, not an unbounded significance statistic. Neither this nor the
+jackknife detects a uniformly mis-scaled `z`: observed and null move together
+(`docs/LIMITATIONS.md`).
+
+**Equation 3. Basis-aware numerator correction.**
 
 ```text
 num_corrected = overlap.numerator_target - overlap.gamma × overlap.q_total
@@ -102,7 +138,7 @@ R²_corrected = num_corrected² / metrics.den
   available basis must declare `linear_trace` or `jacobian_hutchinson`, its
   provenance, and the exact score-support hash.
 - Only `correctable` records may carry `overlap.corrected_r2`; they must also
-  carry the finite current-fit fields needed to verify Equation 2. Every other
+  carry the finite current-fit fields needed to verify Equation 3. Every other
   fit status fails closed. Every refusal status (all except `correctable` and
   `not_applicable`) must explain the refusal in `overlap.note`.
 - When present, `overlap.legacy_unidentified` is never current evidence. It
@@ -114,6 +150,16 @@ R²_corrected = num_corrected² / metrics.den
   legacy and never displays their `corrected_r2` as a validated correction.
   The exact-support baseline does not carry these obsolete values; they remain
   available in repository history at commit `dcd4fc3`.
+- The block diagnostics are optional: packs generated before
+  `scripts/regenerate_results.py` recorded them (including
+  `baseline-2026-07.json`) legitimately lack them, and a record with fewer than
+  2 LD blocks must instead carry `metrics.diagnostics_unavailable` explaining
+  why. When present they must be internally consistent: a jackknife has at
+  least 2 delete-one groups and never more groups than blocks, its `se` is
+  finite and non-negative, and `max_variance_share` is a fraction; the
+  sign-flip null has a positive `null_mean`, `|z| <= sqrt(n_blocks)`, and
+  `ratio == metrics.r2 / null_mean`; and `per_chromosome` partial sums add back
+  to `metrics.num` and `metrics.den`.
 - `metrics.num` and `metrics.den` must be recorded with enough significant
   digits to reproduce `metrics.r2` — a reader must be able to recompute the
   headline number. Rounding both to 4 decimals leaves small-`den` traits with

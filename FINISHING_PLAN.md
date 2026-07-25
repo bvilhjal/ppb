@@ -22,9 +22,7 @@ noise and requires a trainer-specific sensitivity basis on the exact score
 support. Identification, stability, heterogeneity, and sign gates fail closed.
 The current final LDpred2 artifacts do not preserve a reconstructible trainer
 operator, so they are `basis_unavailable` upper bounds and must not carry a
-headline corrected R². The controlled physical simulation deliberately records
-the current weak-identification boundary rather than declaring a false recovery.
-Method note: `docs/OVERLAP.md`.
+headline corrected R². Method note: `docs/OVERLAP.md`.
 
 Revised: 2026-07-22 — **scientific and publication-path hardening**: PUMAS-style
 repeated learning now refits every pseudo-training split with signal-dependent
@@ -40,6 +38,17 @@ in-sample rows are displayed as upper bounds, and only overlap fits satisfying
 the new basis-aware gates may be corrected. This is the "first leaderboard from
 reviewed result files" — no submission service before the protocol survives
 external beta (unchanged).
+
+Revised: 2026-07-25 — **overlap correction salvaged**: the stochastic
+generalized-degrees-of-freedom basis of Equation 4 is implemented
+(`ppb.estimate_overlap_basis`), so a *rerunnable* trainer can supply one, and
+the controlled physical simulation now recovers the coupling and returns an
+inflated statistic to its independent anchor. The earlier "refuses every
+correction" finding was a property of that simulation — a marginal trainer over
+equal-sized blocks makes the basis a constant — not of the method.
+Identification still depends on the genetic architecture: a diffuse trait is
+correctly refused, and the corrected value is an upper bound rather than an
+unbiased estimate. `docs/OVERLAP.md`.
 
 ## Objective
 
@@ -142,10 +151,14 @@ hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out o
   repeated learning that refits each pseudo-training split, and **cross-ancestry
   portability** (`experiments/cross_ancestry.py`).
 - Basis-aware training/target shared-noise detection and guarded numerator
-  correction (`ppb.overlap`, Gate D). Correction requires an identified trainer
-  basis; the current LDpred2 final weights fail closed as `basis_unavailable`, and
-  the physical simulation documents a weak-identification boundary
-  (`docs/OVERLAP.md`).
+  correction (`ppb.overlap`, Gate D), including the stochastic
+  generalized-degrees-of-freedom basis for a rerunnable trainer
+  (`estimate_overlap_basis`, validated against the analytic trace and
+  fail-closed on a discontinuous trainer). Correction requires an identified
+  trainer basis; the current LDpred2 final weights fail closed as
+  `basis_unavailable`. In simulation the correction recovers the coupling and
+  returns an inflated statistic to its independent anchor where the design is
+  identified, and is refused for a diffuse architecture (`docs/OVERLAP.md`).
 - Stage-1 leaderboard: the versioned results registry (`results/`, schema
   enforced by `tests/test_results_registry.py`) regenerated end-to-end from
   source data by `scripts/regenerate_results.py`, rendered to a static site by
@@ -384,6 +397,36 @@ cohorts), release v0.1 and stop.
 Public target-ancestry test summary statistics are effectively public test labels;
 a competitive leaderboard needs open development data and a hidden target-ancestry
 test track with submission limits. v0.1 must not be marketed as competition-ready.
+
+**The exposure is stronger than "labels are public": the metric has a
+closed-form maximizer.** `R² = (wᵀz)²/(wᵀDw)` is maximized at `w ∝ D⁻¹z`,
+giving `zᵀD⁻¹z` — everything needed is in the published bundle, and the optimal
+submission is one linear solve. Measured in simulation (Balding-Nichols B
+target, r_g = 1 so the honest score is at its best, attacker solves
+`(D_ref + λI)⁻¹z_B` on the *released* panel and *released* `z`, truth from a
+fresh 20k cohort):
+
+**Table 2. Closed-form attack on the published bundle.**
+
+| m | N_target | m/N | honest reports | honest true | attack reports | attack true | metric gain |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1000 | 20000 | 0.05 | 0.4112 | 0.3946 | 0.5945 | 0.4342 | 1.45× |
+| 1000 | 4000 | 0.25 | 0.3586 | 0.3872 | 0.7724 | 0.3155 | 2.15× |
+| 1000 | 2000 | 0.50 | 0.4096 | 0.4040 | 1.0612 | 0.2434 | 2.59× |
+| 2000 | 2000 | 1.00 | 0.3767 | 0.3923 | 1.6715 | 0.1492 | 4.44× |
+
+PPB's real regime is `m = 1,444,196` against target GWAS of N ≈ 10⁵, i.e.
+`m/N ≈ 6–14` — off the bottom of that table. And `λ` is a plausibility dial: at
+λ = 1 the same attack reports 1.35× the honest score while staying well below 1,
+so the "R² > 1 means an assumption failed" diagnostic in `docs/LIMITATIONS.md`
+will not catch a tuned submission.
+
+Consequences: the hidden-target-`z` track is a **requirement** for any
+competitive leaderboard, not a refinement; reviewing submitted result packs is
+not a substitute, because a well-formed pack from a `D⁻¹z` refit is
+indistinguishable from an honest one on the recorded fields; and the stage-1
+registry is defensible only because every entry is a maintainer-run baseline
+(stated in `results/schema.md`).
 
 ## Governance
 

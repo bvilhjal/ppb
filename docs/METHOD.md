@@ -22,6 +22,17 @@ the shared core estimator and its conventions.
 
 ## 1. Core estimator
 
+**Prior art.** The identity below is not original to the source preprint and is
+not claimed here. It is the **quasi-correlation** of Pattee & Pan (2020, *PLOS
+Comput Biol* 16:e1008271), published explicitly as an out-of-sample PGS accuracy
+metric, and the square of **lassosum's pseudovalidation** criterion
+`βᵀr/√(βᵀRβ)` (Mak et al. 2017, *Genet Epidemiol* 41:469), where it tunes a
+penalty rather than reporting an accuracy. PUMAS (Zhao et al. 2021) reaches the
+same estimand by subsampling one GWAS. What the source preprint contributed is
+the **shared public benchmark artifact** built on the identity; what this project
+adds is the cross-ancestry framing, the failure-mode map, and the infrastructure.
+See `docs/CROSS_ANCESTRY.md`, "Background".
+
 The performance measure is the squared Pearson correlation between the observed
 phenotype and the polygenic-score prediction, expressed using only summary-level
 inputs:

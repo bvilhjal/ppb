@@ -105,6 +105,41 @@ def dense_quad_int8(D8, w):
 
 
 @njit(parallel=True, cache=True)
+def dense_matvec_int8(D8, w, out):
+    """``out = D8 @ w`` for a square int8 block (caller divides by 127).
+
+    Rows are independent, so each writes its own slot of ``out``.
+    """
+    m = D8.shape[0]
+    for i in prange(m):
+        acc = 0.0
+        for j in range(m):
+            acc += D8[i, j] * w[j]
+        out[i] = acc
+    return out
+
+
+@njit(parallel=True, cache=True)
+def packed_matvec_int8(p8, w, m, out):
+    """``out = D @ w`` for an int8 upper triangle packed row-major.
+
+    Row ``i`` starts at ``i*m - i*(i-1)//2`` and holds ``D8[i, i:]``. Entries
+    below the diagonal are read from the transposed position: ``D8[i, j]`` for
+    ``j < i`` lives at row ``j``'s offset ``(i - j)``.
+    """
+    for i in prange(m):
+        acc = 0.0
+        for j in range(i):
+            base_j = j * m - (j * (j - 1)) // 2
+            acc += p8[base_j + (i - j)] * w[j]
+        base_i = i * m - (i * (i - 1)) // 2
+        for j in range(i, m):
+            acc += p8[base_i + (j - i)] * w[j]
+        out[i] = acc
+    return out
+
+
+@njit(parallel=True, cache=True)
 def packed_quad_int8(p8, w, m):
     """``w^T D w`` for an int8 upper triangle packed row-major (caller divides by 127).
 

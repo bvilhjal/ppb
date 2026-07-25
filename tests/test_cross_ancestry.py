@@ -46,6 +46,39 @@ def test_cross_ancestry_estimator_and_failure_modes():
 def test_cross_ancestry_portability_control_rg1():
     r = run(**{**CFG, "n_phenos": 12}, rg=1.0, seed=0)
     tb, ta = r["R2B_true"], r["R2A_true"]
-    # r_g = 1: portability is high (loss only from MAF/LD), and matched PPB stays exact.
+    # r_g = 1 with a shared LD architecture: portability is ~1. Balding-Nichols
+    # gives the two ancestries different allele frequencies over the *same*
+    # latent haplotype correlation, so F_ST has no LD channel here and there is
+    # almost nothing left to lose. That is a property of the generator, not of
+    # real ancestries -- see test_ld_divergence_dominates_the_mismatch_bias.
     assert tb.mean() / ta.mean() > 0.9, f"control portability {tb.mean()/ta.mean()}"
     assert abs(pct_bias(r["exactB"], tb)) < 0.05
+
+
+def test_ld_divergence_dominates_the_mismatch_bias():
+    """Both halves of the wrong-ancestry-LD claim, at r_g = 1 so LD is the only
+    channel: with a shared LD architecture the bias is small and portability is
+    ~1; give ancestry B its own LD decay and both move by an order of magnitude.
+
+    This is why the headline -3.0% in docs/CROSS_ANCESTRY.md must be read as
+    conditional on the simulated LD rather than as the size of the failure mode.
+    """
+    shared = run(**{**CFG, "n_phenos": 12}, rg=1.0, seed=0)
+    diverged = run(**{**CFG, "n_phenos": 12}, rg=1.0, seed=0, rho=0.9, rho_b=0.6)
+
+    tb_s, ta_s = shared["R2B_true"], shared["R2A_true"]
+    tb_d, ta_d = diverged["R2B_true"], diverged["R2A_true"]
+    bias_s = pct_bias(shared["mismatchA"], tb_s)
+    bias_d = pct_bias(diverged["mismatchA"], tb_d)
+
+    # Shared LD: little to get wrong, and little portability to lose.
+    assert abs(bias_s) < 10.0, f"shared-LD mismatch bias {bias_s}"
+    assert tb_s.mean() / ta_s.mean() > 0.9, "shared-LD portability should be ~1"
+    # Diverged LD: the mismatch bias is several times larger, and real
+    # portability loss appears with r_g held at 1.
+    assert bias_d < 3.0 * bias_s, f"diverged {bias_d} vs shared {bias_s}"
+    assert diverged["ratioLD"].mean() > 2.0 * shared["ratioLD"].mean()
+    assert tb_d.mean() / ta_d.mean() < 0.9, "LD divergence should cost portability"
+    # The estimator itself stays exact throughout -- it is the LD *input* that
+    # is wrong in the mismatch column, not the identity.
+    assert abs(pct_bias(diverged["exactB"], tb_d)) < 0.05

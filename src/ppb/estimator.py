@@ -38,15 +38,7 @@ def _var_y(value) -> float:
     return value
 
 
-def r2(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
-    """Estimated prediction ``R^2`` from summary-level inputs.
-
-    Raises ``ValueError`` if ``w^T D w`` is not strictly positive (an undefined
-    or invalid ratio -- e.g. all-zero weights, or a non-PSD ``D``).
-    """
-    var_y = _var_y(var_y)
-    w, num = _wz(weights, z)
-    den = ld.quad(w)
+def _r2_from_quad(num: float, den: float, var_y: float) -> float:
     if not np.isfinite(den):
         raise ValueError(f"w^T D w = {den!r} is not finite")
     if not den > 0.0:
@@ -55,6 +47,30 @@ def r2(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
     if not np.isfinite(value):
         raise ValueError("estimated R^2 is not finite")
     return value
+
+
+def _mse_from_quad(wz: float, den: float, var_y: float) -> float:
+    if not np.isfinite(den):
+        raise ValueError(f"w^T D w = {den!r} is not finite")
+    if den < 0.0:
+        raise ValueError(
+            f"w^T D w = {den!r} is negative; MSE would be understated "
+            "(a non-PSD LD approximation)")
+    value = var_y - 2.0 * wz + den
+    if not np.isfinite(value):
+        raise ValueError("estimated MSE is not finite")
+    return value
+
+
+def r2(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
+    """Estimated prediction ``R^2`` from summary-level inputs.
+
+    Raises ``ValueError`` if ``w^T D w`` is not strictly positive (an undefined
+    or invalid ratio -- e.g. all-zero weights, or a non-PSD ``D``).
+    """
+    var_y = _var_y(var_y)
+    w, num = _wz(weights, z)
+    return _r2_from_quad(num, ld.quad(w), var_y)
 
 
 def mse(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
@@ -67,14 +83,4 @@ def mse(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
     """
     var_y = _var_y(var_y)
     w, wz = _wz(weights, z)
-    den = ld.quad(w)
-    if not np.isfinite(den):
-        raise ValueError(f"w^T D w = {den!r} is not finite")
-    if den < 0.0:
-        raise ValueError(
-            f"w^T D w = {den!r} is negative; MSE would be understated "
-            "(a non-PSD LD approximation)")
-    value = var_y - 2.0 * wz + den
-    if not np.isfinite(value):
-        raise ValueError("estimated MSE is not finite")
-    return value
+    return _mse_from_quad(wz, ld.quad(w), var_y)

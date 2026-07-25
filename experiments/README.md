@@ -225,9 +225,35 @@ Observed (m=500, n=20000, F_ST=0.25, h²=0.5):
 
 With B target stats + B LD the estimate is exact/unbiased and recovers the
 portability loss; ancestry-A LD biases it (the LD-form ratio 1.031); substituting
-ancestry-A sumstats does not estimate R²_B at all (+58%). **Target-ancestry
-summary statistics are irreducibly required.** Encoded in
-`tests/test_cross_ancestry.py`.
+ancestry-A sumstats does not estimate R²_B at all. **Target-ancestry summary
+statistics are irreducibly required.** The +57.7% is `1/portability − 1` — an
+arithmetic consequence of the chosen `r_g`, not a measured effect size.
+
+**Read the mismatch row as conditional on the simulated LD.** Both ancestries
+above share one LD architecture: Balding-Nichols differs their allele
+frequencies, but `ppb.simulate` draws haplotypes with the same latent
+correlation `rho**|i-j|` for both. That is why portability is 0.998 at
+r_g = 1.0 — F_ST has no LD channel, so all loss in Table 6 comes from `r_g`.
+`run()` takes `rho_b` / `block_size_b` to give B its own LD:
+
+```bash
+python experiments/cross_ancestry.py --ld-divergence
+```
+
+**Table 7. Wrong-ancestry-LD bias against the simulated LD (r_g = 1.0)**
+
+| A LD | B LD | portability | mismatch % bias | LD ratio |
+|---|---|---:|---:|---:|
+| ρ 0.5, blocks 100 *(shipped)* | ρ 0.5, blocks 100 | 1.001 | −3.17 | 1.034 |
+| ρ 0.8, blocks 100 | ρ 0.8, blocks 100 | 0.963 | −10.66 | 1.113 |
+| ρ 0.9, blocks 100 | ρ 0.9, blocks 100 | 0.920 | −13.70 | 1.154 |
+| ρ 0.9, blocks 100 | **ρ 0.6, blocks 100** | **0.780** | **−64.74** | 2.844 |
+| ρ 0.9, blocks 100 | **ρ 0.6, blocks 50** | **0.771** | **−65.30** | 2.883 |
+
+So the −3% headline is a property of the generator (AR(1) at ρ = 0.5 decays to
+r = 0.06 in four variants; the real HM3+ blocks have a median of 1,901 variants),
+and genuinely divergent LD produces real portability loss with `r_g` held at 1.
+Both experiments are encoded in `tests/test_cross_ancestry.py`.
 
 ## `overlap_detection.py` — detecting/correcting training-target sample overlap
 
@@ -247,22 +273,36 @@ Run:
 python experiments/overlap_detection.py
 ```
 
-Observed (known marginal-score basis, five replicates per overlap fraction):
+Observed (blockwise ridge trainer, Hutchinson basis, heterogeneous LD blocks,
+two replicates):
 
-**Table 7. Seeded basis-aware overlap diagnostics**
+**Table 7. Basis-aware overlap diagnostics by genetic architecture**
 
-| overlap | γ̂ | γ_true | fit status | correction |
-|---:|---:|---:|---|---|
-| 0% | −1.18e-05 | 0 | `weak_identification` | refused |
-| 25% | 5.82e-05 | 6.25e-05 | `weak_identification` | refused |
-| 100% | 1.91e-04 | 2.50e-04 | `weak_identification` | refused |
+| architecture | overlap | fit status | γ̂/γ_true | R² naive | R² corrected | independent anchor |
+|---|---:|---|---:|---:|---:|---:|
+| diffuse (20% causal) | 100% | `weak_identification` | 0.76 | — | refused | — |
+| sparse (1% causal) | 0% | `not_detected` | — | 0.056 | none issued | 0.041 |
+| sparse (1% causal) | 25% | `correctable` | 0.84 | 0.158 | **0.050** | 0.047 |
+| sparse (1% causal) | 100% | `correctable` | 0.99 | 1.094 | **0.062** | 0.038 |
 
-The overlap direction is visible, but the diffuse signal and basis remain too
-collinear for a defensible correction (full-overlap VIF 2.76; condition number
-8.9). The thresholded trainer is separately refused because its sensitivity
-operator was not reconstructed. This is the point of fail-closed statistics:
-"looks plausible" is not an identification theorem. Encoded in
-`tests/test_overlap.py`.
+**Identification is decided by the architecture, not by the code.** The design
+has two positive columns — the reference signal and the trainer basis — that
+both grow with block size, so separating them needs signal variation *at fixed
+block size*. A diffuse trait has almost none and is correctly refused; a sparse
+one has plenty, and the same code recovers the coupling and brings a statistic
+inflated nearly thirtyfold back to within ~1.6× of its honest anchor. Partial
+overlap lands on the anchor, and the null issues nothing.
+
+An earlier version of this experiment ran only the diffuse corner *with a
+constant basis* — a marginal trainer over equal-sized blocks makes
+`q_b = tr(D_b)` the block size — and recorded the resulting refusal as the
+method's operating limit. It was the least identifiable configuration available.
+
+The Hutchinson basis (`ppb.estimate_overlap_basis`, `docs/OVERLAP.md` Eq. 4) is
+checked against the exact `tr(A_b'K_b)` of the linear trainer it is estimating
+(0.2–0.6% error). A p+T trainer is refused at the basis: its local Jacobian is
+locally stable but misses its own selection response, which the perturbation
+sweep detects.
 
 ## `transferability.py` — LD-based reweighting does not improve portability (negative result)
 

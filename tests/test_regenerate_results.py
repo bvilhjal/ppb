@@ -169,3 +169,106 @@ def test_human_readable_evaluators_use_joint_support(
     assert num == pytest.approx(100.0 / np.sqrt(2.0))
     assert den == pytest.approx(5.0)
     assert (w_matched, w_total, z_matched, z_total, n_scored) == (3, 3, 2, 2, 2)
+
+
+def _blocked_metrics(n_blocks=66, seed=0, coherent=True):
+    rng = np.random.default_rng(seed)
+    u = (np.abs(rng.normal(0.02, 0.004, n_blocks)) if coherent
+         else rng.normal(0.0, 0.02, n_blocks))
+    v = rng.uniform(0.5, 1.5, n_blocks)
+    chrom = np.repeat([str(c) for c in range(1, 23)],
+                      int(np.ceil(n_blocks / 22)))[:n_blocks]
+    num, den = float(u.sum()), float(v.sum())
+    return regenerate._metrics(
+        num, den, 1.0, 1.0, 1000, "quantitative", u=u, v=v, chrom=chrom), u, v
+
+
+def test_metrics_records_the_block_jackknife_and_sign_flip_null():
+    metrics, u, v = _blocked_metrics()
+
+    assert metrics["jackknife"]["n_groups"] == 66
+    assert metrics["jackknife"]["se"] > 0.0
+    assert metrics["jackknife_chromosome"]["n_groups"] == 22
+    assert metrics["sign_flip_null"]["z"] > 5.0
+    assert metrics["sign_flip_null"]["null_mean"] > 0.0
+    # The control must calibrate the headline value, not restate it.
+    assert metrics["sign_flip_null"]["ratio"] == pytest.approx(
+        metrics["r2"] / metrics["sign_flip_null"]["null_mean"])
+    # Per-chromosome partial sums must reconstruct the headline totals.
+    assert sum(p[0] for p in metrics["per_chromosome"].values()) == pytest.approx(
+        metrics["num"])
+    assert sum(p[1] for p in metrics["per_chromosome"].values()) == pytest.approx(
+        metrics["den"])
+
+
+def test_metrics_declares_when_the_block_diagnostics_cannot_run():
+    """A single-block sweep must say so, not emit a field that looks computed."""
+    metrics = regenerate._metrics(
+        0.1, 1.0, 1.0, 1.0, 10, "quantitative",
+        u=np.array([0.1]), v=np.array([1.0]), chrom=np.array(["1"]))
+    assert "jackknife" not in metrics
+    assert "sign_flip_null" not in metrics
+    assert "LD block" in metrics["diagnostics_unavailable"]
+
+
+def test_metrics_without_block_products_omits_the_diagnostics():
+    metrics = regenerate._metrics(0.1, 1.0, 1.0, 1.0, 10, "quantitative")
+    assert set(metrics) == {"num", "den", "r2", "w_match", "z_match",
+                            "n_variants_scored", "scale"}
+
+
+def test_emitted_diagnostics_satisfy_the_registry_schema():
+    """What the generator writes must pass the validators the registry enforces."""
+    from tests import test_results_registry as registry
+
+    metrics, _, _ = _blocked_metrics()
+    record = {"metrics": {**metrics, "r2": metrics["r2"]},
+              "score": {"n_variants": 5000}}
+    registry.test_jackknife_blocks_are_internally_consistent("synthetic", record)
+    registry.test_sign_flip_null_is_internally_consistent("synthetic", record)
+    registry.test_per_chromosome_sums_reproduce_the_headline_metrics(
+        "synthetic", record)
+    registry.test_missing_diagnostics_declare_why("synthetic", record)
+
+
+@pytest.mark.parametrize("mutate,match", [
+    (lambda m: m["jackknife"].update(n_groups=999), "more groups than blocks"),
+    (lambda m: m["jackknife"].update(se=-1.0), "non-negative"),
+    (lambda m: m["jackknife"].update(max_variance_share=1.5), "fraction"),
+    (lambda m: m["jackknife"].update(n_groups=1), "at least 2 delete-one groups"),
+])
+def test_registry_rejects_a_malformed_jackknife(mutate, match):
+    from tests import test_results_registry as registry
+
+    metrics, _, _ = _blocked_metrics()
+    mutate(metrics)
+    with pytest.raises(AssertionError, match=match):
+        registry.test_jackknife_blocks_are_internally_consistent(
+            "synthetic", {"metrics": metrics})
+
+
+@pytest.mark.parametrize("mutate,match", [
+    (lambda m: m["sign_flip_null"].update(z=99.0), r"exceeds sqrt\(n_blocks\)"),
+    (lambda m: m["sign_flip_null"].update(null_mean=0.0), "must be positive"),
+    (lambda m: m["sign_flip_null"].update(ratio=1.0), "must equal r2 / null_mean"),
+    (lambda m: m["sign_flip_null"].update(z_ceiling=2.0), None),
+])
+def test_registry_rejects_a_malformed_sign_flip_null(mutate, match):
+    from tests import test_results_registry as registry
+
+    metrics, _, _ = _blocked_metrics()
+    mutate(metrics)
+    with pytest.raises(AssertionError, match=match):
+        registry.test_sign_flip_null_is_internally_consistent(
+            "synthetic", {"metrics": metrics})
+
+
+def test_registry_rejects_per_chromosome_sums_that_do_not_reconstruct_the_total():
+    from tests import test_results_registry as registry
+
+    metrics, _, _ = _blocked_metrics()
+    first = next(iter(metrics["per_chromosome"]))
+    metrics["per_chromosome"][first][0] += 0.5
+    with pytest.raises(AssertionError, match="does not sum to metrics.num"):
+        registry.test_per_chromosome_sums_reproduce_the_headline_metrics(
+            "synthetic", {"metrics": metrics})
