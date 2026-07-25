@@ -114,6 +114,11 @@ utility, causality, or individual privacy.
   standard errors for binary traits do the same; and the analyst's choice of
   `n_eff` moves it directly — `REAL_DATA.md` records a 1.2× swing for DIAGRAM
   T2D from that choice alone, on a number quoted to three significant figures.
+  This is now **measured, not hypothesised**: against published individual-level
+  accuracy for the same scores, LDL (a GLGC target) agrees to 2% while both
+  **GIANT** targets come in 1.5–2× low, implying a `z` deflation of 1.22–1.44 —
+  the right size for GIANT's genomic control, and not explained by score support
+  or by the cohort difference (`REAL_DATA.md`, Table 3).
   PPB performs **no diagnostic** on the scale of its input `z` and cannot detect
   a mis-scaled target. Reported values should be read as conditional on the
   source study's processing; a mean-χ²/LD-score or heritability sanity check

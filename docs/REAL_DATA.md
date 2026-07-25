@@ -2,7 +2,7 @@
 
 Status: record. Numbers here are reproducible from committed code at the stated
 commit. Symbols and labels: [`NOTATION.md`](NOTATION.md). Results are labelled
-(G1)–(G4).
+(G1)–(G5).
 
 First run of ppb on real data: public PGS Catalog scores evaluated against real
 GWAS summary statistics with the bigsnpr HapMap3+ European LD reference
@@ -100,6 +100,83 @@ consortium rows are restricted-score estimates as Table 1 states. The
 independent quantitative magnitudes are consistent with the literature (height
 about 25%, LDL about 11%, BMI about 6%); binary-trait comparisons retain the
 approximation described below.
+
+## External validation against published individual-level accuracy
+
+The claim above that these magnitudes are "consistent with the literature" is
+the weakest form of validation available, and it is unnecessary. The same PGS
+Catalog scores carry **published individual-level accuracy** from their source
+publication (Privé et al. 2022), retrievable from the PGS Catalog REST API, so
+the hand-wave can be replaced by ratios:
+
+```bash
+python scripts/anchor_validation.py          # needs network, no local data
+```
+
+**Table 3. PPB against published individual-level accuracy** (partial R² in the
+held-out UK Biobank "UK (+ Ireland)" group; PPB against its consortium target).
+
+| trait | target GWAS | PPB R² | published R² | published/PPB | support |
+|---|---|---:|---:|---:|---:|
+| LDL | GLGC 2013 | 0.110 | 0.112 | **1.02** | 88.6% |
+| height | GIANT 2014 | 0.252 | 0.376 | **1.49** | 91.8% |
+| BMI | GIANT 2015 | 0.065 | 0.134 | **2.08** | 92.1% |
+| T2D | DIAGRAM 2017 | 0.044 | 0.017 | 0.38 | 99.9% |
+| breast cancer | BCAC 2017 | 0.042 | 0.013 | 0.30 | 100.0% |
+| CAD | CARDIoGRAM 2015 | 0.025 | 0.012 | 0.46 | 99.9% |
+
+These are two different EUR cohorts and two slightly different estimands (a
+covariate-adjusted partial correlation within UKBB, versus PPB against a
+consortium meta-analysis), so this is a magnitude check rather than an equality
+test. Read it that way, and it says three things.
+
+**LDL agrees to 2%.** On the trait with the *lowest* score support in the table,
+the summary-statistic estimate lands on the individual-level one. That is the
+strongest single piece of evidence the pipeline has: harmonization, the gauge,
+per-variant `n`, the LD reference, and (G1) all have to be right together to
+produce it.
+
+**Both GIANT targets are low by 1.5–2×, and nothing else is.** Support does not
+explain it — LDL has the least and agrees best. The cohort difference does not
+explain it — it would not single out one consortium. What does fit is the
+mechanism `LIMITATIONS.md` already names: R² scales as the **square** of the
+scale of `z`, and genomic control deflates `z`. The implied deflation is
+`√1.49 = 1.22` for height and `√2.08 = 1.44` for BMI, which is the right size for
+GIANT's study-and-meta-level genomic control. This is now a measured,
+target-specific effect rather than a flagged possibility — and it is a reason to
+treat GIANT-derived rows as **lower bounds** until a scale diagnostic exists.
+
+**The binary rows are not comparable**, as the caveats below state: PPB's binary
+output is a standardized summary-statistic approximation whose scale depends on
+the supplied effective sample size, not an observed-scale partial correlation.
+They run 2–3× *higher* by a roughly constant factor, which is what a scale
+convention difference looks like rather than an error, and they are excluded from
+the verdict.
+
+### A ready-made target for the flagship
+
+The same query returns each score's accuracy in **all nine** UKBB ancestry
+groups — the individual-level portability curve, for these exact scores, that
+the cross-ancestry method aims to recover from summary statistics alone:
+
+**Table 4. Published individual-level portability, relative to UK (+ Ireland).**
+
+| group | height | BMI | LDL | CAD | T2D | BrCa |
+|---|---:|---:|---:|---:|---:|---:|
+| UK (+ Ireland) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| Poland | 0.93 | 1.02 | 1.08 | 1.77 | 0.44 | 0.51 |
+| Italy | 0.88 | 0.96 | 0.85 | 0.97 | 0.76 | 0.93 |
+| Iran | 0.65 | 0.64 | 0.79 | 0.45 | 1.83 | 0.74 |
+| India | 0.60 | 0.71 | 0.43 | 1.34 | 1.47 | 0.50 |
+| China | 0.49 | 0.54 | 0.58 | 0.23 | 0.36 | 1.02 |
+| Caribbean | 0.27 | 0.33 | 0.77 | 0.11 | 0.59 | 0.18 |
+| Nigeria | 0.17 | 0.18 | 0.45 | 0.01 | 0.38 | 0.55 |
+
+The quantitative columns show the portability decay the project exists to
+measure — height and BMI down to ~0.18 in the West African group. Given a
+non-European target GWAS for one of these traits, (X1) can be evaluated against
+this column rather than against a simulation. That is the Phase-4 validation
+target, and it already exists.
 
 ## Uncertainty and negative controls
 

@@ -161,6 +161,7 @@ it to account.
 | (G2) | delete-one-group block jackknife | `ppb.diagnostics.r2_block_jackknife` | `tests/test_diagnostics.py` |
 | (G3) | block-sign-flip null | `ppb.diagnostics.sign_flip_null` | `tests/test_diagnostics.py` |
 | (G4) | trait-swap negative control | `scripts/negative_controls.py` | `tests/test_negative_controls.py` |
+| (G5) | external check against published individual-level accuracy | `scripts/anchor_validation.py` | `tests/test_anchor_validation.py` |
 | (R1) | registry score metric | `scripts/regenerate_results.py` | `tests/test_results_registry.py` |
 | (E1) | PUMAS moment covariance `V = var_y D + z zᵀ` | `ppb.pumas` | `tests/test_pumas.py` |
 
