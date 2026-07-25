@@ -3,9 +3,12 @@
 > **Historical snapshot — not a live document.** This is a point-in-time review
 > of commit `bd5d0d9` (2026-07-18). The repository has moved on substantially
 > since: the real-data evaluations, the sample-overlap detector, the results
-> registry, and the stage-1 leaderboard all post-date it, and some findings here
-> have since been fixed. For current status see [`FINISHING_PLAN.md`](FINISHING_PLAN.md);
-> for current specification see [`docs/METHOD.md`](docs/METHOD.md).
+> registry, and the stage-1 leaderboard all post-date it, and every finding here
+> has since been resolved (see "Resolution" at the end). **The current review is
+> [`REVIEW-2026-07-25.md`](REVIEW-2026-07-25.md)** (commit `011bdee`), which
+> covers the work that post-dates this one. For current status see
+> [`FINISHING_PLAN.md`](FINISHING_PLAN.md); for current specification see
+> [`docs/METHOD.md`](docs/METHOD.md).
 
 **Date:** 2026-07-18
 **Scope:** full review at commit `bd5d0d9` — the scientific idea (Witteveen
