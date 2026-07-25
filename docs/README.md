@@ -59,7 +59,7 @@ numbered result to its module and its test, then the module.
 | [`METHOD.md`](METHOD.md) | specification | the estimator (M1–M4), LD representation, conventions, tolerances |
 | [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | specification | target-ancestry inputs (X1), the gauge condition (X2), what is impossible without target data |
 | [`OVERLAP.md`](OVERLAP.md) | specification | shared training/target noise: the model (O1–O2), the basis (O3–O4), the gates |
-| [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2) and controls (G3–G4) |
+| [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2), controls (G3–G4), and the external check against published individual-level accuracy (G5) |
 | [`LIMITATIONS.md`](LIMITATIONS.md) | scope | what PPB does and does not establish; every known failure mode |
 | [`TRANSFERABILITY.md`](TRANSFERABILITY.md) | scope | a negative result: why PPB measures portability but does not construct scores |
 | [`../results/schema.md`](../results/schema.md) | specification | the result-pack format (R1) and the rules CI enforces |
