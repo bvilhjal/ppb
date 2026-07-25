@@ -7,7 +7,7 @@ predictive accuracy (R²) in a *target ancestry* — from **summary-level data o
 (target-ancestry GWAS summary statistics + a matched LD reference), without
 individual-level test records. The estimator is
 
-**Equation 1. Target-ancestry summary-statistic accuracy**
+**(X1) Target-ancestry summary-statistic accuracy**
 
 ```
 R²_B = (wᵀ z_B)² / (wᵀ D_B w)
@@ -50,6 +50,13 @@ the validation anchor.
 > for the specification and scope. Input harmonization, weight scaling, LD
 > structure, and result-pack provenance are validated explicitly; invalid or
 > non-finite inputs fail rather than being silently ranked.
+
+## Documentation
+
+[`docs/README.md`](docs/README.md) is the roadmap: what each document is for,
+which are binding, and where to start. [`docs/NOTATION.md`](docs/NOTATION.md)
+defines every symbol once and indexes every numbered result — (M1), (X1), (O4),
+(G2) and the rest — to the module that implements it and the test that pins it.
 
 ## Install
 

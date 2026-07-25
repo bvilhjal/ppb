@@ -40,7 +40,7 @@ reviewed result files" — no submission service before the protocol survives
 external beta (unchanged).
 
 Revised: 2026-07-25 — **overlap correction salvaged**: the stochastic
-generalized-degrees-of-freedom basis of Equation 4 is implemented
+generalized-degrees-of-freedom basis (O4) is implemented
 (`ppb.estimate_overlap_basis`), so a *rerunnable* trainer can supply one, and
 the controlled physical simulation now recovers the coupling and returns an
 inflated statistic to its independent anchor. The earlier "refuses every
@@ -59,12 +59,12 @@ polygenic score in a *target ancestry* — using only summary-level data
 individual-level test records.
 
 The within-ancestry summary-statistic evaluator of Witteveen et al. (2022) is the
-**foundation and validation anchor**: cross-ancestry evaluation uses Equation 1
+**foundation and validation anchor**: cross-ancestry evaluation uses (X1)
 with the target-population moments (`z_B`, `D_B`) supplied for target ancestry B.
 The project's new scientific contribution is turning that estimator into a
 portability-measurement tool and benchmark, and validating it across ancestries.
 
-**Equation 1. Target-ancestry summary-statistic accuracy**
+**(X1) Target-ancestry summary-statistic accuracy**
 
     R²_B = (wᵀz_B)² / (wᵀD_Bw).
 

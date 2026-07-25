@@ -47,10 +47,12 @@ class OverlapBasis:
     """Trainer sensitivity to one unit of shared estimation noise.
 
     ``values[b]`` is the block basis ``q_b``.  For a linear trainer
-    ``w = A z_train`` it is ``tr(A_b.T K_b)``, where ``K`` is the declared
-    shared-noise covariance template.  ``support`` is the exact block support
-    of the score numerator.  ``support_hash`` and ``provenance`` tie the basis
-    to the evaluated score and trainer artifact.
+    ``w = Phi z_train`` it is ``tr(Phi_b.T K_b)``, where ``K`` is the declared
+    shared-noise covariance template.  (``Phi``, not ``A``: ``A`` is the
+    discovery ancestry elsewhere -- see ``docs/NOTATION.md`` section 4.)
+    ``support`` is the exact block support of the score numerator.
+    ``support_hash`` and ``provenance`` tie the basis to the evaluated score and
+    trainer artifact.
 
     Use :meth:`unavailable` when the trainer operator cannot be reconstructed;
     variant count is deliberately not used as a fallback.
@@ -103,7 +105,7 @@ def estimate_overlap_basis(trainer, z, blocks, noise_sqrt, *, rng,
                            max_relative_spread=0.2, min_pattern_correlation=0.9):
     """Stochastic trainer-sensitivity basis for a rerunnable trainer.
 
-    Implements ``docs/OVERLAP.md`` Equation 4, the generalized-degrees-of-freedom
+    Implements ``docs/OVERLAP.md`` (O4), the generalized-degrees-of-freedom
     trace estimate (Ye 1998; Hutchinson 1989):
 
         q_b = (1 / R) sum_r g_br' {f(z + delta g_r) - f(z)}_b / delta,
@@ -117,7 +119,7 @@ def estimate_overlap_basis(trainer, z, blocks, noise_sqrt, *, rng,
     ``deltas`` are step sizes **as a fraction of** ``norm(z)``: the actual
     perturbation is ``delta * scale * g`` with
     ``scale = norm(z) / sqrt(sum_b tr K_b)``, and the difference quotient
-    divides by the same step, so the estimate keeps the units of ``tr(A' K)``.
+    divides by the same step, so the estimate keeps the units of ``tr(Phi' K)``.
     That scaling is not cosmetic -- a step much larger than ``z`` makes *any*
     trainer look like the identity, which is how a thresholding trainer can
     otherwise be mistaken for a well-behaved linear one. Pass ``scale``

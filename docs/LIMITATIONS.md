@@ -1,5 +1,7 @@
 # Scope, limitations, and privacy claims
 
+Status: scope. Symbols and labels: [`NOTATION.md`](NOTATION.md).
+
 This consolidates what PPB does and does not claim. It complements the estimator
 specification in [`METHOD.md`](METHOD.md) and the project plan in
 [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md).
@@ -11,7 +13,7 @@ A tool (and planned benchmark) that measures the **cross-ancestry portability** 
 from **summary-level information only** (target-ancestry GWAS summary statistics +
 a matched LD reference), without individual-level test records:
 
-**Equation 1. Target-ancestry summary-statistic accuracy**
+This is (X1) — the core identity (M1) with target-ancestry moments:
 
     R²_B = (wᵀ z_B)² / (wᵀ D_B w),   with z_B, D_B from the target ancestry B.
 

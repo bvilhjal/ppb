@@ -1,5 +1,8 @@
 # Cross-ancestry R² estimation — PPB's flagship method
 
+Status: specification (binding). Symbols and labels:
+[`NOTATION.md`](NOTATION.md). Results are labelled (X1)–(X3).
+
 This is the project's central method (see `FINISHING_PLAN.md`, "Project focus"):
 **measure the predictive R² of a polygenic score in a target ancestry** from
 summary-level data. It *measures* portability given target-ancestry data; it does
@@ -48,22 +51,16 @@ target-ancestry data, sometimes with criteria of this family — so treat
 "new to this project" as a claim still to be checked against the literature
 before publication.
 
-This project starts from that idea and makes one observation: the estimator is
-**ancestry-agnostic in form** — the identity holds in *any* population whose
-moments `(z, D)` are supplied. Supplying the **target ancestry's** summary
-statistics `z_B` and LD `D_B` therefore turns the same estimator into a
-measurement of **cross-ancestry transferability**: the realized predictive
-accuracy in a target ancestry B of a PGS trained in any ancestry. That reframing
-— from a within-ancestry benchmark into a summary-statistics-based probe of PRS
-portability across ancestries — is what this project pursues, and is *not*
-part of the European-only original.
-
 ## The estimator
 
-The PPB identity is ancestry-agnostic in *form*. For a fixed PGS `w` (trained in
-any ancestry A) evaluated in a **target ancestry B**:
+The reframing rests on one observation: (M1) is **ancestry-agnostic in form**.
+The identity holds in *any* population whose moments `(z, D)` are supplied, so
+supplying the target ancestry's turns an evaluator into a measurement of
+portability. For a fixed PGS `w` (trained in any ancestry A) evaluated in a
+**target ancestry B**:
 
-**Equation 1. Target-ancestry predictive accuracy.**
+**(X1) Target-ancestry predictive accuracy.** This is (M1) with ancestry-B
+moments substituted — the same code, the same algebra, different inputs.
 
 $$R^2_B = \frac{(w_B^\top z_B)^2}{w_B^\top D_B\, w_B}$$
 
@@ -73,7 +70,7 @@ with **both** `z_B` and `D_B` from ancestry B:
 
 | input | definition | source |
 |---|---|---|
-| `z_B` | target-trait marginal correlations in B, `r_{B,j} = t_{B,j}/√(t_{B,j}²+n_{B,j}−2)` | **B GWAS** of the trait |
+| `z_B` | target-trait marginal correlations in B, by (M3) | **B GWAS** of the trait |
 | `D_B` | LD (genotype correlation) matrix in B, ideally from a panel independent of the `z_B` sample | **B reference panel** |
 | `w_B` | weights on B's standardized-genotype scale | dosage weight `b_j` times empirical `sd_B,j`; only an already A-standardized weight uses `w_A,j × sd_B,j / sd_A,j` |
 
@@ -84,6 +81,10 @@ it already encodes B's true effects tagged through B LD; the estimator never
 decomposes it into causal effects, so `r_g` has no slot.
 
 ## The one subtlety: gauge self-consistency
+
+**(X2) Gauge condition.** `w`, `z_B` and `D_B` must be expressed on one and the
+same ancestry-B standardization; put the weights there with the empirical
+genotype SDs, `w_B,j = w_A,j · sd_B,j / sd_A,j`.
 
 The ratio is invariant only to a **global** rescale of `w`, not a per-variant
 one. So `w`, `z_B`, `D_B` must be on **one self-consistent B standardization**.
@@ -120,7 +121,7 @@ the standardized genotypes represented by `D_B`.
 4. **Tri-panel allele harmonization** (weights, `z_B`, `D_B`); drop strand-ambiguous
    SNPs — cross-ancestry MAF differences make frequency-based strand tie-breaks unreliable.
 5. **Sample independence** between the A training GWAS and the `z_B` GWAS; PC-adjust within B.
-6. **Finite-sample numerator correction** *(not yet implemented)*: the plug-in
+6. **(X3) Finite-sample numerator correction** *(not yet implemented)*: the plug-in
    `(wᵀẑ_B)²` is biased upward by `≈ wᵀD_B w / N_B` (an absolute R² bias of
    `≈ 1/N_B` — small even at modest GWAS N, but cheap to remove); subtract it
    (or use within-B PUMAS subsampling) and report an SE. Tracked as a v0.1

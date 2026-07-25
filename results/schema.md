@@ -1,5 +1,9 @@
 # PPB results registry
 
+Status: specification (binding) — these rules are enforced by
+`tests/test_results_registry.py`. Symbols and labels:
+[`../docs/NOTATION.md`](../docs/NOTATION.md).
+
 Versioned, review-only result records — the stage-1 "leaderboard": a static
 site (`site/`) generated from these files by `scripts/build_leaderboard.py`.
 No submission service; records enter by maintainer-run baselines and reviewed
@@ -43,7 +47,7 @@ records, one per (score × target GWAS) evaluation.
 | `target.overlap` | `"none (declared)"` \| `"in-sample"` |
 | `ld_ref` | LD reference id/version |
 | `metrics.num`, `metrics.den` | `wᵀz`, `wᵀDw` over the target-specific joint weight/summary-statistic support |
-| `metrics.r2` | registry R² from Equation 1 |
+| `metrics.r2` | registry R² from (R1) |
 | `metrics.scale` | `"quantitative correlation R2"` \| `"standardized logistic-summary approximation (not liability R2)"` |
 | `metrics.w_match`, `metrics.z_match` | harmonized-variant fractions |
 | `metrics.n_variants_scored` | count of non-zero weights on the target-specific joint `w`/`z` support |
@@ -58,23 +62,24 @@ records, one per (score × target GWAS) evaluation.
 | `overlap.basis` | trainer-sensitivity basis kind, provenance, and support hash; unavailable bases say so explicitly |
 | `overlap.alpha`, `overlap.alpha_se` | fitted target/reference cohort-signal scale and jackknife SE |
 | `overlap.gamma`, `overlap.gamma_se`, `overlap.gamma_z` | fitted shared-noise coupling and jackknife evidence |
-| `overlap.q_total`, `overlap.numerator_target` | exact-support quantities used by Equation 3 |
+| `overlap.q_total`, `overlap.numerator_target` | exact-support quantities used by (O6) |
 | `overlap.corrected_r2` | basis-aware correction; permitted only when `status == "correctable"` |
 | `overlap.reference` | label + R² of the reference evaluation |
 | `overlap.note` | reason a correction is not applicable or was refused |
 | `overlap.legacy_unidentified` | optional quarantined pre-v1 slope fields, retained for audit only and never treated as a current correction |
 | `date`, `ppb_commit` | provenance |
 
-**Equation 1. Registry score metric.**
+**(R1) Registry score metric.**
 
 ```text
 R²_registry = metrics.num² / metrics.den
 ```
 
-For a binary trait, Equation 1 is a standardized logistic-summary
+For a binary trait, (R1) is a standardized logistic-summary
 approximation. It is not observed-scale or liability-scale case/control R².
 
-**Equation 2. Block-sign-flip null.**
+**(G3) Block-sign-flip null.** (Defined in `docs/REAL_DATA.md`; restated
+here because the registry stores its outputs.)
 
 ```text
 E[R²_null] = Σ_b u_b² / Σ_b v_b        z = Σ_b u_b / sqrt(Σ_b u_b²)
@@ -91,7 +96,7 @@ fixed scale, not an unbounded significance statistic. Neither this nor the
 jackknife detects a uniformly mis-scaled `z`: observed and null move together
 (`docs/LIMITATIONS.md`).
 
-**Equation 3. Basis-aware numerator correction.**
+**(O6) Basis-aware numerator correction.** (Defined in `docs/OVERLAP.md`.)
 
 ```text
 num_corrected = overlap.numerator_target - overlap.gamma × overlap.q_total
@@ -138,7 +143,7 @@ R²_corrected = num_corrected² / metrics.den
   available basis must declare `linear_trace` or `jacobian_hutchinson`, its
   provenance, and the exact score-support hash.
 - Only `correctable` records may carry `overlap.corrected_r2`; they must also
-  carry the finite current-fit fields needed to verify Equation 3. Every other
+  carry the finite current-fit fields needed to verify (O6). Every other
   fit status fails closed. Every refusal status (all except `correctable` and
   `not_applicable`) must explain the refusal in `overlap.note`.
 - When present, `overlap.legacy_unidentified` is never current evidence. It
