@@ -78,12 +78,13 @@ def _one(rng, frac, causal_frac, *, n, per_size, rho, h2, ridge, thresholded,
     def trainer(values):
         """Blockwise ridge -- rerunnable, and linear so its basis is checkable."""
         w = np.zeros_like(values)
-        for A, idx in zip(operators, idxs):
-            w[idx] = A @ values[idx]
+        for Phi, idx in zip(operators, idxs):
+            w[idx] = Phi @ values[idx]
         return w
 
-    analytic = np.array([float(np.trace(A.T @ Db))
-                         for A, Db in zip(operators, blocks)])
+    # (O3): q_b = tr(Phi_b' K_b) with K = D, exact for this linear trainer.
+    analytic = np.array([float(np.trace(Phi.T @ Db))
+                         for Phi, Db in zip(operators, blocks)])
     if thresholded:
         # Discontinuous selection: the local Jacobian misses the selection
         # response, and the perturbation-stability gate must say so.
@@ -172,7 +173,7 @@ def run(n=2500, per_size=15, rho=0.6, h2=0.3, ridge=0.5, reps=2,
 def main():
     out = run()
     print("=== Hutchinson basis for a rerunnable trainer ===")
-    print(f"  relative error vs analytic tr(A'K) = {out['basis_error']:.4f}")
+    print(f"  relative error vs analytic tr(Phi'K) = {out['basis_error']:.4f}")
     print("\n=== diffuse architecture (20% causal): the refusal corner ===")
     print(f"  status = {out['diffuse_status']}, VIF {out['diffuse_vif']:.2f} "
           f"(gate 2.0); gamma/true {out['diffuse_gamma_ratio']:.2f}")

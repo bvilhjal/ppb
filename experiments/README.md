@@ -1,5 +1,7 @@
 # Experiments
 
+Status: record. Symbols and labels: [`../docs/NOTATION.md`](../docs/NOTATION.md).
+
 Validated demonstrations, each encoded as a test. Some reproduce within-ancestry
 results from Witteveen et al. (2022) — `figure_s1.py`, `benchmark_methods.py`,
 `pc_adjustment.py`, `per_variant_n.py`; `pumas_agreement.py` tests a PUMAS-style
@@ -122,9 +124,9 @@ refits each data-derived score with `fit(z_train)`, and evaluates it on the pair
 accepted through a separate API so weights trained on the full input GWAS cannot
 masquerade as independent.
 
-The sampler uses the signal-dependent full-LD covariance in Equation 1.
+The sampler uses the signal-dependent full-LD covariance (E1).
 
-**Equation 1. Dense Gaussian moment covariance**
+**(E1) Dense Gaussian moment covariance**
 
     V = var_y D + z_full z_fullᵀ.
 
@@ -165,12 +167,12 @@ Encoded in `tests/test_pumas.py`.
 ## `per_variant_n.py` — per-variant sample sizes; uniform N biases R²
 
 In a meta-analysis each variant has its own sample size `n_j`. The standardized
-marginal correlation is recovered per variant with Equation 2
+marginal correlation is recovered per variant with (M3)
 (`ppb.standardized_marginal`).
 
-**Equation 2. Per-variant standardized marginal correlation**
+**(M3) Per-variant standardized marginal correlation**
 
-    r_j = t_j / √(t_j² + n_j − 2).
+    z_j = t_j / √(t_j² + n_j − 2).
 
 Using a single uniform `N` instead shrinks every low-`n` variant and biases R²
 **downward**.
@@ -308,18 +310,18 @@ sweep detects.
 
 Asks whether the two LD matrices `D_A` (discovery) and `D_B` (target) can be
 used to move a PGS onto more transferable variants. They cannot. A per-variant
-LD-concordance score (Equation 3; LD-only, no phenotype) cannot distinguish a
+LD-concordance score (E2; LD-only, no phenotype) cannot distinguish a
 discordant *tag* from a discordant *causal* variant, so reweighting by it removes
 signal.
 
-**Equation 3. Per-variant LD concordance**
+**(E2) Per-variant LD concordance**
 
     s_j = cos(D_A row_j, D_B row_j).
 
-Maximizing the PPB statistic over `w` instead has the optimum in Equation 4 — a
+Maximizing the PPB statistic over `w` instead has the optimum (E3) — a
 ridge/BLUP refit in B, i.e. score construction, not reweighting.
 
-**Equation 4. Target-informed optimum**
+**(E3) Target-informed optimum**
 
     argmax_w (wᵀz_B)² / (wᵀD_Bw) ∝ D_B⁻¹z_B.
 

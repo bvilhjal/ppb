@@ -1,16 +1,21 @@
 # Real-data demonstration (within-ancestry anchor)
 
+Status: record. Numbers here are reproducible from committed code at the stated
+commit. Symbols and labels: [`NOTATION.md`](NOTATION.md). Results are labelled
+(G1)–(G4).
+
 First run of ppb on real data: public PGS Catalog scores evaluated against real
 GWAS summary statistics with the bigsnpr HapMap3+ European LD reference
 (see the README "LD reference (real data)" section). This exercises the whole
 stack — `read_ldref`, `harmonize_to`, `standardized_marginal`, per-variant `n`,
-and the genome-wide estimator in Equation 1 accumulated across chromosomes. It
+and the genome-wide accumulation (G1) across chromosomes. It
 is a **within-ancestry (EUR→EUR) anchor**, the A = B special case; it is not a
 cross-ancestry result.
 
-**Equation 1. Genome-wide summary-statistic accuracy**
+**(G1) Genome-wide accumulation.** (M1) evaluated over the whole genome by
+summing the per-block products of (M4):
 
-    R² = (wᵀz)² / (wᵀDw).
+    R² = (Σ_b u_b)² / (Σ_b v_b).
 
 ## Setup
 
@@ -102,13 +107,13 @@ Two things a point estimate cannot tell you, both computed from the per-block
 `u_b = wᵀ_b z_b` and `v_b = wᵀ_b D_b w_b` that the genome-wide sweep already
 builds — no second pass over the LD reference (`ppb.diagnostics`):
 
-- **`metrics.jackknife`** — a delete-one-block standard error (plus a
+- **(G2) `metrics.jackknife`** — a delete-one-block standard error (plus a
   delete-one-chromosome variant, and the per-chromosome partial sums so a reader
   can recompute it from the pack). Without it "0.252 vs 0.110" is a comparison
   with no stated precision, which is not enough for a benchmark whose purpose is
   ranking. It also captures genomic heterogeneity, which the `1/N` finite-sample
   term does not, and `max_variance_share` flags an estimate carried by one region.
-- **`metrics.sign_flip_null`** — an exact negative control. Because `D` is
+- **(G3) `metrics.sign_flip_null`** — an exact negative control. Because `D` is
   block-diagonal, negating every weight in a block flips `u_b` and leaves `v_b`
   untouched, so the sign-flipped scores are a null family with the same
   denominator and the same per-block magnitudes. `null_mean = Σu_b²/Σv_b` is the
@@ -116,7 +121,7 @@ builds — no second pass over the LD reference (`ppb.diagnostics`):
   CAD's 0.025 against that, not against zero.** `z = Σu_b/√(Σu_b²)` measures how
   coherently the blocks agree, bounded by `√431 = 20.8` on this reference.
 
-A third control needs its own sweep:
+**(G4)** A third control needs its own sweep:
 
 ```bash
 python scripts/negative_controls.py --out controls.json

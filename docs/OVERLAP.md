@@ -1,9 +1,12 @@
 # Basis-aware detection and correction of shared training/target noise
 
-**Status:** fail-closed, and now demonstrated end to end in simulation. The API
-is validated by focused counterexamples and by a controlled physical-overlap
-simulation in which it recovers the coupling and returns an inflated statistic
-to its independent anchor. It is not yet wired into the results registry, and no
+Status: specification (binding). Symbols and labels:
+[`NOTATION.md`](NOTATION.md). Results are labelled (O1)–(O6).
+
+**Where this stands:** fail-closed, and now demonstrated end to end in
+simulation. The API is validated by focused counterexamples and by a controlled
+physical-overlap simulation in which it recovers the coupling and returns an
+inflated statistic to its independent anchor. It is not yet wired into the results registry, and no
 real score has supplied a basis. Existing registry corrections were produced by
 the deprecated fixed-scale, variant-count model and should be treated as legacy
 estimates.
@@ -29,7 +32,7 @@ transportability differences.
 
 For block `b`, the implemented model is
 
-**Equation 1. Shared-noise block model.**
+**(O1) Shared-noise block model.**
 
     u_Rb = s_b + e_Rb
     u_Tb = alpha s_b + gamma q_b + e_Tb.
@@ -43,7 +46,7 @@ the same moment.
 The implementation profiles the latent signal and minimizes the generalized
 Deming objective
 
-**Equation 2. Generalized Deming objective.**
+**(O2) Generalized Deming objective.**
 
     Q(alpha, gamma) = sum_b [
         (u_Tb - alpha u_Rb - gamma q_b)^2
@@ -63,13 +66,15 @@ intercept also captures shared confounding, not participant overlap uniquely
 
 ## The correction basis
 
-For a known linear trainer, let its complete effective operator be `A`, and let
-`K` be the covariance template corresponding to one unit of shared error. Then
+For a known linear trainer, let its complete effective operator be `Phi`, and
+let `K` be the covariance template corresponding to one unit of shared error.
+(It was written `A` before 2026-07-25; that collided with the discovery ancestry
+of `CROSS_ANCESTRY.md` — see [`NOTATION.md`](NOTATION.md) §4.) Then
 
-**Equation 3. Linear-trainer overlap basis.**
+**(O3) Linear-trainer overlap basis.**
 
-    w = A z_train
-    q_b = tr(A_b^T K_b).
+    w = Phi z_train
+    q_b = tr(Phi_b^T K_b).
 
 Variant count is valid only in the special identity-operator normalization. It
 is not a defensible fallback for shrinkage, LD-aware, clumped, thresholded, or
@@ -77,7 +82,7 @@ otherwise selected scores.
 
 For a rerunnable differentiable trainer, the permitted stochastic basis is
 
-**Equation 4. Stochastic overlap-basis estimate.**
+**(O4) Stochastic overlap-basis estimate.**
 
     q_hat_b = (1/R) sum_{r=1}^R [
         g_br^T {f(z + delta g_r) - f(z)}_b / delta
@@ -97,7 +102,7 @@ decide whether it measures anything:
 
 - **The step is scaled to the data.** `deltas` are fractions of `‖z‖`; the
   perturbation is `delta × ‖z‖ / sqrt(Σ_b tr K_b) × g` and the difference
-  quotient divides by the same step, preserving the units of `tr(A'K)`. A step
+  quotient divides by the same step, preserving the units of `tr(Phi'K)`. A step
   much larger than `z` makes *any* trainer look like the identity — a
   thresholding trainer perturbed that hard reports the basis of a linear one.
 - **One small step is not a stability check.** A hard-thresholding trainer has a
@@ -106,7 +111,7 @@ decide whether it measures anything:
   responds to the shared noise. The default `deltas` therefore span from a step
   too small to move any selection boundary to one that moves many, and the gate
   gets its evidence from the disagreement. It is validated against the exact
-  `tr(A_b' K_b)` for a linear trainer (0.2–0.6% error) and refuses a p+T trainer.
+  `tr(Phi_b' K_b)` for a linear trainer (0.2–0.6% error) and refuses a p+T trainer.
 
 `OverlapBasis` intentionally permits only two available kinds:
 `linear_trace` and `jacobian_hutchinson`. Arbitrary labels are rejected because
@@ -117,7 +122,7 @@ the basis units determine both `gamma` and the amount subtracted.
 The basis object includes block values, exact score support, provenance, and a
 support hash. The fit owns both the target numerator and total basis:
 
-**Equation 5. Target numerator and total basis.**
+**(O5) Target numerator and total basis.**
 
     U_T = sum_{b in S_score} u_Tb
     Q_total = sum_{b in S_score} q_b.
@@ -126,12 +131,12 @@ A zero-noise block is excluded from fitting. If such a block has nonzero basis
 mass, correction is refused rather than extrapolated. Otherwise the guarded
 correction is
 
-**Equation 6. Corrected signed numerator.**
+**(O6) Corrected signed numerator.**
 
     U_corr = U_T - gamma_hat Q_total.
 
 The usual PPB denominator is unchanged. The signed numerator must be inspected
-before squaring; correction is refused if Equation (6) reverses its sign.
+before squaring; correction is refused if (O6) reverses its sign.
 
 ## Eligibility gates
 
@@ -207,7 +212,7 @@ them as the headline path.
 | 11 | Controlled participant-overlap simulation, diffuse architecture | Refused as weakly identified |
 | 12 | Controlled participant-overlap simulation, sparse architecture | Recover the coupling; return the statistic to its independent anchor |
 | 13 | Same simulation at zero overlap | No correction issued |
-| 14 | Hutchinson basis for a linear trainer | Match the analytic `tr(A'K)` |
+| 14 | Hutchinson basis for a linear trainer | Match the analytic `tr(Phi'K)` |
 | 15 | Hutchinson basis for a thresholding trainer | `unavailable` on perturbation-scale instability |
 
 **What decides identification.** The design has two columns — the reference
@@ -246,11 +251,11 @@ sensitivity is not stable in the perturbation scale.
 
 ## Remaining limitations
 
-- Equation (1) assumes cohort signal differences are approximately
+- (O1) assumes cohort signal differences are approximately
   multiplicative. Block-specific changes correlated with the basis cannot be
   separated from shared noise using these products alone.
 - A declared independent reference is still required. Undeclared reference
-  overlap invalidates Equation (2).
+  overlap invalidates (O2).
 - A local Jacobian can miss discontinuous model-selection effects. Perturbation
   stability and trainer reruns are mandatory for that basis kind, and the
   stability sweep must span steps large enough to move selection boundaries —

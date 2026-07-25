@@ -1,6 +1,10 @@
 # PPB method specification
 
-Status: draft, revised 2026-07-18 (cross-ancestry focus).
+Status: specification (binding). Revised 2026-07-25.
+
+Symbols are defined in [`NOTATION.md`](NOTATION.md) and are not redefined here.
+Equations carry the stable labels (M1)–(M4); see `NOTATION.md` §1 for the
+scheme and §5 for the index tying each to its implementation and test.
 
 This is the contract for the reimplementation. PPB is being rebuilt from the
 theory in the source preprint, not ported from the historical notebook. The
@@ -9,8 +13,9 @@ this implementation reproduces the published numbers; no legacy logic is copied.
 
 Source (foundation): Witteveen, Pedersen, Meijsen, Andersen, Privé, Speed,
 Vilhjalmsson, *Publicly Available Privacy-preserving Benchmarks for Polygenic
-Prediction*, bioRxiv 2022, doi:10.1101/2022.10.10.510645 (CC-BY). Equation numbers
-below are re-derived here.
+Prediction*, bioRxiv 2022, doi:10.1101/2022.10.10.510645 (CC-BY). Results here are
+re-derived rather than transcribed, and are labelled (M1)–(M4) in this project's
+own scheme; they do not correspond to the preprint's numbering.
 
 **Project focus: cross-ancestry portability.** The estimator below is
 ancestry-agnostic in *form*; PPB's flagship application is measuring the R² of a
@@ -37,22 +42,16 @@ The performance measure is the squared Pearson correlation between the observed
 phenotype and the polygenic-score prediction, expressed using only summary-level
 inputs:
 
-**Equation 1. Core summary-statistic estimator.**
+**(M1) Core summary-statistic estimator.**
 
-    R^2 = (w^T z)^2 / (w^T D w)
+    R^2 = (w^T z)^2 / (w^T D w * var_y)
 
-Symbols (all on standardized scales):
+This is the whole method. Everything else in these documents is either a
+consequence of it, a condition under which it is valid, or machinery for
+computing it at genome scale.
 
-- `w`  — length-`M` vector of PGS weights being evaluated (the submission).
-- `X`  — `N`-by-`M` standardized genotype matrix; each variant has mean 0,
-         variance 1 across the target cohort.
-- `y`  — length-`N` standardized target phenotype (mean 0, variance 1), after
-         covariate adjustment (see §4).
-- `D = (1/N) X^T X`  — `M`-by-`M` LD (genotype covariance/correlation) matrix.
-- `z = (1/N) X^T y`  — length-`M` vector of marginal association summary
-         statistics of `y` on each variant.
-
-`M` ranges from ~1e5 to several million; `N` up to ~3.6e5 in the real benchmark.
+Symbols are Table 1 of [`NOTATION.md`](NOTATION.md). `M` ranges from ~1e5 to
+several million; `N` up to ~3.6e5 in the real benchmark.
 
 ### Derivation sketch (to be reconciled with the supplement)
 
@@ -121,16 +120,35 @@ The block quadratic form is then, per block `b`:
 - D8 block:  `w_b^T D_b w_b`  over the int8 block (square or packed triangle);
 - LR8 block: `s = U_b^T w_b` (length `r`), then `w_b^T D_b w_b = s^T s = ||s||^2`.
 
-Total `w^T D w = sum_b (block quadratic form)`. This is O(sum k_b * r_b) time and
-int8 (~1 byte/entry) memory — the efficiency win.
+**(M4) Block-diagonal accumulation.**
+
+    w^T D w = sum_b w_b^T D_b w_b
+
+This is O(sum k_b * r_b) time and int8 (~1 byte/entry) memory — the efficiency
+win. It is also what makes the block diagnostics of `REAL_DATA.md` free: the
+per-block `u_b` and `v_b` of Table 4 in [`NOTATION.md`](NOTATION.md) are
+computed on the way to the two totals, so (G2) and (G3) need no second pass.
 
 **PSD is representation-specific.** A low-rank `R = U U^T` is positive
 semi-definite, so LR8 guarantees `w^T D w = ||U^T w||^2 >= 0`. D8 does not:
 rounding a PSD correlation matrix entrywise can introduce negative eigenvalues.
-The LD-reference reader rejects materially indefinite modest blocks, where an
-exact eigendecomposition is practical, and the estimator rejects any negative
-quadratic form it encounters. Large D8 blocks still carry no proof of PSD; use
-LR8 when that guarantee is required. No denominator is silently clamped.
+Three checks, in decreasing strength:
+
+1. **Exact**, at load: blocks with `m <= 512` are eigendecomposed and rejected
+   if materially indefinite. Cubic cost, so limited to the small tail.
+2. **Detection**, at conversion: larger blocks get a Lanczos estimate of
+   `lambda_min` (`ppb.ld_backend.min_eig_upper_bound`). The smallest Ritz value
+   bounds the true minimum from *above*, so this can prove a block indefinite and
+   can never prove one PSD — the useful direction, since the failure it guards
+   against is an indefinite block silently deflating the denominator. It runs in
+   `write_ldref`, not on every read: O(m^2 * iters), about 11 s at the largest
+   shipped block (m = 17,304).
+3. **Per block**, at evaluation: `BlockDiagonalLD.quad` rejects any block whose
+   quadratic form is negative. A check on the total alone would let one bad block
+   hide among 430 good ones, and the direction of that error inflates R^2.
+
+Large D8 blocks still carry no *proof* of PSD; use LR8 when that guarantee is
+required. No denominator is silently clamped.
 
 ldpred3 additionally applies **linear shrinkage toward the identity** to large
 blocks (`shrink_ld_blocks`: `D_a = (1-a) D + a I`, with an MP-motivated intensity
@@ -281,9 +299,9 @@ hyper-parameter selection only, not for estimating final performance.
   normalized `(chrom, pos)`, flip the value sign on allele swaps and strand
   flips (reverse-complement, indel-aware), and drop strand-ambiguous
   palindromes. `ppb.evaluate` composes harmonization with the estimator.
-- Per-variant sample size: handled by `ppb/sumstats.py`
-  (`standardized_marginal(beta, se, n)` → `r_j = t_j/√(t_j²+n_j−2)`), which
-  recovers the standardized marginal correlation per variant. Assuming a uniform
+- Per-variant sample size — **(M3)**: `z_j = t_j/√(t_j²+n_j−2)`, implemented by
+  `ppb/sumstats.py` (`standardized_marginal(beta, se, n)`), which recovers the
+  standardized marginal correlation per variant. Assuming a uniform
   `N` when the true `n_j` vary biases R² downward (see
   `experiments/per_variant_n.py`), so summary-statistic bundles should carry
   per-variant `n`.
@@ -299,9 +317,15 @@ hyper-parameter selection only, not for estimating final performance.
 Mean squared error is computable from the same summary-level inputs. For
 standardized `y` and predictor `p = X w`:
 
+**(M2) Summary-statistic mean squared error.**
+
     MSE = (1/N) || y - X w ||^2
-        = var(y) - 2 w^T z + w^T D w
-        = 1 - 2 w^T z + w^T D w     (with standardized y).
+        = var_y - 2 w^T z + w^T D w
+
+Unlike (M1), this is **not** invariant to a rescale of `w`, so it is meaningful
+only when the weights carry an absolute scale. Ordinary PGS Catalog weights are
+in trait units and theirs is not; `EvaluationResult.mse_interpretable` records
+which case a given evaluation is in.
 
 ## 6. Numerical tolerance
 
