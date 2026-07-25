@@ -12,6 +12,13 @@ The estimator is ancestry-agnostic in form; supplying target-ancestry ``z`` and
 """
 
 from .covariates import adjust, principal_components, residualize
+from .diagnostics import (
+    BlockJackknife,
+    SignFlipNull,
+    r2_block_jackknife,
+    r2_from_blocks,
+    sign_flip_null,
+)
 from .estimator import mse, r2
 from .evaluate import EvaluationResult, evaluate
 from .harmonize import HarmonizeReport, VariantTable, harmonize_to
@@ -43,6 +50,8 @@ from .sumstats import standardized_marginal, zstat_to_corr
 
 __all__ = [
     "r2", "mse",
+    "r2_from_blocks", "r2_block_jackknife", "BlockJackknife",
+    "sign_flip_null", "SignFlipNull",
     "DenseLD", "LowRankLD", "BlockDiagonalLD", "LDBackend",
     "DenseLDInt8", "LowRankLDInt8", "PackedDenseLDInt8", "quantize_lowrank",
     "lowrank_ld",

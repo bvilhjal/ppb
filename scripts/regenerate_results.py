@@ -41,8 +41,10 @@ import numpy as np
 from ppb import (
     OverlapBasis,
     harmonize_to,
+    r2_block_jackknife,
     read_ldref,
     read_weights,
+    sign_flip_null,
     standardized_marginal,
 )
 from ppb.harmonize import VariantTable
@@ -254,11 +256,58 @@ def sweep(pgs, targets):
     return per_block, totals
 
 
-def _metrics(num, den, w_frac, z_frac, n_variants_scored, trait_type):
-    return dict(num=num, den=den, r2=num * num / den,
-                w_match=w_frac, z_match=z_frac,
-                n_variants_scored=n_variants_scored,
-                scale=METRIC_SCALES[trait_type])
+def _metrics(num, den, w_frac, z_frac, n_variants_scored, trait_type,
+             u=None, v=None, chrom=None):
+    """Headline metrics, plus the block-level SE and negative control.
+
+    The genome-wide sweep already builds the per-block ``u`` and ``v`` on its
+    way to ``num`` and ``den``, so both diagnostics are free: a point estimate
+    cannot support the comparison a leaderboard exists to make, and a small
+    ``R^2`` cannot be read without knowing what block noise alone would produce.
+    """
+    metrics = dict(num=num, den=den, r2=num * num / den,
+                   w_match=w_frac, z_match=z_frac,
+                   n_variants_scored=n_variants_scored,
+                   scale=METRIC_SCALES[trait_type])
+    if u is None or v is None:
+        return metrics
+    u, v = np.asarray(u, dtype=float), np.asarray(v, dtype=float)
+    # Both diagnostics are undefined on a single block: nothing to delete, and
+    # a one-block sign flip has only two outcomes. A genome-wide run has 431, so
+    # this is the single-chromosome-subset case; record the reason rather than
+    # emitting a field that looks computed.
+    if u.size < 2:
+        metrics["diagnostics_unavailable"] = (
+            f"{u.size} LD block(s): the block jackknife and sign-flip null "
+            "need at least 2")
+        return metrics
+
+    block = r2_block_jackknife(u, v)
+    metrics["jackknife"] = dict(
+        method="delete-one-block", se=block.se,
+        n_blocks=block.n_blocks, n_groups=block.n_groups,
+        max_variance_share=block.max_variance_share)
+    if chrom is not None:
+        chrom = np.asarray(chrom)
+        order = sorted(set(chrom.tolist()), key=lambda c: int(c))
+        if len(order) > 1:
+            by_chrom = r2_block_jackknife(u, v, groups=chrom)
+            metrics["jackknife_chromosome"] = dict(
+                method="delete-one-chromosome", se=by_chrom.se,
+                n_blocks=by_chrom.n_blocks, n_groups=by_chrom.n_groups,
+                max_variance_share=by_chrom.max_variance_share)
+        # Enough to recompute a chromosome-level jackknife from the pack alone,
+        # without shipping all 431 block products per record.
+        metrics["per_chromosome"] = {
+            c: [float(u[chrom == c].sum()), float(v[chrom == c].sum())]
+            for c in order}
+
+    control = sign_flip_null(u, v)
+    metrics["sign_flip_null"] = dict(
+        method="block-sign-flip", null_mean=control.null_mean,
+        z=control.z, ratio=control.ratio, n_blocks=control.n_blocks,
+        z_ceiling=float(np.sqrt(control.n_blocks)))
+    return metrics
 
 
 def _unavailable_overlap(role, reference=None):
@@ -320,7 +369,9 @@ def build_records(trait, cfg, commit, date):
             ld_ref=LD_REF,
             metrics=_metrics(
                 num_ref, den_ref, w_frac, zfrac("consortium"),
-                totals["n_variants_scored"]["consortium"], trait_type),
+                totals["n_variants_scored"]["consortium"], trait_type,
+                u=per_block["u"]["consortium"], v=per_block["v"]["consortium"],
+                chrom=per_block["chrom"]),
             overlap=dict(
                 role="reference", status="not_applicable",
                 method=OVERLAP_METHOD,
@@ -343,7 +394,9 @@ def build_records(trait, cfg, commit, date):
         ld_ref=LD_REF,
         metrics=_metrics(
             num_ov, den_ov, w_frac, zfrac("panukb"),
-            totals["n_variants_scored"]["panukb"], trait_type),
+            totals["n_variants_scored"]["panukb"], trait_type,
+            u=per_block["u"]["panukb"], v=per_block["v"]["panukb"],
+            chrom=per_block["chrom"]),
         overlap=overlap, date=date, ppb_commit=commit))
     return records
 

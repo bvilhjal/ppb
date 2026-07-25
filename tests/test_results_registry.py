@@ -515,3 +515,94 @@ def test_leaderboard_loader_rejects_unsafe_pack_shapes(tmp_path, payload, error)
     (tmp_path / "bad.json").write_text(payload, encoding="utf-8")
     with pytest.raises(ValueError, match=error):
         load_records(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Block-level uncertainty and negative control (optional; packs generated before
+# scripts/regenerate_results.py recorded them legitimately lack these fields).
+
+
+@pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
+def test_jackknife_blocks_are_internally_consistent(name, rec):
+    """A recorded SE must be a finite non-negative number over a real grouping.
+
+    The grouping is a partition of the blocks, so there can never be more
+    delete-one groups than blocks, and a variance share is a fraction.
+    """
+    for key in ("jackknife", "jackknife_chromosome"):
+        block = rec["metrics"].get(key)
+        if block is None:
+            continue
+        assert isinstance(block, dict), f"{name}: metrics.{key} must be an object"
+        for field in ("method", "se", "n_blocks", "n_groups", "max_variance_share"):
+            assert field in block, f"{name}: missing metrics.{key}.{field}"
+        assert isinstance(block["method"], str) and block["method"].strip()
+        assert _finite_number(block["se"]) and block["se"] >= 0.0, \
+            f"{name}: metrics.{key}.se must be finite and non-negative"
+        assert _positive_int(block["n_blocks"]) and _positive_int(block["n_groups"])
+        assert block["n_groups"] >= 2, \
+            f"{name}: metrics.{key} needs at least 2 delete-one groups"
+        assert block["n_groups"] <= block["n_blocks"], \
+            f"{name}: metrics.{key} has more groups than blocks"
+        share = block["max_variance_share"]
+        assert _finite_number(share) and 0.0 <= share <= 1.0, \
+            f"{name}: metrics.{key}.max_variance_share must be a fraction"
+
+
+@pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
+def test_sign_flip_null_is_internally_consistent(name, rec):
+    """The control must be a real null: positive expectation, |z| within its
+    Cauchy-Schwarz ceiling, and a ratio that matches the recorded R^2."""
+    control = rec["metrics"].get("sign_flip_null")
+    if control is None:
+        return
+    for field in ("method", "null_mean", "z", "ratio", "n_blocks", "z_ceiling"):
+        assert field in control, f"{name}: missing metrics.sign_flip_null.{field}"
+    assert _positive_int(control["n_blocks"])
+    assert _finite_number(control["null_mean"]) and control["null_mean"] > 0.0, \
+        f"{name}: sign_flip_null.null_mean must be positive"
+    assert _finite_number(control["z"])
+    ceiling = math.sqrt(control["n_blocks"])
+    assert control["z_ceiling"] == pytest.approx(ceiling, rel=1e-9)
+    assert abs(control["z"]) <= ceiling + 1e-9, \
+        f"{name}: |z| = {control['z']} exceeds sqrt(n_blocks) = {ceiling}"
+    assert control["ratio"] == pytest.approx(
+        rec["metrics"]["r2"] / control["null_mean"], rel=1e-6), \
+        f"{name}: sign_flip_null.ratio must equal r2 / null_mean"
+
+
+@pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
+def test_per_chromosome_sums_reproduce_the_headline_metrics(name, rec):
+    """The per-chromosome partial sums exist so a reader can recompute the
+    jackknife; they must therefore add back up to the recorded num and den."""
+    per_chrom = rec["metrics"].get("per_chromosome")
+    if per_chrom is None:
+        return
+    assert isinstance(per_chrom, dict) and per_chrom, \
+        f"{name}: metrics.per_chromosome must be a non-empty object"
+    total_u = total_v = 0.0
+    for chrom, pair in per_chrom.items():
+        assert isinstance(chrom, str) and chrom.strip()
+        assert isinstance(pair, list) and len(pair) == 2, \
+            f"{name}: per_chromosome[{chrom}] must be [u, v]"
+        u, v = pair
+        assert _finite_number(u) and _finite_number(v)
+        assert v >= 0.0, f"{name}: per_chromosome[{chrom}] has negative score variance"
+        total_u += u
+        total_v += v
+    assert total_u == pytest.approx(rec["metrics"]["num"], rel=1e-9), \
+        f"{name}: per_chromosome u does not sum to metrics.num"
+    assert total_v == pytest.approx(rec["metrics"]["den"], rel=1e-9), \
+        f"{name}: per_chromosome v does not sum to metrics.den"
+
+
+@pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
+def test_missing_diagnostics_declare_why(name, rec):
+    """A record without the block diagnostics must say so explicitly rather than
+    leaving a reader to guess whether they were run and omitted."""
+    note = rec["metrics"].get("diagnostics_unavailable")
+    if note is not None:
+        assert isinstance(note, str) and note.strip(), \
+            f"{name}: metrics.diagnostics_unavailable must explain the omission"
+        assert "jackknife" not in rec["metrics"], \
+            f"{name}: cannot both declare diagnostics unavailable and record them"

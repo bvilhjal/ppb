@@ -96,6 +96,43 @@ independent quantitative magnitudes are consistent with the literature (height
 about 25%, LDL about 11%, BMI about 6%); binary-trait comparisons retain the
 approximation described below.
 
+## Uncertainty and negative controls
+
+Two things a point estimate cannot tell you, both computed from the per-block
+`u_b = wᵀ_b z_b` and `v_b = wᵀ_b D_b w_b` that the genome-wide sweep already
+builds — no second pass over the LD reference (`ppb.diagnostics`):
+
+- **`metrics.jackknife`** — a delete-one-block standard error (plus a
+  delete-one-chromosome variant, and the per-chromosome partial sums so a reader
+  can recompute it from the pack). Without it "0.252 vs 0.110" is a comparison
+  with no stated precision, which is not enough for a benchmark whose purpose is
+  ranking. It also captures genomic heterogeneity, which the `1/N` finite-sample
+  term does not, and `max_variance_share` flags an estimate carried by one region.
+- **`metrics.sign_flip_null`** — an exact negative control. Because `D` is
+  block-diagonal, negating every weight in a block flips `u_b` and leaves `v_b`
+  untouched, so the sign-flipped scores are a null family with the same
+  denominator and the same per-block magnitudes. `null_mean = Σu_b²/Σv_b` is the
+  R² this score would report from block noise alone: **read a small value like
+  CAD's 0.025 against that, not against zero.** `z = Σu_b/√(Σu_b²)` measures how
+  coherently the blocks agree, bounded by `√431 = 20.8` on this reference.
+
+A third control needs its own sweep:
+
+```bash
+python scripts/negative_controls.py --out controls.json
+```
+
+It evaluates every score against **every** consortium target. The diagonal
+should dominate. Off-diagonal cells are *not* all expected to be zero — BMI/T2D
+and LDL/CAD are genuinely genetically correlated, and seeing that is itself
+evidence the pipeline responds to real signal — so the expected-correlated pairs
+are declared in the script rather than rationalised afterwards. What must not
+appear is strong signal between traits with no shared aetiology (height × LDL);
+that is an artifact, and the script exits non-zero when it finds one.
+
+None of the three detects a uniformly mis-scaled `z`, which moves the estimate
+and its null together. See the caveat below and [`LIMITATIONS.md`](LIMITATIONS.md).
+
 ## Caveats
 
 - **Binary traits:** the reported number is a standardized summary-statistic

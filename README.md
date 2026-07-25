@@ -78,6 +78,14 @@ offsets, dtypes, annotations, packed diagonals, and low-rank definiteness. D8
 quantization is checked where tractable but is not a blanket PSD certificate for
 every large block; see [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
+Block-level uncertainty and negative controls (`ppb.diagnostics`) come free from
+the per-block products a genome-wide sweep already computes: `r2_block_jackknife`
+gives a delete-one-block SE, and `sign_flip_null` gives an exact null — because
+`D` is block-diagonal, negating a whole block's weights flips `wᵀ_b z_b` and
+leaves `wᵀ_b D_b w_b` alone, so the sign-flipped scores share the denominator and
+carry no coherent signal. `scripts/negative_controls.py` adds the score × target
+trait-swap matrix. See [`docs/REAL_DATA.md`](docs/REAL_DATA.md).
+
 Supporting pieces for real summary statistics: allele harmonization
 (`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
 sizes (`ppb.standardized_marginal`), PUMAS-style single-GWAS subsampling
