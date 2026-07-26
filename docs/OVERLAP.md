@@ -195,6 +195,47 @@ The general statement: `q_b` is a functional of the *derivative* of the training
 map, and a weight vector is that map evaluated at a single point. Infinitely
 many maps pass through one point with different derivatives.
 
+**The trap.** For a p+T score you *can* read the selected support off the weight
+list, so `Phi = diag(support)` looks reconstructible from the artifact alone. It
+is not admissible, and the code blocks it structurally: that basis is
+variant-count-on-the-support, which is (O3) under the identity normalization —
+the one case it does not apply to. A selected support is the *outcome* of a
+noise-responsive choice, not a fixed operator.
+
+### Which training methods can supply a basis
+
+Probed against the actual gate (`estimate_overlap_basis` with its shipped
+defaults), not merely classified on paper.
+
+**Table 2. Trainers and the basis they admit.**
+
+| method | linear in `z_train`? | `Phi` | verdict |
+|---|---|---|---|
+| marginal, `w = z_train` | yes | `I` | analytic, `q_b = m_b`. The only correct variant-count case — and usually refused *downstream* as `nonidentifiable`, since a constant column cannot be separated from the signal |
+| ridge / LDpred-inf | yes | `(D_train + lambda I)^{-1}`, `lambda = M/(h² n)` | analytic **and** stochastic; the validated reference case |
+| lassosum | no | active-set solve; `q_b → \|A_b\|` in the soft-threshold limit | **regime-dependent** — passes at moderate shrinkage, refused at heavy, and near the boundary not reproducible across seeds (1 of 8 passed at one penalty) |
+| PRS-CS | no | none in closed form | **plausibly passes** — the only non-linear method here with a real prospect, because continuous shrinkage has no point mass at zero. Not verified against real PRS-CS |
+| p+T / clumping+thresholding | no | data-dependent selection | refused, at 5/5 thresholds and 3/3 clump depths |
+| LDpred2 grid/auto | no | none | refused; the spike-and-slab point mass is hard selection, and `auto` learns `p` and `h²` in-chain |
+| published PGS artifact | — | unrecoverable | `basis_unavailable` |
+
+Three practical notes the table hides. `linear_trace` is **entirely
+caller-supplied** — ppb ships no code that computes `tr(Phi_b^T K_b)`, and
+`estimate_overlap_basis` can only ever return `jacobian_hutchinson` or
+`unavailable`. The ridge `Phi` contains `D_train`, the *training* panel rather
+than ppb's evaluation panel, and linearity holds only if `lambda` was fixed a
+priori: estimating `h²` from the same `z_train` makes `lambda = lambda(z)` and
+the map is no longer strictly linear. And the stochastic route costs
+`n_draws × len(deltas) + 1` = 97 trainer runs at defaults, which for a
+genome-wide Gibbs sampler is a barrier in its own right.
+
+Condition 2 of Table 1 is met by *either* a closed form (O3) *or* a rerunnable
+differentiable trainer (O4), so "keep the trainer" does not strictly mean "keep
+`Phi`". Rerunnability does not rescue the shipped scores, though: the
+portability-LDpred2 series is UK Biobank-trained, so the training data is
+restricted-access and no seed or LD-panel build is recorded — and LDpred2 would
+be refused at the stability gate even if it could be rerun.
+
 For a rerunnable differentiable trainer, the permitted stochastic basis is
 
 **(O4) Stochastic overlap-basis estimate.**
@@ -225,8 +266,13 @@ decide whether it measures anything:
   stable near `z` while missing the fact that which variants are selected also
   responds to the shared noise. The default `deltas` therefore span from a step
   too small to move any selection boundary to one that moves many, and the gate
-  gets its evidence from the disagreement. It is validated against the exact
-  `tr(Phi_b' K_b)` for a linear trainer (0.2–0.6% error) and refuses a p+T trainer.
+  gets its evidence from the disagreement. The gate has **two** criteria —
+  `max_relative_spread` across steps and `min_pattern_correlation` between the
+  per-block patterns — and it is the *pattern correlation*, not the spread, that
+  actually catches p+T at this repository's own test configuration. It is
+  validated against the exact `tr(Phi_b' K_b)` for a linear trainer; accuracy is
+  configuration-dependent (0.2–0.6% in the simulation, ~1–2% at the smaller
+  unit-test setup), and the test asserts only < 5%.
 
 `OverlapBasis` intentionally permits only two available kinds:
 `linear_trace` and `jacobian_hutchinson`. Arbitrary labels are rejected because
@@ -387,6 +433,17 @@ sensitivity is not stable in the perturbation scale.
   stability and trainer reruns are mandatory for that basis kind, and the
   stability sweep must span steps large enough to move selection boundaries —
   a check at one small step passes trivially for a thresholding trainer.
+- **The gate does not see hyperparameter selection.** A trainer that picks its
+  penalty by argmax over a grid evaluated on the same `z` — lassosum and
+  LDpred2-grid pseudovalidation — passes with spread 0.000, because the argmax
+  does not switch under perturbations as large as `0.25‖z‖`. Conditioning on a
+  locally stable argmax is defensible, but the gate cannot distinguish "stable"
+  from "happened not to move here", so this class is accepted on weaker evidence
+  than the sweep suggests.
+- A basis that passes `estimate_overlap_basis` can still be rejected by
+  `fit_overlap`: `mc_se/|q_total| > 0.05` returns `unstable`. Passing the
+  stability gate is necessary, not sufficient, and the draw count is a real
+  constraint rather than a tuning detail.
 - Identification depends on the genetic architecture, which the analyst does not
   choose. A sufficiently diffuse trait can be refused even with a perfect basis;
   that is the gate working, not a bug, and there is no correction available in
