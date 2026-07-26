@@ -55,7 +55,7 @@ the validation anchor.
 
 [`docs/README.md`](docs/README.md) is the roadmap: what each document is for,
 which are binding, and where to start. [`docs/NOTATION.md`](docs/NOTATION.md)
-defines every symbol once and indexes every numbered result — (M1), (X1), (O4),
+defines every symbol once and indexes every numbered result — (M2), (X1), (O4),
 (G2) and the rest — to the module that implements it and the test that pins it.
 
 ## Install

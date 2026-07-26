@@ -23,7 +23,7 @@ label is stable when a document grows and unambiguous when cited from elsewhere:
 | **R** | [`../results/schema.md`](../results/schema.md) | the results registry |
 | **E** | [`../experiments/README.md`](../experiments/README.md) | simulation demonstrations |
 
-So (M1) is the core identity wherever it appears, and (O4) is the stochastic
+So (M2) is the core identity wherever it appears, and (O4) is the stochastic
 overlap basis whether you meet it in `OVERLAP.md` or in a docstring. Tables keep
 per-document numbering, since they are read where they sit.
 
@@ -43,7 +43,7 @@ All of these are on standardized scales unless stated otherwise (§3).
 | `D = (1/N) XᵀX` | LD matrix: variant-by-variant genotype correlation | an LD reference panel |
 | `z = (1/N) Xᵀy` | marginal association of each variant with the phenotype | a GWAS, via Table 2 |
 | `var_y` | variance of `y` on the scale used to form `z`; 1 when `y` is standardized | declared |
-| `R²` | the estimate produced by (M1) | computed |
+| `R²` | the estimand (M1); its plug-in estimate is `R²_hat` | computed |
 
 **Table 2. Turning a GWAS into `z`.**
 
@@ -104,7 +104,7 @@ these, which is why they cost no extra pass over the LD reference.
    then a correlation matrix with unit diagonal, and `z` is a vector of marginal
    correlations.
 2. **One gauge.** `w`, `z`, and `D` must share a single self-consistent
-   standardization. (M1) is invariant to a *global* rescale of `w` but not to a
+   standardization. The ratio is invariant to a *global* rescale of `w` but not to a
    per-variant one — see (X2).
 3. **Effect allele.** Every table carries `(chrom, pos, a1, a2)` with `a1` the
    effect allele. Harmonization flips signs on allele swaps and strand flips and
@@ -114,6 +114,12 @@ these, which is why they cost no extra pass over the LD reference.
    range are recorded rather than a single number.
 5. **Blocks tile.** Block index sets partition `[0, M)` exactly. Off-block LD is
    taken to be zero.
+
+The three hypotheses that turn the identity (M2) into an estimator — **(H1)** one
+population, **(H2)** `w` independent of the sampling noise, **(H3)** one gauge —
+are stated in [`METHOD.md`](METHOD.md) §1.3, and §1.4 tabulates what violating
+each one costs. Every failure mode elsewhere in these documents is one of those
+three failing.
 
 ## 4. Where a symbol is overloaded
 
@@ -144,10 +150,11 @@ it to account.
 
 | result | statement | implemented in | pinned by |
 |---|---|---|---|
-| (M1) | `R² = (wᵀz)² / (wᵀDw · var_y)` | `ppb.estimator.r2` | `tests/test_estimator.py` |
-| (M2) | `MSE = var_y − 2wᵀz + wᵀDw` | `ppb.estimator.mse` | `tests/test_estimator.py` |
-| (M3) | `z_j = t_j / √(t_j² + n_j − 2)` | `ppb.sumstats.standardized_marginal` | `tests/test_sumstats.py` |
-| (M4) | block-diagonal accumulation `wᵀDw = Σ_b w_bᵀ D_b w_b` | `ppb.ld_backend.BlockDiagonalLD` | `tests/test_ld_backend.py` |
+| (M1) | the estimand `R²(w) = (wᵀρ)²/(wᵀΣw)` | — (a definition) | — |
+| (M2) | in-sample identity: (M1) with sample moments equals `corr(Xw, y)²` **exactly** | `ppb.estimator.r2` | `tests/test_estimator.py` (to 1e-10) |
+| (M3) | block-diagonal accumulation `wᵀDw = Σ_b w_bᵀ D_b w_b` | `ppb.ld_backend.BlockDiagonalLD` | `tests/test_ld_backend.py` |
+| (M4) | `z_j = t_j / √(t_j² + n_j − 2)` | `ppb.sumstats.standardized_marginal` | `tests/test_sumstats.py` |
+| (M5) | `MSE = var_y − 2wᵀz + wᵀDw` | `ppb.estimator.mse` | `tests/test_estimator.py` |
 | (X1) | (M1) with target-ancestry moments `z_B`, `D_B` | `ppb.estimator.r2` (same code) | `tests/test_cross_ancestry.py` |
 | (X2) | gauge self-consistency; `w_B,j = w_A,j · sd_B,j / sd_A,j` | `ppb.evaluate` (`weight_scale`) | `tests/test_cli.py` |
 | (X3) | finite-sample numerator bias `≈ wᵀD_Bw / N_B` | *not implemented* | — |

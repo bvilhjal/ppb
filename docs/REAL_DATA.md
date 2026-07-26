@@ -13,7 +13,7 @@ is a **within-ancestry (EUR→EUR) anchor**, the A = B special case; it is not a
 cross-ancestry result.
 
 **(G1) Genome-wide accumulation.** (M1) evaluated over the whole genome by
-summing the per-block products of (M4):
+summing the per-block products of (M3):
 
     R² = (Σ_b u_b)² / (Σ_b v_b).
 

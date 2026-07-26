@@ -70,7 +70,7 @@ with **both** `z_B` and `D_B` from ancestry B:
 
 | input | definition | source |
 |---|---|---|
-| `z_B` | target-trait marginal correlations in B, by (M3) | **B GWAS** of the trait |
+| `z_B` | target-trait marginal correlations in B, by (M5) | **B GWAS** of the trait |
 | `D_B` | LD (genotype correlation) matrix in B, ideally from a panel independent of the `z_B` sample | **B reference panel** |
 | `w_B` | weights on B's standardized-genotype scale | dosage weight `b_j` times empirical `sd_B,j`; only an already A-standardized weight uses `w_A,j × sd_B,j / sd_A,j` |
 
@@ -130,17 +130,42 @@ the standardized genotypes represented by `D_B`.
 
 ## What is impossible without target-ancestry data
 
-You **cannot** estimate `R²_B` from ancestry-A summaries (`z_A`, `D_A`, `p_A`)
-plus a B LD panel. The denominator `wᵀD_B w` (PGS variance in B) *is* computable
-from a B genotype reference with no trait data — the irreducible gap is the
-numerator `wᵀz_B` (the PGS–phenotype covariance in B). Substituting `z_A`
-estimates `R²_A`, not `R²_B`, and overstates cross-ancestry accuracy whenever
-transfer is imperfect (**+58% at r_g = 0.8** in the demo).
+The obstruction is structural, and it is worth stating precisely, because it
+draws the line between what PPB does and what a portability *model* does.
 
-Predicting `R²_B` without any B phenotype is a **portability-modeling** problem
-(Wang et al. 2020), needing external parameters PPB does not supply: `h²_B` (sets
-the numerator scale, cannot cancel), a cross-population effect-coupling model
-(`r_g` is necessary but not sufficient), and both ancestries' LD/MAF.
+Split (X1) into its two factors and ask what distribution each one is a
+functional of:
+
+    denominator   w' Sigma_B w   depends on the *genotype* distribution in B alone
+    numerator     w' rho_B       depends on the *joint* (genotype, phenotype)
+                                 distribution in B
+
+The denominator is therefore free: a B genotype reference panel, carrying no
+phenotypes at all, determines it. The numerator is not. `rho_B = E[x_B y_B]` is a
+property of how the trait relates to genotype *in B*, and no function of
+A-side data — `z_A`, `D_A`, `p_A`, in any combination — determines it, because
+those data are computed from a different joint distribution. Nothing about
+population A pins down `E[x_B y_B]`; you can hold every A-side quantity fixed and
+vary `rho_B` freely by varying B's causal effects.
+
+So exactly one measurement is irreducible: **a phenotype measured in B**, i.e. a
+B GWAS of the trait. Everything else in the requirements list above is
+bookkeeping around that one input.
+
+Substituting `z_A` does not approximate `R²_B`; it computes `R²_A`, a different
+quantity, and overstates transfer by `1/portability − 1` whenever transfer is
+imperfect (**+58%** at the demo's `r_g = 0.8` — arithmetic from the chosen `r_g`,
+not a measured bias).
+
+Predicting `R²_B` without any B phenotype is therefore a different problem, not a
+harder version of this one. It is **portability modelling** (Wang et al. 2020),
+and it closes the gap by *assuming* a transport map from A's causal effects to
+B's — which needs external parameters PPB does not supply and does not estimate:
+`h²_B` (it sets the numerator's scale and cannot cancel), a cross-population
+effect-coupling model (`r_g` is necessary but not sufficient — it fixes a
+correlation, not the per-variant map), and both ancestries' LD and allele
+frequencies. PPB measures what such a model predicts; the two are complementary,
+not competing.
 
 ## Demonstration (`experiments/cross_ancestry.py`)
 

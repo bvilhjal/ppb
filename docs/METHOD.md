@@ -38,34 +38,120 @@ the **shared public benchmark artifact** built on the identity; what this projec
 adds is the cross-ancestry framing, the failure-mode map, and the infrastructure.
 See `docs/CROSS_ANCESTRY.md`, "Background".
 
-The performance measure is the squared Pearson correlation between the observed
-phenotype and the polygenic-score prediction, expressed using only summary-level
-inputs:
+### 1.1 The estimand
 
-**(M1) Core summary-statistic estimator.**
+Fix a population. Its standardized genotype vector is `x` (length `M`, each entry
+mean 0 and variance 1) and its standardized phenotype is `y` (mean 0, variance 1).
+Write
 
-    R^2 = (w^T z)^2 / (w^T D w * var_y)
+    rho = E[x y]        the marginal correlations
+    Sigma = E[x x^T]    the LD matrix
 
-This is the whole method. Everything else in these documents is either a
-consequence of it, a condition under which it is valid, or machinery for
-computing it at genome scale.
+A polygenic score assigns the value `g = x^T w`. Since `var(g) = w^T Sigma w` and
+`cov(g, y) = w^T rho`, the quantity PPB reports is
 
-Symbols are Table 1 of [`NOTATION.md`](NOTATION.md). `M` ranges from ~1e5 to
-several million; `N` up to ~3.6e5 in the real benchmark.
+**(M1) Predictive accuracy of a linear score.**
 
-### Derivation sketch (to be reconciled with the supplement)
+    R^2(w) = corr(g, y)^2 = (w^T rho)^2 / (w^T Sigma w)
 
-Prediction is `p = X w`. With standardized `y` (var 1):
+with `var_y` restored in the denominator when `y` is not standardized. Note what
+`R^2(w)` is *not*: it is a property of a **fixed** `w` in a **named** population,
+not of the procedure that produced `w`. Two populations give one score two
+different accuracies, which is the entire subject of `CROSS_ANCESTRY.md`.
 
-    R^2 = corr(p, y)^2 = cov(p, y)^2 / (var(p) var(y))
-        = ( (1/N) w^T X^T y )^2 / ( (1/N) w^T X^T X w * 1 )
-        = (w^T z)^2 / (w^T D w).
+### 1.2 The identity: exact, and assumption-free
 
-The summary-statistics-based (individual-level-data-free) property rests on this
-identity: a method developer needs only `D` and `z` (both summary-level), never
-individual `X` or `y`, to evaluate a weight vector `w`. ("Privacy-preserving" here
-means individual-level-data-free, not differential privacy or immunity to
-membership inference — see `LIMITATIONS.md`.)
+Suppose a single sample of `n` individuals supplies everything — genotypes `X`
+(columns centered and scaled to unit variance), phenotype `y` (centered, scaled),
+and the moments formed from them:
+
+    z_hat = X^T y / n,     D_hat = X^T X / n
+
+Then substituting into (M1) is not an approximation but an algebraic identity:
+
+**(M2) In-sample identity.**
+
+    (w^T z_hat)^2 / (w^T D_hat w) = corr(X w, y)^2      exactly
+
+*Proof.* `Xw` is centered because the columns of `X` are, so
+`cov(Xw, y) = (Xw)^T y / n = w^T z_hat` and `var(Xw) = (Xw)^T (Xw) / n = w^T D_hat w`,
+while `var(y) = 1`. Divide. ∎
+
+No probability enters. Nothing is assumed about how `w` arose, about
+heritability, or about the genetic architecture. This is the statement
+`tests/test_estimator.py` checks to `1e-10`, and it is the reason the method
+needs no individual-level data: `z_hat` and `D_hat` are summary-level, and they
+are sufficient. ("Privacy-preserving" here means individual-level-data-free — not
+differential privacy, not immunity to membership inference; see
+[`LIMITATIONS.md`](LIMITATIONS.md).)
+
+### 1.3 The estimator: consistent under three hypotheses
+
+PPB never operates in the regime of §1.2. In practice `z_hat` comes from a GWAS,
+`D_hat` from a separate reference panel, and `w` from a third cohort entirely.
+Then (M1) is no longer an identity; it is a plug-in estimator
+
+    R^2_hat = (w^T z_hat)^2 / (w^T D_hat w)
+
+and it estimates `R^2(w)` when three hypotheses hold:
+
+- **(H1) One population.** `z_hat` estimates `rho` and `D_hat` estimates `Sigma`
+  for the *same* population — the one whose accuracy is being reported.
+- **(H2) Independence.** `w` is independent of the sampling noise in `z_hat` and
+  in `D_hat`.
+- **(H3) One gauge.** `w`, `z_hat` and `D_hat` express the same standardization
+  of each variant (§4, and (X2)).
+
+Under (H1)–(H3) both `w^T z_hat -> w^T rho` and `w^T D_hat w -> w^T Sigma w`, so
+`R^2_hat -> R^2(w)`: the estimator is consistent. Two second-order facts follow,
+and both are worth knowing before quoting a number.
+
+**Bias.** Squaring a noisy numerator biases it upward. With
+`var(w^T z_hat) ~= w^T Sigma w (1 - R^2) / N`,
+
+    E[R^2_hat] - R^2(w) ~= (1 - R^2) / N   <=  1/N
+
+so the absolute bias is at most `1/N` — 4e-6 at `N = 250,000`, negligible beside
+any real R^2, but cheap to remove. That correction is (X3), specified and not yet
+implemented.
+
+**Variance.** The blocks of `D` are independent, so the sampling variability of
+`R^2_hat` is estimable by a delete-one-block jackknife over the per-block products
+of (M3) — (G2), which costs nothing because the sweep computes those products
+anyway.
+
+### 1.4 What each violated hypothesis costs
+
+The value of stating (H1)–(H3) is that every documented failure mode of PPB is
+one of them failing, with a known direction. This table is the map; the detail
+lives where the third column points.
+
+**Table 1. Violated hypotheses and their consequences.**
+
+| what fails | mechanism | direction | where treated | measured |
+|---|---|---|---|---|
+| (H1) `D_hat` from the wrong population | `R^2_hat = R^2 · (w^T Sigma_B w)/(w^T Sigma_A w)` | either; downward when the wrong panel has more LD | (X1), `CROSS_ANCESTRY.md` | −3% to −65% in simulation, depending on how far the LD architectures diverge |
+| (H1) `z_hat` from the wrong population | estimates that population's accuracy instead | overstates transfer | `CROSS_ANCESTRY.md` §impossible | `1/portability − 1`; +58% at the demo's `r_g = 0.8` |
+| (H1) `z_hat` mis-scaled by `c` | `R^2_hat -> c^2 R^2_hat`; nothing cancels it | as `c^2`; genomic control deflates | [`LIMITATIONS.md`](LIMITATIONS.md) | 1.5–2× low on GIANT targets, (G5) |
+| (H2) `w` fitted on the target's noise | numerator gains `gamma q` | **upward**, without limit | (O1), [`OVERLAP.md`](OVERLAP.md) | up to 30× on real data (T2D 0.509 vs 0.044) |
+| (H2) `w` fitted on the LD panel's noise | `w` overfits that panel, so `w^T D_hat w` is *overstated* | downward | §3, `experiments/figure_s1.py` | −9.0% using training-set LD |
+| (H3) per-variant gauge mismatch | scale factors `c_j` do not cancel | either | (X2) | small within EUR, unbounded under admixture |
+| support(`w`) ≠ support(`z_hat`) | a *different*, restricted score is evaluated | usually downward | [`LIMITATIONS.md`](LIMITATIONS.md) | 88.6–92.1% support on the GIANT/GLGC rows |
+
+### 1.5 Two consequences of the ratio form
+
+**It is invariant to a global rescale of `w`, and to nothing else.** Replacing `w`
+by `c w` multiplies numerator and denominator by `c^2`. This is why per-allele PGS
+Catalog weights in trait units give a correct `R^2` with no rescaling — and why
+(M5)'s MSE, which lacks that invariance, does not. It is *not* invariance to a
+rescale of `z_hat`: `z` appears only in the numerator, so its scale passes
+through squared. That asymmetry is the whole content of row three of Table 1.
+
+**Outside §1.2 it is not bounded by 1.** In the in-sample regime `R^2_hat` is a
+squared sample correlation and cannot exceed 1. Once numerator and denominator
+come from different samples — every real use — nothing constrains the ratio, and
+ppb does not clamp it. A value near or above 1 is therefore a *diagnostic that
+one of (H1)–(H3) has failed*, not a very good score.
 
 ## 2. Exact vs. banded LD
 
@@ -120,7 +206,7 @@ The block quadratic form is then, per block `b`:
 - D8 block:  `w_b^T D_b w_b`  over the int8 block (square or packed triangle);
 - LR8 block: `s = U_b^T w_b` (length `r`), then `w_b^T D_b w_b = s^T s = ||s||^2`.
 
-**(M4) Block-diagonal accumulation.**
+**(M3) Block-diagonal accumulation.**
 
     w^T D w = sum_b w_b^T D_b w_b
 
@@ -299,7 +385,7 @@ hyper-parameter selection only, not for estimating final performance.
   normalized `(chrom, pos)`, flip the value sign on allele swaps and strand
   flips (reverse-complement, indel-aware), and drop strand-ambiguous
   palindromes. `ppb.evaluate` composes harmonization with the estimator.
-- Per-variant sample size — **(M3)**: `z_j = t_j/√(t_j²+n_j−2)`, implemented by
+- Per-variant sample size — **(M4)**: `z_j = t_j/√(t_j²+n_j−2)`, implemented by
   `ppb/sumstats.py` (`standardized_marginal(beta, se, n)`), which recovers the
   standardized marginal correlation per variant. Assuming a uniform
   `N` when the true `n_j` vary biases R² downward (see
@@ -317,7 +403,7 @@ hyper-parameter selection only, not for estimating final performance.
 Mean squared error is computable from the same summary-level inputs. For
 standardized `y` and predictor `p = X w`:
 
-**(M2) Summary-statistic mean squared error.**
+**(M5) Summary-statistic mean squared error.**
 
     MSE = (1/N) || y - X w ||^2
         = var_y - 2 w^T z + w^T D w

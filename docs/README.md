@@ -30,8 +30,10 @@ and the test that pins it.
 
 1. [`NOTATION.md`](NOTATION.md) §2–3 — the symbols and the standardization
    conventions. Ten minutes, and everything afterwards is unambiguous.
-2. [`METHOD.md`](METHOD.md) §1 — the identity (M1), its derivation, and the
-   prior art it comes from. This is the whole method; the rest is consequences.
+2. [`METHOD.md`](METHOD.md) §1 — the estimand (M1), the exact in-sample
+   identity (M2), the three hypotheses that turn it into an estimator, and a
+   table of what each violated hypothesis costs. That table is the map of every
+   failure mode in the rest of these documents.
 3. [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) — what changes when the target is a
    different ancestry. Mostly: nothing changes in the algebra, and a great deal
    changes in what the inputs must be.
@@ -56,7 +58,7 @@ numbered result to its module and its test, then the module.
 | document | kind | contents |
 |---|---|---|
 | [`NOTATION.md`](NOTATION.md) | reference | symbols, conventions, overloadings, index of results |
-| [`METHOD.md`](METHOD.md) | specification | the estimator (M1–M4), LD representation, conventions, tolerances |
+| [`METHOD.md`](METHOD.md) | specification | the estimand and estimator (M1–M5), the hypotheses and what violating each costs, LD representation, conventions, tolerances |
 | [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | specification | target-ancestry inputs (X1), the gauge condition (X2), what is impossible without target data |
 | [`OVERLAP.md`](OVERLAP.md) | specification | shared training/target noise: the model (O1–O2), the basis (O3–O4), the gates |
 | [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2), controls (G3–G4), and the external check against published individual-level accuracy (G5) |
