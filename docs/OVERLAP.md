@@ -3,23 +3,51 @@
 Status: specification (binding). Symbols and labels:
 [`NOTATION.md`](NOTATION.md). Results are labelled (O1)–(O6).
 
-**Where this stands:** fail-closed, and now demonstrated end to end in
-simulation. The API is validated by focused counterexamples and by a controlled
-physical-overlap simulation in which it recovers the coupling and returns an
-inflated statistic to its independent anchor. It is not yet wired into the results registry, and no
-real score has supplied a basis. Existing registry corrections were produced by
-the deprecated fixed-scale, variant-count model and should be treated as legacy
-estimates.
+## Does it work?
 
-> **Revised (2026-07-25).** An earlier version of this document reported that
-> the identification gate "refuses every correction, including at the null" and
-> recorded that as the method's operating boundary. That was a property of the
-> simulation, not of the method: it ran a *marginal* trainer over *equal-sized*
-> blocks, which makes the basis `q_b = tr(D_b)` the block size — the same
-> constant for every block — and a *diffuse* architecture, which makes the
-> reference signal near-constant too. Two constant columns cannot be separated,
-> so the refusal was correct and uninformative. With per-block signal variation
-> the same code identifies cleanly and corrects. See "Validation" below.
+**Yes — when four conditions hold. When they do not, it refuses rather than
+guesses.** Three of the four are arranged by whoever trained the score; the
+fourth is a property of the trait, and no amount of care supplies it.
+
+**Table 1. What a correction requires.**
+
+| # | Condition | Why it is needed | If absent |
+|---:|---|---|---|
+| 1 | An independent reference GWAS of the same trait | (O1) has two rows. With the target row alone, `alpha s_b` and `gamma q_b` are one equation in two unknowns | nothing to fit |
+| 2 | The trainer, not merely its output | the subtracted quantity `q_b = tr(Phi_b^T K_b)` is a functional of the *operator*: closed form (O3), or rerunnable and differentiable (O4) | `basis_unavailable` |
+| 3 | Block sampling-noise variances | (O2) is a weighted fit, and LD quadratic forms are not automatically these variances | input rejected |
+| 4 | A trait sparse enough to identify | both design columns are positive and both grow with block size, so separating them needs signal variation *at fixed block size* | `weak_identification` |
+
+Conditions 1–3 are satisfied by keeping information that exists at training
+time. Condition 4 is discovered rather than chosen: you run the fit and the gate
+answers. Sparse architectures supply it in abundance — most blocks carry no
+causal variant and a few carry many, which is uncorrelated with the
+deterministic basis — and diffuse ones do not.
+
+**Condition 2 is the one real scores fail today.** A published PGS artifact is a
+list of weights, and the operator that produced them cannot be recovered from
+that list. Every score in the registry therefore fails closed as
+`basis_unavailable`, and its in-sample value stands as an upper bound. That is a
+provenance problem rather than a statistical one: a trainer that retains its own
+operator passes.
+
+**What it delivers when all four hold** (Table 4, in simulation): a statistic
+inflated nearly thirtyfold — 1.094 against an honest 0.038 — comes back to
+0.062, and a 25%-overlap case lands on its anchor to two decimals. `gamma` is
+recovered to within about 15%, always from below, so the corrected value settles
+at or slightly above the honest anchor. Read it as an **upper bound** far
+tighter than the naive one, not as an unbiased estimate.
+
+**What it never delivers.** `gamma > 0` is evidence of shared *noise*, not proof
+of shared *people*: it is identified from a moment, and shared stratification or
+cryptic relatedness produce the same moment. Nor has any of this been run on
+real data — no real score has yet supplied a basis, the correction is not wired
+into the results registry, and the corrections sitting in existing packs came
+from the deprecated fixed-scale variant-count model and are legacy estimates.
+
+**The failure mode is safe.** Nine of the ten outcomes in Table 2 are refusals.
+The estimator does not return a quietly wrong correction; it declines, and names
+the gate that stopped it.
 
 ## What is identifiable
 
@@ -177,7 +205,7 @@ before squaring; correction is refused if (O6) reverses its sign.
 
 ## Eligibility gates
 
-**Table 1. Correction statuses and default gates**
+**Table 2. Correction statuses and default gates**
 
 | Status | Meaning |
 |---|---|
@@ -232,7 +260,7 @@ them as the headline path.
 
 ## Validation
 
-**Table 2. Focused validation cases**
+**Table 3. Focused validation cases**
 
 | No. | Case | Required behavior |
 |---:|---|---|
@@ -252,14 +280,26 @@ them as the headline path.
 | 14 | Hutchinson basis for a linear trainer | Match the analytic `tr(Phi'K)` |
 | 15 | Hutchinson basis for a thresholding trainer | `unavailable` on perturbation-scale instability |
 
-**What decides identification.** The design has two columns — the reference
-signal `u_R` and the basis `q` — and both are positive and both grow with block
-size, so separating them needs signal variation *at fixed block size*. A diffuse
-architecture has almost none, and the gate correctly refuses. A sparse one has a
-great deal: most blocks carry no causal variant and a few carry a lot, which is
-uncorrelated with the deterministic basis.
+**What decides identification** (condition 4 of Table 1). The design has two
+columns — the reference signal `u_R` and the basis `q` — and both are positive
+and both grow with block size, so separating them needs signal variation *at
+fixed block size*. A diffuse architecture has almost none, and the gate
+correctly refuses. A sparse one has a great deal: most blocks carry no causal
+variant and a few carry a lot, which is uncorrelated with the deterministic
+basis.
 
-**Table 3. Physical-overlap simulation** (`experiments/overlap_detection.py`,
+This is worth stating plainly because getting it wrong once cost this document a
+false conclusion. Before 2026-07-25 it reported that the identification gate
+"refuses every correction, including at the null," and recorded that as the
+method's operating boundary. The boundary belonged to the simulation, not to the
+method: a *marginal* trainer over *equal-sized* blocks makes the basis
+`q_b = tr(D_b)` the block size — one constant for every block — and a *diffuse*
+architecture makes the reference signal near-constant as well. Two constant
+columns cannot be separated, so the refusal was correct and entirely
+uninformative. The same code identifies cleanly once the blocks and the
+architecture vary, which is what Table 4 shows.
+
+**Table 4. Physical-overlap simulation** (`experiments/overlap_detection.py`,
 blockwise ridge trainer, Hutchinson basis, heterogeneous LD blocks, 2 replicates).
 
 | architecture | overlap | status | `gamma`/true | R² naive | R² corrected | independent anchor |
@@ -307,5 +347,18 @@ sensitivity is not stable in the perturbation scale.
 - Delete-group uncertainty covers genomic heterogeneity only approximately; a
   future registry integration should carry intervals for the jointly corrected
   signed numerator and squared statistic.
-- Prefer preventing overlap, recovering training provenance, or retraining the
-  score. Statistical correction is secondary damage control, not a magic bath.
+
+## Conclusion
+
+The correction works in the sense that matters. Where the design is identified
+it recovers the coupling and brings an inflated statistic back to its honest
+anchor; where the design is not identified it says so, rather than returning a
+number that looks like an answer.
+
+The binding constraint is archival rather than statistical. Every gate in Table 2
+can pass, and not one of them can be reached, if the operator that produced the
+weights was discarded — which is the state of every published score today. So
+the order of preference is unchanged: prevent the overlap; failing that, keep
+the provenance that makes it correctable; failing that, retrain. Statistical
+correction is damage control applied after the fact, and it is worth precisely
+what the surviving record of the training procedure is worth.

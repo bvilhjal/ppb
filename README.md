@@ -98,12 +98,13 @@ Supporting pieces for real summary statistics: allele harmonization
 sizes (`ppb.standardized_marginal`), PUMAS-style single-GWAS subsampling
 that refits each pseudo-training split (`ppb.subsample_sumstats` / `ppb.pumas_r2`),
 and basis-aware detection/correction of training-target sample overlap
-(`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)). Overlap correction is
-fail-closed: it requires a reconstructible trainer-sensitivity basis and an
-identifiable, stable block fit. Final weights alone are not such a basis, but a
-*rerunnable* trainer can supply one stochastically
-(`ppb.estimate_overlap_basis`), and in simulation the correction then returns an
-inflated statistic to its independent anchor.
+(`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)). That correction works
+in simulation — it brings a thirtyfold-inflated statistic back to its
+independent anchor — but only given an independent reference GWAS, a
+reconstructible trainer-sensitivity basis, and a trait sparse enough for the fit
+to be identified. Final weights alone are not such a basis, so every published
+score fails closed; a *rerunnable* trainer can supply one stochastically
+(`ppb.estimate_overlap_basis`).
 
 ## LD reference (real data)
 

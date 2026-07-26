@@ -300,8 +300,8 @@ constant basis* — a marginal trainer over equal-sized blocks makes
 `q_b = tr(D_b)` the block size — and recorded the resulting refusal as the
 method's operating limit. It was the least identifiable configuration available.
 
-The Hutchinson basis (`ppb.estimate_overlap_basis`, `docs/OVERLAP.md` Eq. 4) is
-checked against the exact `tr(A_b'K_b)` of the linear trainer it is estimating
+The Hutchinson basis (`ppb.estimate_overlap_basis`, `docs/OVERLAP.md` (O4)) is
+checked against the exact `tr(Phi_b'K_b)` of the linear trainer it is estimating
 (0.2–0.6% error). A p+T trainer is refused at the basis: its local Jacobian is
 locally stable but misses its own selection response, which the perturbation
 sweep detects.

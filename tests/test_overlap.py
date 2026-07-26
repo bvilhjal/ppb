@@ -243,7 +243,7 @@ def overlap_simulation():
 
 def test_hutchinson_basis_recovers_the_analytic_trainer_trace(overlap_simulation):
     """The stochastic basis is only usable if it estimates the quantity it
-    claims to. For a linear trainer that quantity is tr(A_b' K_b), which is
+    claims to. For a linear trainer that quantity is tr(Phi_b' K_b), which is
     computable exactly, so the estimate is checked against it rather than
     against itself."""
     assert overlap_simulation["basis_error"] < 0.05
@@ -327,7 +327,7 @@ def test_overlap_slope_rejects_misaligned_groups():
 
 
 # ---------------------------------------------------------------------------
-# Stochastic trainer-sensitivity basis (OVERLAP.md Equation 4)
+# Stochastic trainer-sensitivity basis (OVERLAP.md (O4))
 
 
 def _ridge_setup(sizes=(12, 20, 8, 15), rho=0.6, lam=0.8, seed=0):
