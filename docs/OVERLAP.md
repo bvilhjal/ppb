@@ -145,6 +145,56 @@ Variant count is valid only in the special identity-operator normalization. It
 is not a defensible fallback for shrinkage, LD-aware, clumped, thresholded, or
 otherwise selected scores.
 
+### What `q_b` measures, and why weights do not determine it
+
+`Phi` is the *procedure*, not its output: the map that turns training summary
+statistics into weights. And `q_b` has a plain reading — **how much of block
+`b`'s training noise the procedure copies into the weights.** Three cases make
+that concrete.
+
+**A trainer that copies everything.** Take the weights straight from the
+training statistics, `w = z_train`. Then `Phi = I` and, since `K = D` has a unit
+diagonal, `q_b = tr(D_b) = m_b`, the number of variants in the block. Every
+variant's noise is passed through intact, so the block contributes its full
+variant count. *This is the only case in which variant count is the right
+answer* — which is precisely what the deprecated `fixed_signal_variant_count_v0`
+model assumed for every score.
+
+**A trainer that shrinks.** Ridge, or LDpred-infinitesimal, solves
+`w = (D + lambda I)^{-1} z_train`, so `Phi = (D + lambda I)^{-1}` and
+
+    q_b = tr((D_b + lambda I)^{-1} D_b) = sum_i d_i / (d_i + lambda)
+
+over the eigenvalues `d_i` of `D_b`. That expression is the ridge **effective
+degrees of freedom** — the effective number of parameters fitted in the block.
+It runs from `m_b` at `lambda = 0` down toward zero as `lambda` grows: on an
+8-variant block it is 8.00, 7.25, 3.97, 0.73 at `lambda = 0, 0.1, 1, 10`. A
+score that shrank hard absorbed little training noise and needs little
+subtracted; one that barely shrank needs nearly the full variant count. Both
+have `m_b` variants in the block, and the deprecated model would have given them
+the same answer.
+
+**A trainer that selects.** Keep the `k` largest `|z_train|` and zero the rest.
+Locally `Phi` is a selection matrix and `q_b` looks like a count of survivors —
+but *which* variants survive is itself a response to the training noise, and
+that response is invisible to a derivative taken at one point. This is why
+`estimate_overlap_basis` sweeps a range of step sizes rather than taking one
+small one, and why p+T is refused.
+
+**Two scores with identical weights can need different corrections.** Suppose a
+published score has 100 non-zero weights. If those 100 were the top-scoring
+variants in the training GWAS, the selection responded to training noise. If
+they were a panel fixed in advance — prior biology, an earlier cohort — it did
+not, and `Phi` is a constant selection matrix with `q_b = tr(S_b D_b)`, the
+count of selected variants in the block. **The weight vector is identical in
+both cases**; the corrections differ, and the second is correctable while the
+first is refused. Nothing recoverable from a list of weights distinguishes them,
+which is what "final weights alone are not a basis" means in practice.
+
+The general statement: `q_b` is a functional of the *derivative* of the training
+map, and a weight vector is that map evaluated at a single point. Infinitely
+many maps pass through one point with different derivatives.
+
 For a rerunnable differentiable trainer, the permitted stochastic basis is
 
 **(O4) Stochastic overlap-basis estimate.**

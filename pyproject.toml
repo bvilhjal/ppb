@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ppb"
 version = "0.0.1.dev0"
-description = "Cross-ancestry polygenic-score portability benchmark: summary-statistics-based (individual-level-data-free) R^2 measurement"
+description = "Measure polygenic-score accuracy in a target ancestry from summary statistics alone"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
