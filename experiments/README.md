@@ -167,10 +167,10 @@ Encoded in `tests/test_pumas.py`.
 ## `per_variant_n.py` — per-variant sample sizes; uniform N biases R²
 
 In a meta-analysis each variant has its own sample size `n_j`. The standardized
-marginal correlation is recovered per variant with (M3)
+marginal correlation is recovered per variant with (M4)
 (`ppb.standardized_marginal`).
 
-**(M3) Per-variant standardized marginal correlation**
+**(M4) Per-variant standardized marginal correlation**
 
     z_j = t_j / √(t_j² + n_j − 2).
 

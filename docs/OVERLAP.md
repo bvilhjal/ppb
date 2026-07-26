@@ -30,7 +30,40 @@ subtracting reference and target products assumes their genuine score signal is
 identical. That assumption is false under ordinary cohort-scale or
 transportability differences.
 
-For block `b`, the implemented model is
+### Where the model comes from
+
+The block model below is not postulated; it falls out of writing down what a
+shared individual does to the numerator. Let the training GWAS have `n1`
+individuals and the target GWAS `n2`, sharing `n_ov` of them, and write both
+estimates as truth plus noise:
+
+    z_train = z + eps1,    z_target = z + eps2
+
+Sharing individuals correlates the two noise terms. For standardized data the
+per-individual cross-product has covariance `K` (in practice `K = D`, since
+`cov(x y)` is the LD matrix up to `var_y`), and only the shared individuals
+contribute, so
+
+    Cov(eps1, eps2) = (n_ov / (n1 n2)) K  =:  gamma K
+
+Now let the trainer be linear, `w = Phi z_train`. The numerator PPB computes on
+the exposed target is `w' z_target`, and its expectation splits cleanly:
+
+    E[w' z_target] = E[(Phi(z + eps1))' (z + eps2)]
+                   = (Phi z)' z  +  E[eps1' Phi' eps2]
+                   = (Phi z)' z  +  tr(Phi' Cov(eps2, eps1))
+                   = (Phi z)' z  +  gamma tr(Phi' K)
+
+The first term is the genuine signal — what an independent reference cohort also
+measures. The second is pure contamination: it does not vanish as the GWAS grows,
+it is proportional to `gamma = n_ov/(n1 n2)`, and its per-block shape is
+`tr(Phi_b' K_b)`, which is (O3). **Both factors are needed.** `gamma` is a single
+unknown scalar; the shape `q_b` must come from the trainer, and that is why final
+weights alone are not enough.
+
+Restricting to block `b` and allowing the reference cohort's genuine signal to
+differ from the target's by a scale `alpha` (different cohort sizes, different
+phenotype definitions, ordinary transportability) gives the fitted model:
 
 **(O1) Shared-noise block model.**
 
@@ -39,9 +72,13 @@ For block `b`, the implemented model is
 
 Here `s_b` is latent genuine signal, `alpha` is a positive target/reference
 signal scale, `gamma` is shared-noise coupling, and `q_b` is the trainer's
-sensitivity to a declared unit of shared estimation noise. `gamma` is not proof
-of literal participant overlap: shared stratification or relatedness can produce
-the same moment.
+sensitivity to a declared unit of shared estimation noise.
+
+Two cautions the derivation makes visible. `alpha` is not a nuisance to be set to
+1: doing so attributes every cohort-scale difference to overlap. And `gamma` is
+identified from a *moment*, not from participant records — shared stratification
+or cryptic relatedness produce the same correlation between `eps1` and `eps2`, so
+`gamma > 0` is evidence of shared noise, not proof of shared people.
 
 The implementation profiles the latent signal and minimizes the generalized
 Deming objective
