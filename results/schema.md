@@ -63,7 +63,6 @@ records, one per (score × target GWAS) evaluation.
 | `overlap.alpha`, `overlap.alpha_se` | fitted target/reference cohort-signal scale and jackknife SE |
 | `overlap.gamma`, `overlap.gamma_se`, `overlap.gamma_z` | fitted shared-noise coupling and jackknife evidence |
 | `overlap.q_total`, `overlap.numerator_target` | exact-support quantities used by (O6) |
-| `overlap.corrected_r2` | basis-aware correction; permitted only when `status == "correctable"` |
 | `overlap.reference` | label + R² of the reference evaluation |
 | `overlap.note` | reason a correction is not applicable or was refused |
 | `overlap.legacy_unidentified` | optional quarantined pre-v1 slope fields, retained for audit only and never treated as a current correction |
@@ -96,12 +95,12 @@ fixed scale, not an unbounded significance statistic. Neither this nor the
 jackknife detects a uniformly mis-scaled `z`: observed and null move together
 (`docs/LIMITATIONS.md`).
 
-**(O6) Basis-aware numerator correction.** (Defined in `docs/OVERLAP.md`.)
-
-```text
-num_corrected = overlap.numerator_target - overlap.gamma × overlap.q_total
-R²_corrected = num_corrected² / metrics.den
-```
+**No correction is published.** `ppb.overlap` can still fit one experimentally,
+but every correction needs an independent reference GWAS of the same trait — and
+given one, evaluating the score against it is unbiased in a single line. The
+condition that makes a correction valid is the condition that makes it
+unnecessary, so the registry records detection only and `correctable` is not a
+status here. See [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
 
 **Table 2. Current overlap statuses.**
 
@@ -117,7 +116,6 @@ R²_corrected = num_corrected² / metrics.den
 | `unstable` | numerical or delete-group stability rule failed |
 | `not_detected` | positive overlap coupling was not detected |
 | `sign_reversal` | proposed correction would reverse the signed numerator |
-| `correctable` | every basis, identification, detection, and stability gate passed |
 
 ## Rules for records
 
@@ -142,10 +140,9 @@ R²_corrected = num_corrected² / metrics.den
   record must carry an unavailable basis with non-empty provenance. An
   available basis must declare `linear_trace` or `jacobian_hutchinson`, its
   provenance, and the exact score-support hash.
-- Only `correctable` records may carry `overlap.corrected_r2`; they must also
-  carry the finite current-fit fields needed to verify (O6). Every other
-  fit status fails closed. Every refusal status (all except `correctable` and
-  `not_applicable`) must explain the refusal in `overlap.note`.
+- No record may carry `overlap.corrected_r2`, and `correctable` is not an
+  accepted status. Every status except `not_applicable` must explain itself in
+  `overlap.note`.
 - When present, `overlap.legacy_unidentified` is never current evidence. It
   records the old
   `fixed_signal_variant_count_v0` calculation, which fixed the signal scale

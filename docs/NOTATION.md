@@ -163,7 +163,7 @@ it to account.
 | (O3) | linear-trainer basis `q_b = tr(Φ_bᵀ K_b)` | caller-supplied `OverlapBasis` | `tests/test_overlap.py` |
 | (O4) | stochastic basis (Hutchinson GDF) | `ppb.overlap.estimate_overlap_basis` | `tests/test_overlap.py` |
 | (O5) | exact-support numerator and total basis | `ppb.overlap.fit_overlap` | `tests/test_overlap.py` |
-| (O6) | corrected signed numerator | `ppb.overlap.correct_overlap_numerator` | `tests/test_overlap.py` |
+| (O6) | corrected signed numerator (experimental; not a registry contract) | `ppb.overlap.correct_overlap_numerator` | `tests/test_overlap.py` |
 | (G1) | genome-wide accumulation of (M1) | `scripts/regenerate_results.py` | `tests/test_regenerate_results.py` |
 | (G2) | delete-one-group block jackknife | `ppb.diagnostics.r2_block_jackknife` | `tests/test_diagnostics.py` |
 | (G3) | block-sign-flip null | `ppb.diagnostics.sign_flip_null` | `tests/test_diagnostics.py` |

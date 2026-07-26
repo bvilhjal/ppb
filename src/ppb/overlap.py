@@ -1,5 +1,12 @@
 """Detect shared training/target noise without erasing cohort signal.
 
+Correction is **experimental and not recommended**.  Every correction needs an
+independent reference GWAS of the same trait, and given one, evaluating the
+score against it is unbiased in a single line -- so the condition that makes a
+correction valid is the condition that makes it unnecessary.  ``fit_overlap``
+and ``correct_overlap_numerator`` are retained for the record; the results
+registry rejects a ``correctable`` status.  See ``docs/OVERLAP.md``.
+
 The defensible detector compares block-level score products in an exposed
 target and an independent reference while allowing their genuine signal to
 differ by a multiplicative factor.  Correction additionally requires a
