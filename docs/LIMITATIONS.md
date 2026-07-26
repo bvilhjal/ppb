@@ -64,15 +64,14 @@ utility, causality, or individual privacy.
   benchmark.** The estimator assumes `w` was trained independently of the target
   GWAS's noise. When it was not, the numerator is inflated additively — by more
   than tenfold for T2D in the real-data demonstration (0.509 against an in-sample
-  Pan-UKB target vs 0.044 against non-overlapping DIAGRAM). The retained correction
-  is deliberately basis-aware: it needs an independent reference target, a
-  reconstructible trainer-sensitivity basis on the exact score support, supplied
-  block sampling-noise variances, and an identifiable, stable fit. Final weights
-  alone do not identify that basis. The published LDpred2 artifacts therefore
-  fail closed as `basis_unavailable`; their in-sample values are upper bounds,
-  not corrected estimates. Even an eligible positive fit can reflect shared
-  stratification or relatedness rather than literal participant overlap. See
-  [`OVERLAP.md`](OVERLAP.md).
+  Pan-UKB target vs 0.044 against non-overlapping DIAGRAM). PPB detects and labels this
+  rather than correcting it. A correction would need an independent reference
+  GWAS of the same trait, and given one, evaluating the score against it is
+  unbiased in a single line — so the condition that makes a correction valid is
+  the condition that makes it unnecessary. In-sample values are published as
+  upper bounds. Detection is a moment, not a participant record: shared
+  stratification or relatedness produce the same signature.
+  See [`OVERLAP.md`](OVERLAP.md).
 - **Incomplete target-summary support changes the score being evaluated.** A
   missing target association cannot be treated as a zero while its weight stays
   in `wᵀDw`. PPB now restricts both quadratic forms to the exact joint support

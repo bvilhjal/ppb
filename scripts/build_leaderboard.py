@@ -97,7 +97,6 @@ STATUS_LABEL = {
     "unstable": "unstable",
     "not_detected": "not detected",
     "sign_reversal": "sign reversal refused",
-    "correctable": "correctable",
 }
 
 SCALE_LABEL = {
@@ -114,8 +113,7 @@ def row(rec, include_legacy=False):
     color = ROLE_STYLE.get(role, "#fff")
     prefix = "reference" if role == "reference" else "upper bound"
     label = f"{prefix} · {STATUS_LABEL.get(status, esc(status))}"
-    corrected = (fmt(ov.get("corrected_r2"))
-                 if status == "correctable" else "—")
+    corrected = "—"
     z = fmt(ov.get("gamma_z"), 1) if ov.get("gamma_z") is not None else "—"
     ref = esc(ov.get("reference", "—"))
     note = f'<br><small>{esc(ov["note"])}</small>' if ov.get("note") else ""
@@ -199,7 +197,7 @@ def build(records):
 <p class="sub">R&sup2; = (w&#7488;z)&sup2; / (w&#7488;Dw), computed without individual-level data;
 its declared scale is shown per row, and binary values are not liability-scale R&sup2;.
 Every evaluation declares its training/target sample overlap; in-sample rows are <b>upper bounds</b>.
-A correction is displayed only for a basis-aware fit whose status is <code>correctable</code>.
+Corrections are not published: see <code>docs/OVERLAP.md</code> for why the fit is dominated by evaluating against the independent reference it requires.
 <a href="https://github.com/bvilhjal/ppb/blob/main/docs/OVERLAP.md">Method details</a>.
 {legacy_note}</p>
 <p class="legend">

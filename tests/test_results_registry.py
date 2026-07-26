@@ -32,7 +32,6 @@ OVERLAP_STATUSES = {
     "not_applicable", "basis_unavailable", "insufficient_data",
     "excluded_basis", "nonidentifiable", "weak_identification",
     "heterogeneous", "unstable", "not_detected", "sign_reversal",
-    "correctable",
 }
 AVAILABLE_BASIS_KINDS = {"linear_trace", "jacobian_hutchinson"}
 LEGACY_METHOD = "fixed_signal_variant_count_v0"
@@ -265,10 +264,8 @@ def test_overlap_basis_and_fail_closed_contract(name, rec):
             f"{name}: paired suspect is missing overlap.reference"
     if ov["role"] == "suspect-unpaired":
         assert "reference" not in ov, f"{name}: unpaired suspect has a reference"
-        assert ov["status"] != "correctable", \
-            f"{name}: an unpaired evaluation cannot be corrected"
 
-    if ov["status"] not in {"not_applicable", "correctable"}:
+    if ov["status"] != "not_applicable":
         assert isinstance(ov.get("note"), str) and ov["note"].strip(), \
             f"{name}: refused correction must explain overlap.note"
 
@@ -291,9 +288,8 @@ def test_overlap_basis_and_fail_closed_contract(name, rec):
         f"{name}: available overlap basis has an unknown kind"
     assert isinstance(basis.get("support_hash"), str) and basis["support_hash"].strip(), \
         f"{name}: available overlap basis needs its exact support hash"
-    if ov["status"] != "correctable":
-        assert ov.get("corrected_r2") is None, \
-            f"{name}: only status=correctable may carry corrected_r2"
+    assert ov.get("corrected_r2") is None, \
+        f"{name}: the registry does not accept a corrected R2"
 
 
 def _half_step(x):
@@ -331,26 +327,18 @@ def test_r2_matches_num_and_den(name, rec):
 
 
 @pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
-def test_corrected_r2_matches_the_numerator_correction(name, rec):
-    """A correctable fit must carry and satisfy schema Equation 2."""
-    ov, m = rec["overlap"], rec["metrics"]
-    if ov["status"] != "correctable":
-        assert ov.get("corrected_r2") is None, \
-            f"{name}: non-correctable fit publishes a current correction"
-        pytest.skip("fit is not correctable")
-    for key in (
-        "alpha", "alpha_se", "gamma", "gamma_se", "gamma_z", "q_total",
-        "numerator_target", "corrected_r2",
-    ):
-        assert _finite_number(ov.get(key)), \
-            f"{name}: correctable fit is missing finite overlap.{key}"
-    assert ov["gamma_se"] > 0, f"{name}: overlap.gamma_se must be positive"
-    assert 0.0 <= ov["corrected_r2"] <= 1.0, \
-        f"{name}: overlap.corrected_r2 must lie in [0, 1]"
-    num_corr = ov["numerator_target"] - ov["gamma"] * ov["q_total"]
-    assert ov["corrected_r2"] == pytest.approx(num_corr ** 2 / m["den"], rel=1e-12), \
-        f"{name}: corrected_r2 does not satisfy schema Equation 2"
+def test_registry_never_publishes_a_correction(name, rec):
+    """The registry stores detection only; corrections are not a published path.
 
+    ``ppb.overlap`` can still fit one experimentally (``docs/OVERLAP.md``), but
+    the correction is dominated by simply evaluating against the independent
+    reference it requires, so no pack may present one as a result.
+    """
+    ov = rec["overlap"]
+    assert ov["status"] != "correctable", \
+        f"{name}: 'correctable' is not a registry status"
+    assert ov.get("corrected_r2") is None, \
+        f"{name}: the registry does not accept a corrected R2"
 
 @pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
 def test_match_fractions_are_fractions(name, rec):
@@ -394,33 +382,23 @@ def _synthetic_correctable_record():
     rec["overlap"] = ov
     return rec
 
-
-def test_synthetic_correctable_record_satisfies_current_contract():
+def test_a_correctable_record_is_rejected_by_the_registry():
+    """A well-formed correctable fit is still refused: the status is not a
+    registry outcome, and its corrected_r2 is not a publishable result."""
     rec = _synthetic_correctable_record()
-    test_overlap_basis_and_fail_closed_contract("synthetic", rec)
-    test_corrected_r2_matches_the_numerator_correction("synthetic", rec)
-    test_overlap_z_matches_gamma_over_se("synthetic", rec)
+    with pytest.raises(AssertionError, match="not a registry status"):
+        test_registry_never_publishes_a_correction("synthetic", rec)
+    with pytest.raises(AssertionError, match="unknown overlap.status"):
+        test_overlap_is_declared("synthetic", rec)
 
 
-@pytest.mark.parametrize(
-    "missing",
-    [
-        "alpha", "alpha_se", "gamma", "gamma_se", "gamma_z", "q_total",
-        "numerator_target", "corrected_r2",
-    ],
-)
-def test_correctable_status_requires_complete_current_fit(missing):
+def test_a_correctable_record_without_its_status_still_cannot_publish_r2():
+    """Relabelling the status does not smuggle the correction back in."""
     rec = _synthetic_correctable_record()
-    del rec["overlap"][missing]
-    with pytest.raises(AssertionError, match=f"overlap.{missing}"):
-        test_corrected_r2_matches_the_numerator_correction("synthetic", rec)
-
-
-def test_correctable_status_rejects_an_inconsistent_correction():
-    rec = _synthetic_correctable_record()
-    rec["overlap"]["corrected_r2"] *= 1.1
-    with pytest.raises(AssertionError, match="Equation 2"):
-        test_corrected_r2_matches_the_numerator_correction("synthetic", rec)
+    rec["overlap"]["status"] = "not_detected"
+    rec["overlap"]["note"] = "relabelled"
+    with pytest.raises(AssertionError, match="does not accept a corrected R2"):
+        test_registry_never_publishes_a_correction("synthetic", rec)
 
 
 @pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
@@ -473,7 +451,7 @@ def test_leaderboard_loader_reads_the_validated_registry():
 def test_leaderboard_labels_scales_and_quarantines_legacy_values():
     rendered = build(load_records())
     assert "binary approximation (not liability R²)" in rendered
-    assert "A correction is displayed only for a basis-aware fit" in rendered
+    assert "Corrections are not published" in rendered
     assert "validated R&sup2; correction" in rendered
     assert "91.8% target support" in rendered
     assert "Legacy v0 (unidentified)" not in rendered

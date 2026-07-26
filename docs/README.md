@@ -46,7 +46,8 @@ match), the "Command line" section of the [root README](../README.md), and
 **To judge whether a published number means anything**, read
 [`REAL_DATA.md`](REAL_DATA.md) — both the results and the caveats — then
 [`OVERLAP.md`](OVERLAP.md) if the score's training cohort might intersect the
-target, which is the failure mode that dominates all others.
+target — the failure mode that dominates all others, and the one PPB labels
+rather than corrects.
 
 **To extend the code**, read [`NOTATION.md`](NOTATION.md) §5, which maps every
 numbered result to its module and its test, then the module.
@@ -60,7 +61,7 @@ numbered result to its module and its test, then the module.
 | [`NOTATION.md`](NOTATION.md) | reference | symbols, conventions, overloadings, index of results |
 | [`METHOD.md`](METHOD.md) | specification | the estimand and estimator (M1–M5), the hypotheses and what violating each costs, LD representation, conventions, tolerances |
 | [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | specification | target-ancestry inputs (X1), the gauge condition (X2), what is impossible without target data |
-| [`OVERLAP.md`](OVERLAP.md) | specification | shared training/target noise: when a correction is possible at all, the model (O1–O2), the basis (O3–O4), the gates |
+| [`OVERLAP.md`](OVERLAP.md) | specification | shared training/target noise: the mechanism, how it is detected, and why correction is not offered |
 | [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2), controls (G3–G4), and the external check against published individual-level accuracy (G5) |
 | [`LIMITATIONS.md`](LIMITATIONS.md) | scope | what PPB does and does not establish; every known failure mode |
 | [`TRANSFERABILITY.md`](TRANSFERABILITY.md) | scope | a negative result: why PPB measures portability but does not construct scores |
