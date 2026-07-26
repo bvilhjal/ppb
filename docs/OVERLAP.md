@@ -3,23 +3,51 @@
 Status: specification (binding). Symbols and labels:
 [`NOTATION.md`](NOTATION.md). Results are labelled (O1)–(O6).
 
-**Where this stands:** fail-closed, and now demonstrated end to end in
-simulation. The API is validated by focused counterexamples and by a controlled
-physical-overlap simulation in which it recovers the coupling and returns an
-inflated statistic to its independent anchor. It is not yet wired into the results registry, and no
-real score has supplied a basis. Existing registry corrections were produced by
-the deprecated fixed-scale, variant-count model and should be treated as legacy
-estimates.
+## Does it work?
 
-> **Revised (2026-07-25).** An earlier version of this document reported that
-> the identification gate "refuses every correction, including at the null" and
-> recorded that as the method's operating boundary. That was a property of the
-> simulation, not of the method: it ran a *marginal* trainer over *equal-sized*
-> blocks, which makes the basis `q_b = tr(D_b)` the block size — the same
-> constant for every block — and a *diffuse* architecture, which makes the
-> reference signal near-constant too. Two constant columns cannot be separated,
-> so the refusal was correct and uninformative. With per-block signal variation
-> the same code identifies cleanly and corrects. See "Validation" below.
+**Yes — when four conditions hold. When they do not, it refuses rather than
+guesses.** Three of the four are arranged by whoever trained the score; the
+fourth is a property of the trait, and no amount of care supplies it.
+
+**Table 1. What a correction requires.**
+
+| # | Condition | Why it is needed | If absent |
+|---:|---|---|---|
+| 1 | An independent reference GWAS of the same trait | (O1) has two rows. With the target row alone, `alpha s_b` and `gamma q_b` are one equation in two unknowns | nothing to fit |
+| 2 | The trainer, not merely its output | the subtracted quantity `q_b = tr(Phi_b^T K_b)` is a functional of the *operator*: closed form (O3), or rerunnable and differentiable (O4) | `basis_unavailable` |
+| 3 | Block sampling-noise variances | (O2) is a weighted fit, and LD quadratic forms are not automatically these variances | input rejected |
+| 4 | A trait sparse enough to identify | both design columns are positive and both grow with block size, so separating them needs signal variation *at fixed block size* | `weak_identification` |
+
+Conditions 1–3 are satisfied by keeping information that exists at training
+time. Condition 4 is discovered rather than chosen: you run the fit and the gate
+answers. Sparse architectures supply it in abundance — most blocks carry no
+causal variant and a few carry many, which is uncorrelated with the
+deterministic basis — and diffuse ones do not.
+
+**Condition 2 is the one real scores fail today.** A published PGS artifact is a
+list of weights, and the operator that produced them cannot be recovered from
+that list. Every score in the registry therefore fails closed as
+`basis_unavailable`, and its in-sample value stands as an upper bound. That is a
+provenance problem rather than a statistical one: a trainer that retains its own
+operator passes.
+
+**What it delivers when all four hold** (Table 4, in simulation): a statistic
+inflated nearly thirtyfold — 1.094 against an honest 0.038 — comes back to
+0.062, and a 25%-overlap case lands on its anchor to two decimals. `gamma` is
+recovered to within about 15%, always from below, so the corrected value settles
+at or slightly above the honest anchor. Read it as an **upper bound** far
+tighter than the naive one, not as an unbiased estimate.
+
+**What it never delivers.** `gamma > 0` is evidence of shared *noise*, not proof
+of shared *people*: it is identified from a moment, and shared stratification or
+cryptic relatedness produce the same moment. Nor has any of this been run on
+real data — no real score has yet supplied a basis, the correction is not wired
+into the results registry, and the corrections sitting in existing packs came
+from the deprecated fixed-scale variant-count model and are legacy estimates.
+
+**The failure mode is safe.** Nine of the ten outcomes in Table 2 are refusals.
+The estimator does not return a quietly wrong correction; it declines, and names
+the gate that stopped it.
 
 ## What is identifiable
 
@@ -117,6 +145,97 @@ Variant count is valid only in the special identity-operator normalization. It
 is not a defensible fallback for shrinkage, LD-aware, clumped, thresholded, or
 otherwise selected scores.
 
+### What `q_b` measures, and why weights do not determine it
+
+`Phi` is the *procedure*, not its output: the map that turns training summary
+statistics into weights. And `q_b` has a plain reading — **how much of block
+`b`'s training noise the procedure copies into the weights.** Three cases make
+that concrete.
+
+**A trainer that copies everything.** Take the weights straight from the
+training statistics, `w = z_train`. Then `Phi = I` and, since `K = D` has a unit
+diagonal, `q_b = tr(D_b) = m_b`, the number of variants in the block. Every
+variant's noise is passed through intact, so the block contributes its full
+variant count. *This is the only case in which variant count is the right
+answer* — which is precisely what the deprecated `fixed_signal_variant_count_v0`
+model assumed for every score.
+
+**A trainer that shrinks.** Ridge, or LDpred-infinitesimal, solves
+`w = (D + lambda I)^{-1} z_train`, so `Phi = (D + lambda I)^{-1}` and
+
+    q_b = tr((D_b + lambda I)^{-1} D_b) = sum_i d_i / (d_i + lambda)
+
+over the eigenvalues `d_i` of `D_b`. That expression is the ridge **effective
+degrees of freedom** — the effective number of parameters fitted in the block.
+It runs from `m_b` at `lambda = 0` down toward zero as `lambda` grows: on an
+8-variant block it is 8.00, 7.25, 3.97, 0.73 at `lambda = 0, 0.1, 1, 10`. A
+score that shrank hard absorbed little training noise and needs little
+subtracted; one that barely shrank needs nearly the full variant count. Both
+have `m_b` variants in the block, and the deprecated model would have given them
+the same answer.
+
+**A trainer that selects.** Keep the `k` largest `|z_train|` and zero the rest.
+Locally `Phi` is a selection matrix and `q_b` looks like a count of survivors —
+but *which* variants survive is itself a response to the training noise, and
+that response is invisible to a derivative taken at one point. This is why
+`estimate_overlap_basis` sweeps a range of step sizes rather than taking one
+small one, and why p+T is refused.
+
+**Two scores with identical weights can need different corrections.** Suppose a
+published score has 100 non-zero weights. If those 100 were the top-scoring
+variants in the training GWAS, the selection responded to training noise. If
+they were a panel fixed in advance — prior biology, an earlier cohort — it did
+not, and `Phi` is a constant selection matrix with `q_b = tr(S_b D_b)`, the
+count of selected variants in the block. **The weight vector is identical in
+both cases**; the corrections differ, and the second is correctable while the
+first is refused. Nothing recoverable from a list of weights distinguishes them,
+which is what "final weights alone are not a basis" means in practice.
+
+The general statement: `q_b` is a functional of the *derivative* of the training
+map, and a weight vector is that map evaluated at a single point. Infinitely
+many maps pass through one point with different derivatives.
+
+**The trap.** For a p+T score you *can* read the selected support off the weight
+list, so `Phi = diag(support)` looks reconstructible from the artifact alone. It
+is not admissible, and the code blocks it structurally: that basis is
+variant-count-on-the-support, which is (O3) under the identity normalization —
+the one case it does not apply to. A selected support is the *outcome* of a
+noise-responsive choice, not a fixed operator.
+
+### Which training methods can supply a basis
+
+Probed against the actual gate (`estimate_overlap_basis` with its shipped
+defaults), not merely classified on paper.
+
+**Table 2. Trainers and the basis they admit.**
+
+| method | linear in `z_train`? | `Phi` | verdict |
+|---|---|---|---|
+| marginal, `w = z_train` | yes | `I` | analytic, `q_b = m_b`. The only correct variant-count case — and usually refused *downstream* as `nonidentifiable`, since a constant column cannot be separated from the signal |
+| ridge / LDpred-inf | yes | `(D_train + lambda I)^{-1}`, `lambda = M/(h² n)` | analytic **and** stochastic; the validated reference case |
+| lassosum | no | active-set solve; `q_b → \|A_b\|` in the soft-threshold limit | **regime-dependent** — passes at moderate shrinkage, refused at heavy, and near the boundary not reproducible across seeds (1 of 8 passed at one penalty) |
+| PRS-CS | no | none in closed form | **plausibly passes** — the only non-linear method here with a real prospect, because continuous shrinkage has no point mass at zero. Not verified against real PRS-CS |
+| p+T / clumping+thresholding | no | data-dependent selection | refused, at 5/5 thresholds and 3/3 clump depths |
+| LDpred2 grid/auto | no | none | refused; the spike-and-slab point mass is hard selection, and `auto` learns `p` and `h²` in-chain |
+| published PGS artifact | — | unrecoverable | `basis_unavailable` |
+
+Three practical notes the table hides. `linear_trace` is **entirely
+caller-supplied** — ppb ships no code that computes `tr(Phi_b^T K_b)`, and
+`estimate_overlap_basis` can only ever return `jacobian_hutchinson` or
+`unavailable`. The ridge `Phi` contains `D_train`, the *training* panel rather
+than ppb's evaluation panel, and linearity holds only if `lambda` was fixed a
+priori: estimating `h²` from the same `z_train` makes `lambda = lambda(z)` and
+the map is no longer strictly linear. And the stochastic route costs
+`n_draws × len(deltas) + 1` = 97 trainer runs at defaults, which for a
+genome-wide Gibbs sampler is a barrier in its own right.
+
+Condition 2 of Table 1 is met by *either* a closed form (O3) *or* a rerunnable
+differentiable trainer (O4), so "keep the trainer" does not strictly mean "keep
+`Phi`". Rerunnability does not rescue the shipped scores, though: the
+portability-LDpred2 series is UK Biobank-trained, so the training data is
+restricted-access and no seed or LD-panel build is recorded — and LDpred2 would
+be refused at the stability gate even if it could be rerun.
+
 For a rerunnable differentiable trainer, the permitted stochastic basis is
 
 **(O4) Stochastic overlap-basis estimate.**
@@ -147,8 +266,13 @@ decide whether it measures anything:
   stable near `z` while missing the fact that which variants are selected also
   responds to the shared noise. The default `deltas` therefore span from a step
   too small to move any selection boundary to one that moves many, and the gate
-  gets its evidence from the disagreement. It is validated against the exact
-  `tr(Phi_b' K_b)` for a linear trainer (0.2–0.6% error) and refuses a p+T trainer.
+  gets its evidence from the disagreement. The gate has **two** criteria —
+  `max_relative_spread` across steps and `min_pattern_correlation` between the
+  per-block patterns — and it is the *pattern correlation*, not the spread, that
+  actually catches p+T at this repository's own test configuration. It is
+  validated against the exact `tr(Phi_b' K_b)` for a linear trainer; accuracy is
+  configuration-dependent (0.2–0.6% in the simulation, ~1–2% at the smaller
+  unit-test setup), and the test asserts only < 5%.
 
 `OverlapBasis` intentionally permits only two available kinds:
 `linear_trace` and `jacobian_hutchinson`. Arbitrary labels are rejected because
@@ -177,7 +301,7 @@ before squaring; correction is refused if (O6) reverses its sign.
 
 ## Eligibility gates
 
-**Table 1. Correction statuses and default gates**
+**Table 2. Correction statuses and default gates**
 
 | Status | Meaning |
 |---|---|
@@ -232,7 +356,7 @@ them as the headline path.
 
 ## Validation
 
-**Table 2. Focused validation cases**
+**Table 3. Focused validation cases**
 
 | No. | Case | Required behavior |
 |---:|---|---|
@@ -252,14 +376,26 @@ them as the headline path.
 | 14 | Hutchinson basis for a linear trainer | Match the analytic `tr(Phi'K)` |
 | 15 | Hutchinson basis for a thresholding trainer | `unavailable` on perturbation-scale instability |
 
-**What decides identification.** The design has two columns — the reference
-signal `u_R` and the basis `q` — and both are positive and both grow with block
-size, so separating them needs signal variation *at fixed block size*. A diffuse
-architecture has almost none, and the gate correctly refuses. A sparse one has a
-great deal: most blocks carry no causal variant and a few carry a lot, which is
-uncorrelated with the deterministic basis.
+**What decides identification** (condition 4 of Table 1). The design has two
+columns — the reference signal `u_R` and the basis `q` — and both are positive
+and both grow with block size, so separating them needs signal variation *at
+fixed block size*. A diffuse architecture has almost none, and the gate
+correctly refuses. A sparse one has a great deal: most blocks carry no causal
+variant and a few carry a lot, which is uncorrelated with the deterministic
+basis.
 
-**Table 3. Physical-overlap simulation** (`experiments/overlap_detection.py`,
+This is worth stating plainly because getting it wrong once cost this document a
+false conclusion. Before 2026-07-25 it reported that the identification gate
+"refuses every correction, including at the null," and recorded that as the
+method's operating boundary. The boundary belonged to the simulation, not to the
+method: a *marginal* trainer over *equal-sized* blocks makes the basis
+`q_b = tr(D_b)` the block size — one constant for every block — and a *diffuse*
+architecture makes the reference signal near-constant as well. Two constant
+columns cannot be separated, so the refusal was correct and entirely
+uninformative. The same code identifies cleanly once the blocks and the
+architecture vary, which is what Table 4 shows.
+
+**Table 4. Physical-overlap simulation** (`experiments/overlap_detection.py`,
 blockwise ridge trainer, Hutchinson basis, heterogeneous LD blocks, 2 replicates).
 
 | architecture | overlap | status | `gamma`/true | R² naive | R² corrected | independent anchor |
@@ -297,6 +433,17 @@ sensitivity is not stable in the perturbation scale.
   stability and trainer reruns are mandatory for that basis kind, and the
   stability sweep must span steps large enough to move selection boundaries —
   a check at one small step passes trivially for a thresholding trainer.
+- **The gate does not see hyperparameter selection.** A trainer that picks its
+  penalty by argmax over a grid evaluated on the same `z` — lassosum and
+  LDpred2-grid pseudovalidation — passes with spread 0.000, because the argmax
+  does not switch under perturbations as large as `0.25‖z‖`. Conditioning on a
+  locally stable argmax is defensible, but the gate cannot distinguish "stable"
+  from "happened not to move here", so this class is accepted on weaker evidence
+  than the sweep suggests.
+- A basis that passes `estimate_overlap_basis` can still be rejected by
+  `fit_overlap`: `mc_se/|q_total| > 0.05` returns `unstable`. Passing the
+  stability gate is necessary, not sufficient, and the draw count is a real
+  constraint rather than a tuning detail.
 - Identification depends on the genetic architecture, which the analyst does not
   choose. A sufficiently diffuse trait can be refused even with a perfect basis;
   that is the gate working, not a bug, and there is no correction available in
@@ -307,5 +454,18 @@ sensitivity is not stable in the perturbation scale.
 - Delete-group uncertainty covers genomic heterogeneity only approximately; a
   future registry integration should carry intervals for the jointly corrected
   signed numerator and squared statistic.
-- Prefer preventing overlap, recovering training provenance, or retraining the
-  score. Statistical correction is secondary damage control, not a magic bath.
+
+## Conclusion
+
+The correction works in the sense that matters. Where the design is identified
+it recovers the coupling and brings an inflated statistic back to its honest
+anchor; where the design is not identified it says so, rather than returning a
+number that looks like an answer.
+
+The binding constraint is archival rather than statistical. Every gate in Table 2
+can pass, and not one of them can be reached, if the operator that produced the
+weights was discarded — which is the state of every published score today. So
+the order of preference is unchanged: prevent the overlap; failing that, keep
+the provenance that makes it correctable; failing that, retrain. Statistical
+correction is damage control applied after the fact, and it is worth precisely
+what the surviving record of the training procedure is worth.

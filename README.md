@@ -23,33 +23,26 @@ the validation anchor.
   Substituting discovery-ancestry data — `z_A` and `D_A` — estimates R²_A, so it
   overstates R²_B by `1/portability − 1` (+58% at the simulation's r_g=0.8).
   See [`docs/CROSS_ANCESTRY.md`](docs/CROSS_ANCESTRY.md).
-- **Prior art.** The identity itself is **not new to this project or to its
-  foundation**: it is the quasi-correlation of Pattee & Pan (2020) and the square
-  of lassosum's pseudovalidation criterion (Mak et al. 2017); PUMAS reaches the
-  same estimand by subsampling. See [`docs/METHOD.md`](docs/METHOD.md) §1.
+- **Prior art.** The identity is **not new**: it is the quasi-correlation of
+  Pattee & Pan (2020) and the square of lassosum's pseudovalidation criterion
+  (Mak et al. 2017); PUMAS reaches the same estimand by subsampling.
+  See [`docs/METHOD.md`](docs/METHOD.md) §1.
 - **Foundation.** Built on the within-ancestry summary-statistic *benchmark* of
   Witteveen et al., *Publicly Available Privacy-preserving Benchmarks for Polygenic
   Prediction* (bioRxiv 2022,
-  [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)) —
-  the released LD + summary-statistic artifact for a shared European target. The
-  cross-ancestry direction is **this project's**, not attributed to that paper
-  (which is European-only), and its novelty against the cross-population tuning
-  literature is still to be checked. This repository is an attempt to finish and
-  extend Witteveen's unfinished project after he left science; preserving that
-  provenance does not imply his endorsement, ownership of later changes, or
-  current involvement.
+  [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)).
+  The cross-ancestry direction is this project's — that paper is European-only —
+  and its novelty against the cross-population tuning literature is still to be
+  checked. This repository attempts to finish Witteveen's unfinished project
+  after he left science; preserving that provenance does not imply his
+  endorsement or involvement.
 
-> **Status:** early development. The estimator, LD backends, harmonization, and the
-> cross-ancestry method are **validated in simulation against individual-level
-> truth** (CI green), and the within-ancestry anchor has been
-> **demonstrated on real data** (public PGS Catalog scores × non-overlapping
-> consortium GWAS × the bigsnpr HM3+ European LD reference — see
-> [`docs/REAL_DATA.md`](docs/REAL_DATA.md)). It has **not** been run on real
-> cross-ancestry data. See [`FINISHING_PLAN.md`](FINISHING_PLAN.md) for the
-> roadmap and [`docs/METHOD.md`](docs/METHOD.md) / [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)
-> for the specification and scope. Input harmonization, weight scaling, LD
-> structure, and result-pack provenance are validated explicitly; invalid or
-> non-finite inputs fail rather than being silently ranked.
+> **Status:** early development. The estimator, LD backends, harmonization, and
+> the cross-ancestry method are validated **in simulation** against
+> individual-level truth; the within-ancestry anchor is demonstrated **on real
+> data** ([`docs/REAL_DATA.md`](docs/REAL_DATA.md)). It has **not** been run on
+> real cross-ancestry data. Roadmap: [`FINISHING_PLAN.md`](FINISHING_PLAN.md).
+> Scope and failure modes: [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 ## Documentation
 
@@ -78,32 +71,32 @@ acc_B = r2(w, z_B, DenseLD(D_B))     # predictive R² of w in ancestry B
 ```
 
 The estimator is ancestry-agnostic in form — within-ancestry is `z`/`D` from the
-same population. It only needs `wᵀz` and `wᵀDw`, so `D` is never materialised
-densely (dense, block-diagonal, low-rank, and int8 D8/LR8 backends are provided;
-the low-rank factor is PSD, so `wᵀDw ≥ 0`). The LD loader validates block tiling,
-offsets, dtypes, annotations, packed diagonals, and low-rank definiteness. D8
-quantization is checked where tractable but is not a blanket PSD certificate for
-every large block; see [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+same population. It needs only `wᵀz` and `wᵀDw`, so `D` is never materialised
+densely: dense, block-diagonal, low-rank, and int8 D8/LR8 backends are provided,
+and the loader validates block tiling, offsets, dtypes, packed diagonals, and
+low-rank definiteness ([`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) covers what
+int8 quantization does and does not guarantee).
 
 Block-level uncertainty and negative controls (`ppb.diagnostics`) come free from
 the per-block products a genome-wide sweep already computes: `r2_block_jackknife`
-gives a delete-one-block SE, and `sign_flip_null` gives an exact null — because
-`D` is block-diagonal, negating a whole block's weights flips `wᵀ_b z_b` and
-leaves `wᵀ_b D_b w_b` alone, so the sign-flipped scores share the denominator and
-carry no coherent signal. `scripts/negative_controls.py` adds the score × target
-trait-swap matrix. See [`docs/REAL_DATA.md`](docs/REAL_DATA.md).
+gives a delete-one-block SE, and `sign_flip_null` an exact null — negating a
+block's weights flips `wᵀ_b z_b` and leaves `wᵀ_b D_b w_b` alone, so the
+sign-flipped scores share the denominator and carry no coherent signal.
+`scripts/negative_controls.py` adds the trait-swap matrix.
+See [`docs/REAL_DATA.md`](docs/REAL_DATA.md).
 
 Supporting pieces for real summary statistics: allele harmonization
 (`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
 sizes (`ppb.standardized_marginal`), PUMAS-style single-GWAS subsampling
 that refits each pseudo-training split (`ppb.subsample_sumstats` / `ppb.pumas_r2`),
 and basis-aware detection/correction of training-target sample overlap
-(`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)). Overlap correction is
-fail-closed: it requires a reconstructible trainer-sensitivity basis and an
-identifiable, stable block fit. Final weights alone are not such a basis, but a
-*rerunnable* trainer can supply one stochastically
-(`ppb.estimate_overlap_basis`), and in simulation the correction then returns an
-inflated statistic to its independent anchor.
+(`ppb.overlap`, see [`docs/OVERLAP.md`](docs/OVERLAP.md)). That correction works
+in simulation — it brings a thirtyfold-inflated statistic back to its
+independent anchor — but only given an independent reference GWAS, a
+reconstructible trainer-sensitivity basis, and a trait sparse enough for the fit
+to be identified. Final weights alone are not such a basis, so every published
+score fails closed; a *rerunnable* trainer can supply one stochastically
+(`ppb.estimate_overlap_basis`).
 
 ## LD reference (real data)
 

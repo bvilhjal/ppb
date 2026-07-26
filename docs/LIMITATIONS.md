@@ -93,11 +93,9 @@ utility, causality, or individual privacy.
   model only for weights independent of the pseudo split; applying it to refitted
   weights is an explicit approximation. Binary-trait output is less interpretable
   still.
-- **The estimate is not bounded by 1.** `(wᵀz)²/(wᵀDw)` equals a squared
-  correlation only when `z` and `D` describe the same sample as the phenotype.
-  With a mismatched LD reference, overlap, or a `z` on an inconsistent gauge it
-  can exceed 1; ppb does not clamp it. A value near or above 1 is a diagnostic
-  that an assumption has failed, not a very good score.
+- **The estimate is not bounded by 1**, and a value near or above 1 is a
+  diagnostic that a hypothesis has failed rather than a very good score. Derived
+  in [`METHOD.md`](METHOD.md) §1.5.
 - **Gauge (standardization) consistency.** `w`, `z` and `D` must share one
   self-consistent standardization; the ratio is invariant to a *global* rescale
   of `w` but not a per-variant one. The current real-data path uses the HWE
