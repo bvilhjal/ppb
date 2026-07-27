@@ -130,8 +130,18 @@ class BlockDiagonalLD(LDBackend):
         self.m = m
 
     def quad(self, w) -> float:
+        return float(self.block_quads(w).sum())
+
+    def block_quads(self, w) -> np.ndarray:
+        """Per-block ``w[idx_b]^T D_b w[idx_b]``, in block order.
+
+        ``quad`` is their sum. Exposed separately because off-block covariance
+        is zero, so these are the variances of *independent* contributions --
+        which is what the block jackknife (G2) and the score-distribution
+        normality diagnostic both need.
+        """
         w = self._check(w)
-        total = 0.0
+        out = np.empty(len(self.blocks), dtype=np.float64)
         for b, (backend, idx) in enumerate(self.blocks):
             wb = np.ascontiguousarray(w[idx])
             qb = backend.quad(wb)
@@ -149,8 +159,8 @@ class BlockDiagonalLD(LDBackend):
                     "positive semi-definite, and summing it would understate "
                     "w^T D w (inflating R^2). Use a PSD representation such as "
                     "LR8 for this block.")
-            total += qb
-        return total
+            out[b] = qb
+        return out
 
 
 def _clip_int8(a):

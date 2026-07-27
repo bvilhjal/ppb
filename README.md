@@ -96,6 +96,23 @@ same trait, and given one, evaluating the score against it is unbiased in a
 single line. The condition that makes a correction valid is the condition that
 makes it unnecessary, so in-sample results are published as upper bounds.
 
+To report an individual's score as a percentile you need the score's
+distribution in a population, and its first two moments follow from allele
+frequencies and LD alone — no individual genotypes:
+
+```python
+from ppb import score_distribution
+
+dist = score_distribution(ld, ld_variants, w_variants, w, allele_frequency=af)
+dist.percentile(raw_score)          # normal approximation; check max_variance_share
+```
+
+`Var(S)` is the same `wᵀDw` the estimator computes as its denominator. This is
+also the *phenotype-free* half of portability: a percentile depends only on the
+target population's genotype distribution, so it can be computed for any
+ancestry with published frequencies and a matched panel — see
+[`docs/SCORE_DISTRIBUTION.md`](docs/SCORE_DISTRIBUTION.md).
+
 ## LD reference (real data)
 
 `scripts/bigsnpr_ldref_to_ppb.py` converts bigsnpr's precomputed **HapMap3+
