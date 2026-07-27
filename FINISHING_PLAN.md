@@ -16,13 +16,15 @@ literature); the overlapping-cohort (in-sample) failure mode demonstrated
 quantitatively on the same scores. See `docs/REAL_DATA.md`. Still no real
 cross-ancestry result.
 
-Revised: 2026-07-22 — **Gate-D overlap correction retained and redesigned**
-(`ppb.overlap`): the fit separates target/reference signal scale from shared
-noise and requires a trainer-specific sensitivity basis on the exact score
-support. Identification, stability, heterogeneity, and sign gates fail closed.
-The current final LDpred2 artifacts do not preserve a reconstructible trainer
-operator, so they are `basis_unavailable` upper bounds and must not carry a
-headline corrected R². Method note: `docs/OVERLAP.md`.
+Revised: 2026-07-27 — **overlap correction withdrawn** (`ppb.overlap`). Every
+correction needs an independent reference GWAS of the same trait, and given
+one, evaluating the score against it is unbiased in a single line. The
+condition that makes a correction valid is the condition that makes it
+unnecessary, so PPB detects and labels overlap instead: in-sample results are
+published as upper bounds, the registry rejects `correctable`, and no pack may
+carry a corrected R². The fitting apparatus is retained as experimental.
+`docs/OVERLAP.md`. This supersedes the 2026-07-22 "retained and redesigned" and
+2026-07-25 "salvaged" revisions, which are in Git history.
 
 Revised: 2026-07-22 — **scientific and publication-path hardening**: PUMAS-style
 repeated learning now refits every pseudo-training split with signal-dependent
@@ -34,21 +36,18 @@ liability-scale R².
 Revised: 2026-07-22 — **stage-1 leaderboard**: versioned results registry
 (`results/`, schema in `results/schema.md`) + static site generator
 (`scripts/build_leaderboard.py`) + GitHub Pages workflow. Baselines only;
-in-sample rows are displayed as upper bounds, and only overlap fits satisfying
-the new basis-aware gates may be corrected. This is the "first leaderboard from
+in-sample rows are displayed as upper bounds, and no row carries a correction.
+This is the "first leaderboard from
 reviewed result files" — no submission service before the protocol survives
 external beta (unchanged).
 
-Revised: 2026-07-25 — **overlap correction salvaged**: the stochastic
-generalized-degrees-of-freedom basis (O4) is implemented
-(`ppb.estimate_overlap_basis`), so a *rerunnable* trainer can supply one, and
-the controlled physical simulation now recovers the coupling and returns an
-inflated statistic to its independent anchor. The earlier "refuses every
-correction" finding was a property of that simulation — a marginal trainer over
-equal-sized blocks makes the basis a constant — not of the method.
-Identification still depends on the genetic architecture: a diffuse trait is
-correctly refused, and the corrected value is an upper bound rather than an
-unbiased estimate. `docs/OVERLAP.md`.
+Revised: 2026-07-27 — **score distribution added** (`ppb.score_distribution`,
+`docs/SCORE_DISTRIBUTION.md`): a score's mean (P1) and variance (P2) in a
+population follow from allele frequencies and LD alone, so an individual's PGS
+can be standardized without individual genotypes. (P2) is the estimator's own
+denominator. This is the phenotype-free half of portability — a percentile
+depends only on the target population's genotype distribution — so unlike the
+`R²` track it needs no target-ancestry GWAS.
 
 ## Objective
 
@@ -150,15 +149,15 @@ hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out o
   PC adjustment removing stratification, per-variant-N correction, PUMAS-style
   repeated learning that refits each pseudo-training split, and **cross-ancestry
   portability** (`experiments/cross_ancestry.py`).
-- Basis-aware training/target shared-noise detection and guarded numerator
-  correction (`ppb.overlap`, Gate D), including the stochastic
-  generalized-degrees-of-freedom basis for a rerunnable trainer
-  (`estimate_overlap_basis`, validated against the analytic trace and
-  fail-closed on a discontinuous trainer). Correction requires an identified
-  trainer basis; the current LDpred2 final weights fail closed as
-  `basis_unavailable`. In simulation the correction recovers the coupling and
-  returns an inflated statistic to its independent anchor where the design is
-  identified, and is refused for a diffuse architecture (`docs/OVERLAP.md`).
+- Training/target shared-noise **detection and labelling** (`ppb.overlap`):
+  an in-sample evaluation is published as an upper bound, measured against an
+  independent target where one exists (T2D 0.509 vs 0.044). Correction is
+  withdrawn as dominated by that comparison; the fitting apparatus is retained
+  as experimental and the registry rejects it (`docs/OVERLAP.md`).
+- A score's population distribution from allele frequencies and LD
+  (`ppb.score_distribution`, (P1)-(P2)), benchmarked against simulated
+  individuals: SD within 0.2%, and `max_variance_share` calibrated against tail
+  error so a percentile carries a usable warning (`docs/SCORE_DISTRIBUTION.md`).
 - Stage-1 leaderboard: the versioned results registry (`results/`, schema
   enforced by `tests/test_results_registry.py`) regenerated end-to-end from
   source data by `scripts/regenerate_results.py`, rendered to a static site by
@@ -191,8 +190,8 @@ not a repackaging (Gate D).
   severe inflation). Height, LDL, and BMI retain 88.6–92.1% of score weights on
   exact target support and are therefore restricted-score evaluations.
   Binary-trait values are standardized summary-statistic approximations, not
-  liability-scale R²; the final-weight overlap basis is
-  unavailable, so no corrected value is claimed. Details and provenance in
+  liability-scale R²; no corrected value is claimed anywhere, by design.
+  Details and provenance in
   `docs/REAL_DATA.md`.
 
 ## Stewardship and provenance

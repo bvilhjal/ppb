@@ -40,6 +40,10 @@ and the test that pins it.
    changes in what the inputs must be.
 4. [`LIMITATIONS.md`](LIMITATIONS.md) — before believing any number.
 
+[`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md) is a short detour off step 2:
+the estimator's denominator, read on its own, is the score's variance in the
+population — which is what standardizes an individual's score.
+
 **To evaluate a score**, read [`METHOD.md`](METHOD.md) §4 (conventions you must
 match), the "Command line" section of the [root README](../README.md), and
 [`LIMITATIONS.md`](LIMITATIONS.md) on gauge consistency and the scale of `z`.

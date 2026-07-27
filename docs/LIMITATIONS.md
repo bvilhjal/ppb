@@ -27,6 +27,15 @@ real cross-ancestry data. Claims are at preprint strength. See
 PPB **measures** portability given target-ancestry data; it does **not predict**
 portability from discovery-ancestry data alone (that is a different method class).
 
+A second, narrower capability shares the same machinery: `ppb.score_distribution`
+gives a score's mean and variance in a population from allele frequencies and LD
+alone ((P1)-(P2), [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md)), so an
+individual's PGS can be standardized or given a percentile without individual
+genotypes. It needs **no phenotypes**, and therefore no target-ancestry GWAS —
+it is the half of portability that a genotype distribution alone determines. It
+answers a different question from `R²`: not how accurate a score is, but whether
+the same raw score means the same percentile.
+
 ## Privacy claims — deliberately narrow
 
 - PPB is **summary-statistics-based** / **individual-level-data-free**. It shares
@@ -143,6 +152,23 @@ utility, causality, or individual privacy.
 - **Trait-specific discrepancy.** The paper reports Major Depression R² is
   overestimated (~+4.5%), hypothesised to stem from assortative mating — a
   modelling limitation, not a bug.
+- **A percentile from `ppb.score_distribution` rests on a normal
+  approximation, and the tail is where it fails.** (P1)-(P2) give the score's
+  first two moments exactly; `D` gives no third. With a block-diagonal reference
+  the score is exactly a sum of independent block contributions, so the
+  approximation is well founded when the variance is spread — but a score with
+  one dominating block is a mixture whose tail is not normal, and that is where
+  percentile claims live. `max_variance_share` is calibrated against this:
+  below ~0.1 percentiles are accurate to a fraction of a point; at 0.17 the
+  nominal 0.1% tail already holds 2.4× its share; at 0.68, 12.7×
+  ([`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md)).
+- **The score distribution assumes Hardy-Weinberg and a matched panel.**
+  `Var(g) = 2f(1−f)(1+F)`; the `inbreeding` parameter carries `F` but does not
+  correct `D`, so a structured cohort keeps a residual error. Measured: pooling
+  two populations at `F_ST = 0.05` and predicting with a clean
+  single-population panel deflates the SD by 4.4%, of which `F` recovers about
+  half. Unlike `R²`, which is invariant to a global rescale of `w`, nothing
+  here cancels a mismatched panel.
 - **Scope.** v0.1 is the **simulation-validated** cross-ancestry portability
   estimator plus the within-ancestry Witteveen anchor (quantitative traits are the
   interpretable primary use; binary outputs remain approximate). The
