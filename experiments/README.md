@@ -380,3 +380,18 @@ the variance (the nominal 1% tail holds 5.4% of the cohort at
 Run: `python experiments/score_distribution.py`. Numbers are recorded in
 [`../docs/SCORE_DISTRIBUTION.md`](../docs/SCORE_DISTRIBUTION.md) and pinned by
 `tests/test_score_distribution.py`.
+
+## `assortative_mating.py` — AM inflates variance where a block-diagonal `D` cannot see it
+
+Mates a simulated population on its phenotype for ten generations (haplotypes,
+meiosis with recombination, rank-pairing to a target spouse correlation) and
+asks what breaks. The equilibrium variance inflation tracks the classical
+`1/(1 − r h²)` across spouse correlations 0 to 0.6; at 0.4, PPB's R² reads
+**1.336×** the individual-level truth with a block-diagonal reference and
+**1.000×** with full genome-wide LD. (P3), a rank-one correction whose scalar
+comes from `r` and `h²` alone, takes the error from 13.5% to 1.4% without any
+off-block covariance.
+
+Run: `python experiments/assortative_mating.py`. Numbers are recorded in
+[`../docs/SCORE_DISTRIBUTION.md`](../docs/SCORE_DISTRIBUTION.md) and pinned by
+`tests/test_assortative_mating.py`.
