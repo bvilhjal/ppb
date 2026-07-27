@@ -149,9 +149,19 @@ utility, causality, or individual privacy.
 - **LD reference choice.** Test-set LD is exact; training-set LD is biased for
   data-derived weights; an independent same-population panel is unbiased
   (reproduced in `experiments/figure_s1.py`).
-- **Trait-specific discrepancy.** The paper reports Major Depression R² is
-  overestimated (~+4.5%), hypothesised to stem from assortative mating — a
-  modelling limitation, not a bug.
+- **Assortative mating inflates the true variance invisibly.** The paper reports
+  Major Depression R² overestimated (~+4.5%), hypothesised to stem from
+  assortative mating. That hypothesis is now **mechanically confirmed in
+  simulation**: AM correlates trait-increasing alleles at *unlinked* loci, and a
+  block-diagonal reference zeroes exactly those covariances, so the denominator
+  is too small. At a spouse correlation of 0.4 the R² comes out 1.34× the
+  individual-level truth, while full genome-wide LD reproduces it exactly. The
+  bias grows with how much of the trait a score captures (0.5% at 5% coverage,
+  15.6% at complete coverage), so real incomplete PGS carry a fraction of it.
+  (P3) is a rank-one correction requiring only the spouse correlation and
+  heritability — specified in [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md),
+  not implemented. The same blindness applies with the opposite sign to
+  stabilizing selection, which is not correctable this way.
 - **A percentile from `ppb.score_distribution` rests on a normal
   approximation, and the tail is where it fails.** (P1)-(P2) give the score's
   first two moments exactly; `D` gives no third. With a block-diagonal reference

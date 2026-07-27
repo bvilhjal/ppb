@@ -55,6 +55,50 @@ block's share and is the number to read before quoting a tail: a score with one
 dominating block, an APOE-sized effect, is a mixture whose tail is not normal.
 Percentile claims live precisely there.
 
+## Assortative mating moves the variance where `D` cannot see it
+
+AM correlates trait-increasing alleles at **unlinked** loci, inflating the
+additive genetic variance above its linkage-equilibrium value. A block-diagonal
+reference sets exactly those covariances to zero, so (P2) understates the
+variance — and since the same quadratic form is the estimator's denominator,
+`R²` comes out too high. This is the mechanism behind the Major Depression
+overestimate that [`LIMITATIONS.md`](LIMITATIONS.md) attributes to AM.
+
+Measured in `experiments/assortative_mating.py`, mating a population on its
+phenotype for ten generations at a spouse correlation of 0.4: the equilibrium
+variance inflation is **1.377**, against the classical `1/(1 − r h²)` = 1.360.
+The realized score SD is 18.35; the block-diagonal prediction is 15.87
+(0.865×), barely better than ignoring LD entirely (0.846×). PPB's `R²` then
+reads **1.336×** the individual-level truth, while full genome-wide LD
+reproduces it exactly.
+
+The distortion has structure, because AM correlates alleles *in proportion to
+their effects*. The missing covariance is approximately rank one along
+`v = sd ∘ beta`:
+
+**(P3) Assortative-mating variance correction** — *specified, not implemented*.
+
+    Var(S) ≈ w_sᵀ D_block w_s + c (w_sᵀ v)²,     c = (V_A − V_block) / V_LE²
+    V_A = V_LE / (1 − r h²)
+
+One scalar corrects every score on that reference. It matters that `c` is
+*predictable* rather than merely fittable: a correction you can only calibrate
+once you already own the genome-wide LD is no correction at all. Taking `r` and
+`h²` from the literature and both variances from allele frequencies and the
+block reference, `c` lands within 11% of the fitted value, which takes the
+causal score's error from **13.5% to 1.4%**.
+
+**How much reaches a real score.** The AM term is quadratic in `w_sᵀ v` while
+the linkage-equilibrium term is linear in the score's size, so bias grows with
+how much of the trait's effect-weighted variance a score captures: 0.5% at 5%
+coverage, 3.9% at 25%, 15.6% at 100%. Real PGS are far from complete, which
+bounds the damage. A score uncorrelated with the effect direction is not
+distorted at all, and (P3) correctly leaves it alone — the control that shows
+the structure is real and not generic variance inflation.
+
+Everything here is simulation, (P3) needs the causal effect *direction* rather
+than marginal estimates, and nothing in `ppb` applies it.
+
 ## Assumptions
 
 - **Hardy–Weinberg.** `Var(g) = 2f(1-f)(1+F)`. The `inbreeding` parameter

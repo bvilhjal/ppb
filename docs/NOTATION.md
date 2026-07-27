@@ -176,6 +176,7 @@ it to account.
 | (O6) | corrected signed numerator (experimental; not a registry contract) | `ppb.overlap.correct_overlap_numerator` | `tests/test_overlap.py` |
 | (P1) | score mean from allele frequencies | `ppb.score_distribution` | `tests/test_score_distribution.py` |
 | (P2) | score variance from frequencies and LD | `ppb.score_distribution` | `tests/test_score_distribution.py` |
+| (P3) | assortative-mating variance correction | *specified, not implemented* | `tests/test_assortative_mating.py` |
 | (G1) | genome-wide accumulation of (M1) | `scripts/regenerate_results.py` | `tests/test_regenerate_results.py` |
 | (G2) | delete-one-group block jackknife | `ppb.diagnostics.r2_block_jackknife` | `tests/test_diagnostics.py` |
 | (G3) | block-sign-flip null | `ppb.diagnostics.sign_flip_null` | `tests/test_diagnostics.py` |
