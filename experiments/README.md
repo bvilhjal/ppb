@@ -366,3 +366,17 @@ So PPB estimates each method's accuracy to ~0.001 and ranks them correctly
 without individual-level data. LR8 at 99% variance retention is near-exact; more
 aggressive compression (95%) introduces a small, expected bias. Encoded as
 assertions in `tests/test_benchmark.py`.
+
+## `score_distribution.py` — benchmark of (P1)–(P2)
+
+How accurate are the predicted score moments, and when does the normal
+percentile stop being trustworthy? Four measurements against simulated
+individuals: moment accuracy across LD strength and score density (SD within
+0.2%; ignoring LD costs up to 13.8%), tail calibration as one variant takes over
+the variance (the nominal 1% tail holds 5.4% of the cohort at
+`max_variance_share = 0.68`), a structured cohort (pooling deflates the SD by
+4.4%, `inbreeding` recovers half), and cost (0.43× an `evaluate`).
+
+Run: `python experiments/score_distribution.py`. Numbers are recorded in
+[`../docs/SCORE_DISTRIBUTION.md`](../docs/SCORE_DISTRIBUTION.md) and pinned by
+`tests/test_score_distribution.py`.

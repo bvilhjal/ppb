@@ -13,6 +13,9 @@ from ppb.harmonize import VariantTable
 from ppb.ld_backend import BlockDiagonalLD
 from ppb.simulate import _diploid_dosages
 
+from experiments.score_distribution import (  # noqa: E402
+    moment_accuracy, structured_cohort, tail_calibration)
+
 
 def _table(m, *, a1="A", a2="G"):
     return VariantTable(
@@ -180,3 +183,50 @@ def test_result_round_trips_through_a_dict():
     payload = dist.to_dict()
     assert payload["sd"] == dist.sd
     assert ScoreDistribution(**payload).mean == dist.mean
+
+
+# ---------------------------------------------------------------------------
+# The benchmark's claims (experiments/score_distribution.py), pinned.
+
+
+def test_moments_are_accurate_across_ld_and_density_regimes():
+    """Every regime predicts the realized SD to under 1%, and LD is needed."""
+    rng = np.random.default_rng(0)
+    rows = moment_accuracy(rng, n=20_000)
+    assert len(rows) == 8
+    for label, mean_err, sd_err, no_ld_err in rows:
+        assert mean_err < 0.02, f"{label}: mean off by {mean_err:.3f} SD"
+        assert sd_err < 1.0, f"{label}: sd off by {sd_err:.2f}%"
+    # Dropping LD is not a free approximation: it costs > 5% somewhere.
+    assert max(r[3] for r in rows) > 5.0
+
+
+def test_tail_error_is_monotone_in_the_variance_share():
+    """max_variance_share is a calibrated warning, not a vague one.
+
+    The nominal 1% tail is accurate while the variance is spread and degrades
+    as one block takes over -- so a caller can act on the number.
+    """
+    rng = np.random.default_rng(2)
+    rows = tail_calibration(rng, n=60_000, m=400, block=20)
+    shares = [r[1] for r in rows]
+    excess = [r[2] for r in rows]                 # realized % above nominal 1%
+
+    assert shares[0] < 0.2 and shares[-1] > 0.6, "the sweep must span the regime"
+    assert abs(excess[0] - 1.0) < 0.25, "spread variance should be calibrated"
+    assert excess[-1] > 2.5, "a dominated score should overflow its nominal tail"
+    # Deeper tails fail earlier: at the worst share, the 0.1% tail is off by
+    # a larger factor than the 1% tail.
+    assert rows[-1][3] / 0.1 > rows[-1][2] / 1.0
+
+
+def test_structure_deflates_the_predicted_spread():
+    """HWE on a pooled cohort understates the SD; F recovers part of it."""
+    rng = np.random.default_rng(1)
+    rows, realized = structured_cohort(rng, n=30_000, fst=0.05)
+    (_, _, uncorrected), (_, _, corrected), (_, _, homogeneous) = rows
+
+    assert uncorrected < -1.0, "pooling two populations must inflate the truth"
+    assert corrected > uncorrected, "F must move the prediction toward the truth"
+    assert abs(homogeneous) < 0.5, "a homogeneous cohort is predicted exactly"
+    assert realized > 0.0
