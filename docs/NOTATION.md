@@ -18,7 +18,8 @@ label is stable when a document grows and unambiguous when cited from elsewhere:
 |---|---|---|
 | **M** | [`METHOD.md`](METHOD.md) | the core estimator and its conventions |
 | **X** | [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | the cross-ancestry application |
-| **O** | [`OVERLAP.md`](OVERLAP.md) | training/target shared-noise correction |
+| **O** | [`OVERLAP.md`](OVERLAP.md) | training/target shared-noise detection |
+| **P** | [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md) | the score's distribution in a population |
 | **G** | [`REAL_DATA.md`](REAL_DATA.md) | genome-wide accumulation and block diagnostics |
 | **R** | [`../results/schema.md`](../results/schema.md) | the results registry |
 | **E** | [`../experiments/README.md`](../experiments/README.md) | simulation demonstrations |
@@ -164,6 +165,8 @@ it to account.
 | (O4) | stochastic basis (Hutchinson GDF) | `ppb.overlap.estimate_overlap_basis` | `tests/test_overlap.py` |
 | (O5) | exact-support numerator and total basis | `ppb.overlap.fit_overlap` | `tests/test_overlap.py` |
 | (O6) | corrected signed numerator (experimental; not a registry contract) | `ppb.overlap.correct_overlap_numerator` | `tests/test_overlap.py` |
+| (P1) | score mean from allele frequencies | `ppb.score_distribution` | `tests/test_score_distribution.py` |
+| (P2) | score variance from frequencies and LD | `ppb.score_distribution` | `tests/test_score_distribution.py` |
 | (G1) | genome-wide accumulation of (M1) | `scripts/regenerate_results.py` | `tests/test_regenerate_results.py` |
 | (G2) | delete-one-group block jackknife | `ppb.diagnostics.r2_block_jackknife` | `tests/test_diagnostics.py` |
 | (G3) | block-sign-flip null | `ppb.diagnostics.sign_flip_null` | `tests/test_diagnostics.py` |
