@@ -68,6 +68,14 @@ All of these are on standardized scales unless stated otherwise (§3).
 | `F_ST` | population differentiation between A and B |
 | `f_j`, `sd_j` | allele frequency and genotype standard deviation of variant `j` |
 
+**Table 4a. An individual's score** ([`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md)).
+
+| symbol | meaning |
+|---|---|
+| `g_j` | one individual's dosage at variant `j`, in {0, 1, 2} |
+| `S = Σ_j w_j g_j` | that individual's raw polygenic score |
+| `F` | Wright's inbreeding coefficient: `Var(g) = 2f(1−f)(1+F)` |
+
 **Table 4. LD blocks and their storage.**
 
 | symbol | meaning |
@@ -124,11 +132,12 @@ three failing.
 
 ## 4. Where a symbol is overloaded
 
-Three collisions survive, because the alternative is renaming a public interface
+Four collisions survive, because the alternative is renaming a public interface
 for the sake of a table. They are scoped, and they do not co-occur.
 
 | symbol | meaning 1 | meaning 2 | how to tell |
 |---|---|---|---|
+| `F` | Wright's inbreeding coefficient (Table 4a) | `F_ST`, differentiation between A and B (Table 3) | `F_ST` always carries its subscript. They are related but not interchangeable: pooling two populations `F_ST` apart induces an `F` of about that size, which is why `inbreeding=fst` is the natural first guess for a pooled cohort — and why it only recovers half the error, since `F` does not correct `D` |
 | `z` | the marginal-correlation vector (Table 1) | `sign_flip_null.z`, the block-coherence statistic (G3) | the statistic is a scalar and always appears as a named field |
 | `r` | marginal correlation of one variant | retained rank of a low-rank factor | context: `r_j` is per-variant, `r` alone is a rank |
 | `n` | per-variant sample size `n_j` | number of blocks, `n_blocks` | `n_blocks` is always spelled out |
