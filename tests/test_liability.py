@@ -81,16 +81,27 @@ def _threshold_model(rng, n, r, k):
     return float(np.corrcoef(score[idx], case[idx].astype(float))[0, 1] ** 2)
 
 
-@pytest.mark.parametrize("k", [0.5, 0.2, 0.05])
-def test_it_recovers_the_liability_r2_that_generated_the_data(k):
-    """The regime PPB operates in: the registry's binary R² are 0.025-0.044."""
-    rng = np.random.default_rng(abs(hash(("liab", k))) % 2**32)
+@pytest.mark.parametrize("k,seed", [(0.5, 11), (0.2, 12), (0.05, 13)])
+def test_it_recovers_the_liability_r2_that_generated_the_data(k, seed):
+    """The regime PPB operates in: the registry's binary R² are 0.025-0.044.
+
+    The seed is a literal. ``hash()`` of anything containing a string is
+    randomized per interpreter, so seeding from one makes a Monte Carlo test
+    silently non-reproducible -- it passed locally and failed in CI.
+    """
+    rng = np.random.default_rng(seed)
     r = 0.2                                        # liability R² = 0.04
     observed = _threshold_model(rng, 800_000, r, k)
     recovered = liability_r2(observed, k)
     assert recovered == pytest.approx(r * r, rel=0.12)
-    # ...and it is a real correction, not a no-op, wherever K is far from 0.5.
-    if k <= 0.2:
+
+    # Demanding that the rescaling *improve* on the raw value only means
+    # something where the rescaling does something. The factor crosses 1 near
+    # K = 0.1 (1.57 at K = 0.5, 1.31 at 0.2, but 0.85 at 0.05), so near the
+    # crossing the correction is a near-no-op and Monte Carlo noise decides the
+    # comparison. Gate the claim on the factor, not on K.
+    factor = observed_to_liability_factor(k)
+    if abs(factor - 1.0) > 0.25:
         assert abs(observed - r * r) > abs(recovered - r * r)
 
 
