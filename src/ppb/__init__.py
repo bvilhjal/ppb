@@ -21,6 +21,7 @@ from .diagnostics import (
 )
 from .estimator import mse, r2
 from .evaluate import EvaluationResult, evaluate
+from .ldscore import LDScoreFit, ldscore_regression
 from .liability import liability_r2, observed_to_liability_factor
 from .score_distribution import ScoreDistribution, score_distribution
 from .harmonize import HarmonizeReport, VariantTable, harmonize_to
@@ -61,6 +62,7 @@ __all__ = [
     "VariantTable", "harmonize_to", "HarmonizeReport",
     "evaluate", "EvaluationResult",
     "liability_r2", "observed_to_liability_factor",
+    "ldscore_regression", "LDScoreFit",
     "score_distribution", "ScoreDistribution",
     "read_weights", "read_bundle", "write_bundle",
     "read_ldref", "write_ldref",
