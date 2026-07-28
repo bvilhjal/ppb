@@ -87,11 +87,16 @@ utility, causality, or individual privacy.
   and records `metrics.n_variants_scored`. The GIANT/GLGC demonstrations retain
   only 88.6–92.1% of score weights, so those results apply to restricted scores,
   not the complete PGS Catalog scores.
-- **Binary-trait output is not liability-scale R².** The beta/SE-to-correlation
-  conversion for case/control GWAS yields a standardized summary-statistic
-  approximation whose scale depends on the supplied effective sample size and
-  regression model. It is useful as a diagnostic or within-protocol comparison,
-  but it is not a calibrated liability-scale accuracy estimate.
+- **Binary-trait output is on the observed scale at a case fraction of one
+  half**, because `standardized_marginal` is given an effective sample size. That
+  is neither population accuracy nor liability accuracy. `ppb.liability_r2`
+  applies the standard rescaling (M6), which recovers the liability-scale value
+  to within ~8% across prevalences in the registry's R² range (0.025–0.044) and
+  degrades for large R² on rare traits — 17% at `K = 0.01, R² = 0.16`. It is a
+  calibrated **scale**, not a calibrated estimate: it is a first-order result
+  applied on top of the beta/SE-to-correlation approximation, and it needs a
+  population prevalence the summary statistics do not contain. No registry
+  record carries a liability value yet; the packs remain on the observed scale.
 - **PUMAS is a dense Gaussian extension, not a bit-exact reimplementation.** Each
   pseudo-training draw is now refitted and evaluated on its paired
   pseudo-validation draw using the signal-dependent full-LD moment covariance.

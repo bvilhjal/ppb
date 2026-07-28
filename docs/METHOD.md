@@ -413,6 +413,55 @@ only when the weights carry an absolute scale. Ordinary PGS Catalog weights are
 in trait units and theirs is not; `EvaluationResult.mse_interpretable` records
 which case a given evaluation is in.
 
+### Binary traits are on a third scale again
+
+For a case/control GWAS, `standardized_marginal` is handed an **effective**
+sample size, `4/(1/n_case + 1/n_ctrl)` — the size of a balanced study with
+equivalent power. (M1) then approximates R² on the observed 0/1 scale **at a
+case fraction of one half**, which is neither the accuracy in the population nor
+the accuracy on the underlying liability. Converting to the liability scale is
+the standard rescaling of [Lee et al.
+2012](https://doi.org/10.1002/gepi.21614):
+
+**(M6) Observed-to-liability rescaling.**
+
+    R²_liability = R²_observed · K²(1−K)² / (φ(t)² P(1−P)),    t = Φ⁻¹(1−K)
+
+`K` is the population prevalence and `P` the case fraction the observed
+statistic was computed at — one half here, and passing a study's true case
+fraction instead would describe a statistic PPB did not compute. Implemented as
+`ppb.liability_r2`.
+
+The factor is not a small adjustment. At `K = P = 0.5` it is exactly **π/2**,
+because dichotomizing a continuous liability discards information and the
+observed scale *understates*. At `K = 0.01, P = 0.5` it is **0.55**, because a
+balanced sample of a rare disease is enormously enriched and the observed scale
+*overstates*.
+
+**Table 2. What (M6) recovers**, from a liability-threshold simulation that
+ascertains a balanced case/control sample exactly as a study would. The
+liability-scale R² is known by construction.
+
+| `K` | true | observed | rescaled | rescaled error |
+|---:|---:|---:|---:|---:|
+| 0.50 | 0.040 | 0.025 | 0.039 | 2.5% |
+| 0.20 | 0.040 | 0.031 | 0.041 | 2.5% |
+| 0.05 | 0.040 | 0.046 | 0.039 | 3.0% |
+| 0.01 | 0.040 | 0.067 | 0.037 | 7.6% |
+| 0.01 | 0.160 | 0.239 | 0.132 | 17.4% |
+
+(M6) is a **first-order result for small R²**, applied to a statistic that is
+itself an approximation, so the two stack. In the regime this registry occupies
+— binary R² of 0.025–0.044 — it lands within about 8% across every prevalence
+tested. The last row is the honest boundary: a large R² on a rare trait is still
+much better rescaled than raw, and is not calibrated.
+
+**Prevalence is external knowledge**, absent from the summary statistics and
+specific to trait *and population*. (M6) is monotone in it, so a liability-scale
+number carries whatever uncertainty the assumed `K` does — and for a
+cross-ancestry evaluation it is a second place, alongside `z` and `D`, where the
+target population must be named.
+
 ## 6. Numerical tolerance
 
 - **Equation-level (exact D, synthetic data):** summary-statistic R^2 must equal
