@@ -165,6 +165,7 @@ it to account.
 | (M3) | block-diagonal accumulation `wᵀDw = Σ_b w_bᵀ D_b w_b` | `ppb.ld_backend.BlockDiagonalLD` | `tests/test_ld_backend.py` |
 | (M4) | `z_j = t_j / √(t_j² + n_j − 2)` | `ppb.sumstats.standardized_marginal` | `tests/test_sumstats.py` |
 | (M5) | `MSE = var_y − 2wᵀz + wᵀDw` | `ppb.estimator.mse` | `tests/test_estimator.py` |
+| (M6) | observed-to-liability rescaling for binary traits | `ppb.liability_r2` | `tests/test_liability.py` |
 | (X1) | (M1) with target-ancestry moments `z_B`, `D_B` | `ppb.estimator.r2` (same code) | `tests/test_cross_ancestry.py` |
 | (X2) | gauge self-consistency; `w_B,j = w_A,j · sd_B,j / sd_A,j` | `ppb.evaluate` (`weight_scale`) | `tests/test_cli.py` |
 | (X3) | finite-sample numerator bias `≈ wᵀD_Bw / N_B` | *not implemented* | — |
