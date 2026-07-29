@@ -130,10 +130,16 @@ utility, causality, or individual privacy.
   **GIANT** targets come in 1.5–2× low, implying a `z` deflation of 1.22–1.44 —
   the right size for GIANT's genomic control, and not explained by score support
   or by the cohort difference (`REAL_DATA.md`, Table 3).
-  PPB performs **no diagnostic** on the scale of its input `z` and cannot detect
-  a mis-scaled target. Reported values should be read as conditional on the
-  source study's processing; a mean-χ²/LD-score or heritability sanity check
-  against the target is the natural guard and is not implemented.
+  The guard now exists: `ppb.ldscore_regression` fits (C2) from the target's own
+  `χ²` and the shipped reference's LD scores, and its intercept implies the `z`
+  scale (C3). In simulation it recovers a genomic-control `λ` to within 3% and
+  produces no false positive at the null. It fails closed — no verdict without a
+  block jackknife, and none when the intercept is not two standard errors below
+  1 — and an intercept below 1 is conservative evidence of over-correction, since
+  nothing pushes it down and block-diagonal LD scores bias it up. See
+  [`CALIBRATION.md`](CALIBRATION.md). **It has not been run on the real
+  targets**, and no registry record carries a calibration; until then, reported
+  values remain conditional on the source study's processing.
 - **The real-data path pairs an adjusted `z` with an unadjusted `D`.**
   [`METHOD.md`](METHOD.md) §4 specifies forming *both* `z` and `D` from
   covariate-adjusted genotypes. Real GWAS `z` are partial correlations (adjusted

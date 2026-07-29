@@ -20,6 +20,7 @@ label is stable when a document grows and unambiguous when cited from elsewhere:
 | **X** | [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | the cross-ancestry application |
 | **O** | [`OVERLAP.md`](OVERLAP.md) | training/target shared-noise detection |
 | **P** | [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md) | the score's distribution in a population |
+| **C** | [`CALIBRATION.md`](CALIBRATION.md) | whether the target `z` is on the assumed scale |
 | **G** | [`REAL_DATA.md`](REAL_DATA.md) | genome-wide accumulation and block diagnostics |
 | **R** | [`../results/schema.md`](../results/schema.md) | the results registry |
 | **E** | [`../experiments/README.md`](../experiments/README.md) | simulation demonstrations |
@@ -178,6 +179,9 @@ it to account.
 | (P1) | score mean from allele frequencies | `ppb.score_distribution` | `tests/test_score_distribution.py` |
 | (P2) | score variance from frequencies and LD | `ppb.score_distribution` | `tests/test_score_distribution.py` |
 | (P3) | assortative-mating variance correction | *specified, not implemented* | `tests/test_assortative_mating.py` |
+| (C1) | LD score `l_j = Σ_k D_jk²` | `LDBackend.ld_scores` | `tests/test_ldscore.py` |
+| (C2) | LD-score regression | `ppb.ldscore_regression` | `tests/test_ldscore.py` |
+| (C3) | implied `z` scale from the intercept | `ppb.ldscore_regression` | `tests/test_ldscore.py` |
 | (G1) | genome-wide accumulation of (M1) | `scripts/regenerate_results.py` | `tests/test_regenerate_results.py` |
 | (G2) | delete-one-group block jackknife | `ppb.diagnostics.r2_block_jackknife` | `tests/test_diagnostics.py` |
 | (G3) | block-sign-flip null | `ppb.diagnostics.sign_flip_null` | `tests/test_diagnostics.py` |

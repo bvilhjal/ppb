@@ -395,3 +395,17 @@ off-block covariance.
 Run: `python experiments/assortative_mating.py`. Numbers are recorded in
 [`../docs/SCORE_DISTRIBUTION.md`](../docs/SCORE_DISTRIBUTION.md) and pinned by
 `tests/test_assortative_mating.py`.
+
+## `z_calibration.py` — detecting a mis-scaled target `z`
+
+The largest measured error in the project is the scale of the input `z`, not the
+modelling: GIANT targets report 1.5–2× low. This asks whether LD-score
+regression (C2) can find it. On 18,000 simulated variants with the project's own
+block-diagonal LD scores, the intercept is **0.972 ± 0.041** at the null — no
+fabricated deflation — and recovers an applied genomic-control `λ` to within 3%
+across 1.3, 1.6 and 2.0. Consistency across variant counts shows the intercept
+needs ~10⁵ variants, which is why the fit refuses a verdict without a jackknife.
+
+Run: `python experiments/z_calibration.py`. Numbers are recorded in
+[`../docs/CALIBRATION.md`](../docs/CALIBRATION.md) and pinned by
+`tests/test_ldscore.py`.

@@ -32,6 +32,15 @@ class LDBackend:
 
     m: int
 
+    def ld_scores(self) -> np.ndarray:  # pragma: no cover - interface
+        """Per-variant LD score ``l_j = sum_k D_jk^2`` (C1).
+
+        The diagonal is included, so ``l_j >= 1`` for a correlation matrix. This
+        is the regressor in LD-score regression (C2), and it is a property of the
+        reference alone -- no summary statistics enter.
+        """
+        raise NotImplementedError
+
     def quad(self, w) -> float:  # pragma: no cover - interface
         raise NotImplementedError
 
@@ -56,6 +65,9 @@ class DenseLD(LDBackend):
     def quad(self, w) -> float:
         w = self._check(w)
         return float(dense_quad(self.D, w))
+
+    def ld_scores(self) -> np.ndarray:
+        return np.einsum("ij,ij->i", self.D, self.D)
 
 
 class LowRankLD(LDBackend):
@@ -88,6 +100,13 @@ class LowRankLD(LDBackend):
     def quad(self, w) -> float:
         w = self._check(w)
         return float(lowrank_quad_par(self.U, w))
+
+    def ld_scores(self) -> np.ndarray:
+        # D = U U^T, so sum_k (u_j.u_k)^2 = u_j^T (U^T U) u_j -- O(m r^2), never
+        # forming D. Exact for the factor, hence approximate for the LD it stands
+        # in for, by exactly the low-rank truncation error.
+        gram = self.U.T @ self.U
+        return np.einsum("ij,jk,ik->i", self.U, gram, self.U)
 
 
 class BlockDiagonalLD(LDBackend):
@@ -132,6 +151,18 @@ class BlockDiagonalLD(LDBackend):
     def quad(self, w) -> float:
         return float(self.block_quads(w).sum())
 
+    def ld_scores(self) -> np.ndarray:
+        """Off-block entries are zero, so every LD score is a within-block sum.
+
+        That is a real restriction and not a rounding one: a variant's true LD
+        score includes long-range and cross-chromosome terms this reference
+        defines away, so these are systematically *low*. See ``docs/CALIBRATION.md``.
+        """
+        out = np.zeros(self.m, dtype=np.float64)
+        for backend, idx in self.blocks:
+            out[idx] = backend.ld_scores()
+        return out
+
     def block_quads(self, w) -> np.ndarray:
         """Per-block ``w[idx_b]^T D_b w[idx_b]``, in block order.
 
@@ -161,6 +192,22 @@ class BlockDiagonalLD(LDBackend):
                     "LR8 for this block.")
             out[b] = qb
         return out
+
+
+def _int8_row_sq_sums(D8, chunk=512):
+    """Row sums of squared dequantised entries, without materialising floats.
+
+    The largest block in the shipped reference is 17,304 variants; a float64 copy
+    would be 2.4 GB. Squares accumulate in int64 instead (127^2 per entry), and
+    the rows are walked in chunks.
+    """
+    D8 = np.asarray(D8)
+    m = D8.shape[0]
+    out = np.empty(m, dtype=np.float64)
+    for start in range(0, m, chunk):
+        block = D8[start:start + chunk].astype(np.int32)
+        out[start:start + chunk] = np.einsum("ij,ij->i", block, block)
+    return out / (_Q8 * _Q8)
 
 
 def _clip_int8(a):
@@ -225,6 +272,11 @@ class LowRankLDInt8(LDBackend):
         rw = np.ascontiguousarray(self.rowscale * w)
         return float(lowrank_quad_int8(self.U8, rw) * self.scale * self.scale)
 
+    def ld_scores(self) -> np.ndarray:
+        u = np.asarray(self.U8, dtype=np.float64) * self.scale
+        gram = u.T @ u
+        return np.einsum("ij,jk,ik->i", u, gram, u)
+
 
 class DenseLDInt8(LDBackend):
     """int8-quantised dense LD (D8): ``D8[i, j] = round(corr * 127)``.
@@ -254,6 +306,9 @@ class DenseLDInt8(LDBackend):
     def quad(self, w) -> float:
         w = self._check(w)
         return float(dense_quad_int8(self.D8, w) / _Q8)
+
+    def ld_scores(self) -> np.ndarray:
+        return _int8_row_sq_sums(self.D8)
 
     def matvec(self, w) -> np.ndarray:
         """``D w`` for the dequantised block."""
@@ -342,6 +397,9 @@ class PackedDenseLDInt8(LDBackend):
     def quad(self, w) -> float:
         w = self._check(w)
         return float(packed_quad_int8(self.p8, w, self.m) / _Q8)
+
+    def ld_scores(self) -> np.ndarray:
+        return _int8_row_sq_sums(self.to_dense_int8())
 
     def matvec(self, w) -> np.ndarray:
         """``D w`` for the dequantised block."""
