@@ -86,7 +86,7 @@ All of these are on standardized scales unless stated otherwise (§3).
 | `u_b = w_bᵀ z_b` | that block's contribution to the numerator |
 | `v_b = w_bᵀ D_b w_b` | that block's contribution to the denominator |
 | D8 | int8 dense block: `round(corr × 127)`, dequantised by `/127` |
-| LR8 | int8 low-rank factor `U` with `D_b ≈ U Uᵀ`; PSD by construction |
+| LR8 | int8 low-rank factor `U` with `D_b ≈ U Uᵀ`; PSD by construction (ldpred3's representation — not implemented in ppb, see `METHOD.md` §2) |
 | `ρ` | rank retained by a low-rank factor |
 | `λ_min` | smallest eigenvalue of a block; negative means the block is not PSD |
 
@@ -166,29 +166,29 @@ it to account.
 | (M3) | block-diagonal accumulation `wᵀDw = Σ_b w_bᵀ D_b w_b` | `ppb.ld_backend.BlockDiagonalLD` | `tests/test_ld_backend.py` |
 | (M4) | `z_j = t_j / √(t_j² + n_j − 2)` | `ppb.sumstats.standardized_marginal` | `tests/test_sumstats.py` |
 | (M5) | `MSE = var_y − 2wᵀz + wᵀDw` | `ppb.estimator.mse` | `tests/test_estimator.py` |
-| (M6) | observed-to-liability rescaling for binary traits | `ppb.liability_r2` | `tests/test_liability.py` |
+| (M6) | observed-to-liability rescaling for binary traits | *not implemented* (documented formula; implementation removed 2026-07-31) | — |
 | (X1) | (M1) with target-ancestry moments `z_B`, `D_B` | `ppb.estimator.r2` (same code) | `tests/test_cross_ancestry.py` |
 | (X2) | gauge self-consistency; `w_B,j = w_A,j · sd_B,j / sd_A,j` | `ppb.evaluate` (`weight_scale`) | `tests/test_cli.py` |
 | (X3) | finite-sample numerator bias `≈ wᵀD_Bw / N_B` | *not implemented* | — |
-| (O1) | shared-noise block model | `ppb.overlap.fit_overlap` | `tests/test_overlap.py` |
-| (O2) | generalized Deming objective | `ppb.overlap._profile_eiv` | `tests/test_overlap.py` |
+| (O1) | shared-noise block model | `experiments/overlap_detection.py` (`fit_overlap`) | `tests/test_overlap.py` |
+| (O2) | generalized Deming objective | `experiments/overlap_detection.py` (`_profile_eiv`) | `tests/test_overlap.py` |
 | (O3) | linear-trainer basis `q_b = tr(Φ_bᵀ K_b)` | caller-supplied `OverlapBasis` | `tests/test_overlap.py` |
-| (O4) | stochastic basis (Hutchinson GDF) | `ppb.overlap.estimate_overlap_basis` | `tests/test_overlap.py` |
-| (O5) | exact-support numerator and total basis | `ppb.overlap.fit_overlap` | `tests/test_overlap.py` |
-| (O6) | corrected signed numerator (experimental; not a registry contract) | `ppb.overlap.correct_overlap_numerator` | `tests/test_overlap.py` |
+| (O4) | stochastic basis (Hutchinson GDF) | `experiments/overlap_detection.py` (`estimate_overlap_basis`) | `tests/test_overlap.py` |
+| (O5) | exact-support numerator and total basis | `experiments/overlap_detection.py` (`fit_overlap`) | `tests/test_overlap.py` |
+| (O6) | corrected signed numerator (experimental; not a registry contract) | `experiments/overlap_detection.py` (`correct_overlap_numerator`) | `tests/test_overlap.py` |
 | (P1) | score mean from allele frequencies | `ppb.score_distribution` | `tests/test_score_distribution.py` |
 | (P2) | score variance from frequencies and LD | `ppb.score_distribution` | `tests/test_score_distribution.py` |
 | (P3) | assortative-mating variance correction | *specified, not implemented* | `tests/test_assortative_mating.py` |
 | (C1) | LD score `l_j = Σ_k D_jk²` | `LDBackend.ld_scores` | `tests/test_ldscore.py` |
-| (C2) | LD-score regression | `ppb.ldscore_regression` | `tests/test_ldscore.py` |
-| (C3) | implied `z` scale from the intercept | `ppb.ldscore_regression` | `tests/test_ldscore.py` |
+| (C2) | LD-score regression | `experiments/z_calibration.py` (`ldscore_regression`) | `tests/test_ldscore.py` |
+| (C3) | implied `z` scale from the intercept | `experiments/z_calibration.py` (`ldscore_regression`) | `tests/test_ldscore.py` |
 | (G1) | genome-wide accumulation of (M1) | `scripts/regenerate_results.py` | `tests/test_regenerate_results.py` |
 | (G2) | delete-one-group block jackknife | `ppb.diagnostics.r2_block_jackknife` | `tests/test_diagnostics.py` |
 | (G3) | block-sign-flip null | `ppb.diagnostics.sign_flip_null` | `tests/test_diagnostics.py` |
 | (G4) | trait-swap negative control | `scripts/negative_controls.py` | `tests/test_negative_controls.py` |
 | (G5) | external check against published individual-level accuracy | `scripts/anchor_validation.py` | `tests/test_anchor_validation.py` |
 | (R1) | registry score metric | `scripts/regenerate_results.py` | `tests/test_results_registry.py` |
-| (E1) | PUMAS moment covariance `V = var_y D + z zᵀ` | `ppb.pumas` | `tests/test_pumas.py` |
+| (E1) | PUMAS moment covariance `V = var_y D + z zᵀ` | `experiments/pumas_agreement.py` | `tests/test_pumas.py` |
 
 (X3) is the one numbered result with no implementation. It is a stated v0.1
 completion criterion, its constant has been verified by simulation, and it is

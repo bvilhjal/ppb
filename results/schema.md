@@ -95,7 +95,9 @@ fixed scale, not an unbounded significance statistic. Neither this nor the
 jackknife detects a uniformly mis-scaled `z`: observed and null move together
 (`docs/LIMITATIONS.md`).
 
-**No correction is published.** `ppb.overlap` can still fit one experimentally,
+**No correction is published.** The experimental apparatus in
+[`../experiments/overlap_detection.py`](../experiments/overlap_detection.py)
+can still fit one,
 but every correction needs an independent reference GWAS of the same trait — and
 given one, evaluating the score against it is unbiased in a single line. The
 condition that makes a correction valid is the condition that makes it

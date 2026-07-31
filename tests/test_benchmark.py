@@ -80,6 +80,6 @@ def test_benchmark_concordance_with_individual_level():
     assert _best_method(records, "exact", "true") == "causal"
     assert _best_method(records, "exact", "ppb") == "causal"
 
-    # LR8 at 99% variance retention stays high-concordance.
+    # Low-rank at 99% variance retention stays high-concordance.
     p99, s99, _ = _concordance(records, "lr8@0.99")
     assert p99 > 0.88 and s99 > 0.82

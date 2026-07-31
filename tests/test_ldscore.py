@@ -9,12 +9,11 @@ detector that cannot do the second is worthless.
 import numpy as np
 import pytest
 
-from ppb import ldscore_regression
 from ppb.ld_backend import (
     BlockDiagonalLD, DenseLD, DenseLDInt8, LowRankLD)
 
 from experiments.z_calibration import (  # noqa: E402
-    consistency, genomic_control_sweep)
+    consistency, genomic_control_sweep, ldscore_regression)
 
 
 # --------------------------------------------------------------------------

@@ -3,10 +3,10 @@
 The estimator is agnostic to how ``D`` is stored -- it only calls ``.quad(w)``.
 
 - :class:`DenseLD`   -- an explicit dense ``D`` (reference / exact path).
-- :class:`LowRankLD` -- a low-rank factor ``R ~= U U^T`` (the LR8 idea; ``U`` may
-  later be int8-quantised). PSD by construction, so ``w^T D w >= 0`` always.
+- :class:`LowRankLD` -- a low-rank factor ``R ~= U U^T``. PSD by construction,
+  so ``w^T D w >= 0`` always.
 
-Block-diagonal composition and the int8 D8/LR8 on-disk store (reusing ldpred3's
+Block-diagonal composition and the int8 D8 on-disk store (reusing ldpred3's
 representation) build on these next.
 """
 
@@ -18,7 +18,6 @@ from ._kernels import (
     dense_matvec_int8,
     dense_quad,
     dense_quad_int8,
-    lowrank_quad_int8,
     lowrank_quad_par,
     packed_matvec_int8,
     packed_quad_int8,
@@ -116,7 +115,7 @@ class BlockDiagonalLD(LDBackend):
     :class:`LDBackend` over the block and ``idx`` are that block's variant
     positions in the global length-``m`` vector. This mirrors ldpred3's
     recombination-aware block LD: off-block covariance is taken to be zero, and
-    each block may independently be dense (D8) or low-rank (LR8).
+    each block may independently be dense (D8) or low-rank.
     """
 
     def __init__(self, blocks):
@@ -189,7 +188,7 @@ class BlockDiagonalLD(LDBackend):
                     f"block {b} has w^T D_b w = {qb!r} < 0: the LD block is not "
                     "positive semi-definite, and summing it would understate "
                     "w^T D w (inflating R^2). Use a PSD representation such as "
-                    "LR8 for this block.")
+                    "a low-rank factor for this block.")
             out[b] = qb
         return out
 
@@ -215,67 +214,6 @@ def _clip_int8(a):
     q = np.rint(a).astype(np.int64)
     q = np.clip(q, -127, 127)
     return q.astype(np.int8)
-
-
-class LowRankLDInt8(LDBackend):
-    """int8-quantised low-rank LD (LR8): ``R ~= U U^T`` with ``U`` stored as int8.
-
-    ``U8`` (m x r) holds ``round(U / scale)`` and ``scale`` the global step, so
-    ``U ~= U8 * scale``. Per-row scales restore the exact unit LD diagonal that
-    quantisation perturbs. ~4x smaller than a float32 factor, ~8x vs float64, and
-    still PSD, so ``quad(w) = ||U^T w||^2 >= 0``.
-
-    **Precondition: the represented matrix has a unit diagonal** (an LD /
-    correlation matrix). Rows are re-normalized on every ``quad``, so a factor
-    whose rows are not unit-norm describes a *different* operator here than it
-    does under :class:`LowRankLD` -- :func:`quantize_lowrank` enforces this.
-
-    Note that ``quad`` is *invariant* to ``scale``: the row normalisation divides
-    it back out, so it cancels exactly against the ``scale^2`` refolded at the
-    end. ``scale`` is kept because it dequantises the stored factor itself
-    (``U ~= U8 * scale``, needed by anything that reads ``U8`` directly), not
-    because the quadratic form needs it.
-    """
-
-    def __init__(self, U8, scale):
-        U8 = np.ascontiguousarray(np.asarray(U8, dtype=np.int8))
-        if U8.ndim != 2:
-            raise ValueError(f"U8 must be 2-D (m, r); got {U8.shape}")
-        if not 1 <= U8.shape[1] <= U8.shape[0]:
-            raise ValueError(
-                f"rank must be in [1, m]; got U8.shape={U8.shape}")
-        if np.any(U8 == -128):
-            raise ValueError("int8 factor must not contain -128")
-        if not np.isfinite(scale) or scale <= 0:
-            raise ValueError("scale must be finite and > 0")
-        empty = np.flatnonzero(~(U8 != 0).any(axis=1))
-        if empty.size:
-            raise ValueError(
-                f"U8 has {empty.size} all-zero row(s) (e.g. index "
-                f"{int(empty[0])}); those variants would contribute nothing "
-                "to w^T D w")
-        self.U8 = U8
-        self.scale = float(scale)
-        self.m = U8.shape[0]
-        self.rank = U8.shape[1]
-        row_norm = np.sqrt(
-            (np.asarray(U8, np.float64) * self.scale) ** 2
-            @ np.ones(self.rank))
-        self.rowscale = np.ascontiguousarray(1.0 / row_norm)   # -> unit-norm rows
-
-    @property
-    def nbytes(self) -> int:
-        return int(self.U8.nbytes)
-
-    def quad(self, w) -> float:
-        w = self._check(w)
-        rw = np.ascontiguousarray(self.rowscale * w)
-        return float(lowrank_quad_int8(self.U8, rw) * self.scale * self.scale)
-
-    def ld_scores(self) -> np.ndarray:
-        u = np.asarray(self.U8, dtype=np.float64) * self.scale
-        gram = u.T @ u
-        return np.einsum("ij,jk,ik->i", u, gram, u)
 
 
 class DenseLDInt8(LDBackend):
@@ -461,30 +399,6 @@ def min_eig_upper_bound(backend, *, iters: int = 48, seed: int = 0) -> float:
         off = beta[:steps - 1]
         T += np.diag(off, 1) + np.diag(off, -1)
     return float(np.linalg.eigvalsh(T)[0])
-
-
-def quantize_lowrank(low: LowRankLD) -> LowRankLDInt8:
-    """Quantise a float :class:`LowRankLD` factor to int8 (LR8 storage).
-
-    Requires ``low``'s rows to be unit-norm, i.e. the reconstruction ``U U^T``
-    to have the unit diagonal of a correlation matrix. :class:`LowRankLDInt8`
-    re-normalizes rows on every ``quad`` (that is how it undoes quantisation
-    drift in the diagonal), so quantising a factor whose rows are *not* unit-norm
-    silently returns a different operator rather than a lossy copy of this one.
-    Factors from :func:`lowrank_ld` always satisfy this; raise rather than let
-    the discrepancy pass as quantisation error.
-    """
-    U = low.U
-    row_norm = np.sqrt((U * U).sum(axis=1))
-    if not np.allclose(row_norm, 1.0, rtol=1e-6, atol=1e-6):
-        worst = int(np.argmax(np.abs(row_norm - 1.0)))
-        raise ValueError(
-            "quantize_lowrank requires unit-norm rows (a unit-diagonal LD "
-            f"matrix); row {worst} has norm {row_norm[worst]!r}. Build the "
-            "factor with lowrank_ld(), which row-normalizes, or rescale it "
-            "yourself -- LR8 cannot represent a non-unit diagonal.")
-    scale = float(np.abs(U).max()) or 1.0
-    return LowRankLDInt8(_clip_int8(U / scale * _Q8), scale=scale / _Q8)
 
 
 def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:

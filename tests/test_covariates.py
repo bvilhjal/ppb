@@ -3,10 +3,14 @@
 import numpy as np
 import pytest
 
-from ppb import adjust, principal_components, residualize
 from ppb.simulate import simulate_structured_genotypes
 
-from experiments.pc_adjustment import run  # noqa: E402
+from experiments.pc_adjustment import (  # noqa: E402
+    adjust,
+    principal_components,
+    residualize,
+    run,
+)
 
 
 # --- covariate utilities ---------------------------------------------------

@@ -13,10 +13,9 @@ from ppb import (
     BlockDiagonalLD,
     DenseLD,
     r2_block_jackknife,
-    r2_from_blocks,
     sign_flip_null,
 )
-from ppb.diagnostics import _blocks
+from ppb.diagnostics import _blocks, r2_from_blocks
 
 
 def _corr_block(m, rho=0.7):

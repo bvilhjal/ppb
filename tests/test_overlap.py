@@ -1,21 +1,24 @@
-"""Tests for the overlap detector (ppb.overlap) and its simulation validation."""
+"""Tests for the overlap detector and its simulation validation.
+
+The fitting apparatus is experimental and lives in
+``experiments/overlap_detection.py`` (withdrawn from the package, which keeps
+only the fail-closed ``OverlapBasis`` marker); see ``docs/OVERLAP.md``.
+"""
 
 import numpy as np
 import pytest
 
-import ppb.overlap as overlap_module
+import experiments.overlap_detection as overlap_module
+from ppb import OverlapBasis
 from ppb.ld_backend import BlockDiagonalLD, DenseLD
-from ppb.overlap import (
-    estimate_overlap_basis,
-    OverlapBasis,
-    block_products,
-    correct_numerator,
-    correct_overlap_numerator,
-    fit_overlap,
-    overlap_slope,
-)
 
-from experiments.overlap_detection import run
+from experiments.overlap_detection import (
+    block_products,
+    correct_overlap_numerator,
+    estimate_overlap_basis,
+    fit_overlap,
+    run,
+)
 
 
 def _block_ld(m, bs):
@@ -71,26 +74,6 @@ def test_overlap_basis_restricts_scientific_basis_kinds():
         OverlapBasis(
             values=np.ones(10), kind="variant_count",
             provenance="unsupported shortcut", support_hash="test")
-
-
-def test_overlap_slope_recovers_known_slope():
-    rng = np.random.default_rng(1)
-    n_blocks = 60
-    m = rng.integers(50, 150, size=n_blocks).astype(float)
-    v = rng.uniform(0.5, 2.0, size=n_blocks)
-    gamma_true = 0.01
-    u_r = rng.normal(0.0, np.sqrt(v), size=n_blocks)
-    u_t = gamma_true * m + rng.normal(0.0, np.sqrt(v), size=n_blocks)
-    with pytest.warns(DeprecationWarning):
-        est = overlap_slope(u_t, u_r, m, v, v, groups=np.arange(n_blocks) % 8)
-    assert est.gamma == pytest.approx(gamma_true, rel=0.15)
-    assert est.se > 0 and est.n_blocks == n_blocks
-
-
-def test_correct_numerator():
-    with pytest.warns(DeprecationWarning):
-        corrected = correct_numerator(2.0, 1e-4, 10000)
-    assert corrected == pytest.approx(1.0)
 
 
 def test_fit_overlap_does_not_mistake_signal_rescaling_for_overlap():
@@ -296,34 +279,6 @@ def test_discontinuous_trainer_fails_the_perturbation_stability_gate(
     out = overlap_simulation
     assert out["sparse_trainer_basis"] == "unavailable"
     assert out["sparse_trainer_status"] == "basis_unavailable"
-
-
-def test_overlap_slope_default_groups_with_empty_blocks():
-    """Blocks with no score variance are dropped; the default jackknife groups
-    must be indexed like the inputs, not like the filtered arrays (regression:
-    this raised IndexError whenever any block was filtered out)."""
-    rng = np.random.default_rng(3)
-    n_blocks = 60
-    m = np.full(n_blocks, 100.0)
-    v = np.ones(n_blocks)
-    v[[3, 17, 42]] = 0.0                      # e.g. a sparse score with no weight here
-    u_t = 0.01 * m + rng.normal(size=n_blocks)
-    u_r = rng.normal(size=n_blocks)
-    with pytest.warns(DeprecationWarning):
-        est = overlap_slope(u_t, u_r, m, v, v)    # default groups
-    assert est.n_blocks == n_blocks - 3
-    assert est.gamma == pytest.approx(0.01, rel=0.3)
-    assert est.se > 0
-
-
-def test_overlap_slope_rejects_misaligned_groups():
-    n_blocks = 60
-    m = np.full(n_blocks, 100.0)
-    v = np.ones(n_blocks)
-    u = np.zeros(n_blocks)
-    with pytest.warns(DeprecationWarning):
-        with pytest.raises(ValueError, match="one entry per block"):
-            overlap_slope(u, u, m, v, v, groups=np.arange(n_blocks - 1))
 
 
 # ---------------------------------------------------------------------------

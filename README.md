@@ -86,15 +86,18 @@ sign-flipped scores share the denominator and carry no coherent signal.
 See [`docs/REAL_DATA.md`](docs/REAL_DATA.md).
 
 Supporting pieces for real summary statistics: allele harmonization
-(`ppb.harmonize`), PC/covariate adjustment (`ppb.covariates`), per-variant sample
-sizes (`ppb.standardized_marginal`), PUMAS-style single-GWAS subsampling
-that refits each pseudo-training split (`ppb.subsample_sumstats` / `ppb.pumas_r2`),
-and detection of training-target sample overlap (`ppb.overlap`, see
+(`ppb.harmonize`), per-variant sample sizes (`ppb.standardized_marginal`), and
+detection of training-target sample overlap (`ppb.OverlapBasis`, see
 [`docs/OVERLAP.md`](docs/OVERLAP.md)). PPB **detects and labels** overlap rather
 than correcting it: every correction needs an independent reference GWAS of the
 same trait, and given one, evaluating the score against it is unbiased in a
 single line. The condition that makes a correction valid is the condition that
 makes it unnecessary, so in-sample results are published as upper bounds.
+Validated demonstrations that are deliberately **not** part of the package —
+PC/covariate adjustment, PUMAS-style single-GWAS subsampling, LD-score
+calibration of the target `z`, and the experimental overlap fit — live in
+`experiments/` (`pc_adjustment.py`, `pumas_agreement.py`, `z_calibration.py`,
+`overlap_detection.py`).
 
 To report an individual's score as a percentile you need the score's
 distribution in a population, and its first two moments follow from allele

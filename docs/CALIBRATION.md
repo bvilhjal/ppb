@@ -1,6 +1,9 @@
 # Is the target `z` on the scale the estimator assumes?
 
-Status: specification (binding). Symbols and labels:
+Status: scope — a diagnostic specification; the implementation does not ship in
+the package and lives in
+[`../experiments/z_calibration.py`](../experiments/z_calibration.py). Symbols
+and labels:
 [`NOTATION.md`](NOTATION.md). Results are labelled (C1)–(C3).
 
 `R² = (wᵀz)²/(wᵀDw)` puts `z` in the numerator alone. A target whose summary
@@ -27,7 +30,8 @@ A property of the reference alone; no summary statistics enter. Implemented as
 The slope carries heritability. The **intercept** is what matters here: it is 1
 when nothing is wrong, confounding and cryptic relatedness push it *up*, and
 dividing every `χ²` by a genomic-control `λ` pushes it *down* to `1/λ`, taking
-the slope with it. Implemented as `ppb.ldscore_regression`.
+the slope with it. Implemented as `ldscore_regression` in
+[`../experiments/z_calibration.py`](../experiments/z_calibration.py).
 
 **(C3) Implied `z` scale.**
 

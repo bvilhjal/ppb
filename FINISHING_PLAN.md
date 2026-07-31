@@ -4,6 +4,22 @@ Status: proposed
 
 Prepared: 2026-07-17
 
+Revised: 2026-07-31 — **leanness refactor** (review of the same date). The
+package now ships only the estimator path plus what the results pipeline
+consumes. The withdrawn overlap-correction apparatus moved out of
+`ppb.overlap` to `experiments/overlap_detection.py`; the package keeps only the
+fail-closed `OverlapBasis` marker the registry records, and the legacy
+variant-count path (`overlap_slope` / `correct_numerator`) is deleted. The
+PUMAS, covariate-adjustment, and LD-score modules moved into their experiments
+(`pumas_agreement.py`, `pc_adjustment.py`, `z_calibration.py`); the
+liability-scale conversion (M6) is documented in `METHOD.md` §5 but no longer
+implemented; and the LR8 int8 low-rank backend was dropped — the shipped store
+is D8, and LR8 measured only 1.34× better than the lossless packed triangle at
+4× the error. The public API is trimmed to the documented verbs, and
+`docs/OVERLAP.md` / `docs/CALIBRATION.md` are no longer binding specifications.
+No published number changes: nothing the results registry ships touched the
+removed code except the `OverlapBasis.unavailable` label.
+
 Revised: 2026-07-18 — **project refocused on cross-ancestry portability** (see
 "Project focus" below). Earlier revision 2026-07-17 after reviewing the source
 preprint and successor repository.

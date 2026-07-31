@@ -2,7 +2,7 @@
 
 Simulate realistic diploid genotypes (ldpred3-inspired), run several polygenic
 score methods across polygenicity levels, and check that PPB's summary-statistic
-prediction R^2 (using an independent LD reference, exact or LR8-approximated)
+prediction R^2 (using an independent LD reference, exact or low-rank-approximated)
 agrees with the individual-level R^2 -- both in absolute terms (bias) and in
 ranking (Spearman), which is what lets PPB rank methods without individual data.
 

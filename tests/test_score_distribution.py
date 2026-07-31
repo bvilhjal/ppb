@@ -8,9 +8,10 @@ than against the algebra that produced them.
 import numpy as np
 import pytest
 
-from ppb import DenseLD, ScoreDistribution, score_distribution
+from ppb import DenseLD, score_distribution
 from ppb.harmonize import VariantTable
 from ppb.ld_backend import BlockDiagonalLD
+from ppb.score_distribution import ScoreDistribution
 from ppb.simulate import _diploid_dosages
 
 from experiments.score_distribution import (  # noqa: E402

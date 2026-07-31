@@ -59,7 +59,7 @@ utility, causality, or individual privacy.
 - **LD approximation bias.** Coarse LD approximation biases the estimate. In the
   source paper, small cM windows overestimate R² (~+1.9% at 2 cM; ldetect blocks
   ~+12%); 4 cM is the accuracy/size trade-off. In this implementation, aggressive
-  low-rank (LR8) compression slightly *underestimates* R² (≈−2% at 95% variance
+  low-rank compression slightly *underestimates* R² (≈−2% at 95% variance
   retained; near-zero at 99%). int8 quantisation of the shipped reference moves
   the **genome-wide** R² by at most **0.02%** (measured against the float source
   for six real scores) — individual blocks are ~0.1–0.2%, but summing 431 blocks
@@ -89,8 +89,8 @@ utility, causality, or individual privacy.
   not the complete PGS Catalog scores.
 - **Binary-trait output is on the observed scale at a case fraction of one
   half**, because `standardized_marginal` is given an effective sample size. That
-  is neither population accuracy nor liability accuracy. `ppb.liability_r2`
-  applies the standard rescaling (M6), which recovers the liability-scale value
+  is neither population accuracy nor liability accuracy. The standard rescaling
+  (M6, `METHOD.md` §5) recovers the liability-scale value
   to within ~8% across prevalences in the registry's R² range (0.025–0.044) and
   degrades for large R² on rare traits — 17% at `K = 0.01, R² = 0.16`. It is a
   calibrated **scale**, not a calibrated estimate: it is a first-order result
@@ -130,7 +130,8 @@ utility, causality, or individual privacy.
   **GIANT** targets come in 1.5–2× low, implying a `z` deflation of 1.22–1.44 —
   the right size for GIANT's genomic control, and not explained by score support
   or by the cohort difference (`REAL_DATA.md`, Table 3).
-  The guard now exists: `ppb.ldscore_regression` fits (C2) from the target's own
+  The guard now exists: `ldscore_regression` (in `experiments/z_calibration.py`)
+  fits (C2) from the target's own
   `χ²` and the shipped reference's LD scores, and its intercept implies the `z`
   scale (C3). In simulation it recovers a genomic-control `λ` to within 3% and
   produces no false positive at the null. It fails closed — no verdict without a
@@ -223,7 +224,7 @@ rejects non-finite values rather than mixing numerator and denominator supports.
 
 Population structure is controlled by residualizing genotypes and phenotype on
 fixed covariates (sex, age, principal components) before forming `z` and `D`
-(`ppb.covariates`). Adjustment removes the ancestry-aligned component of
+(`experiments/pc_adjustment.py`). Adjustment removes the ancestry-aligned component of
 prediction — spurious stratification *and* any genetic prediction mediated
 through structure — so PC-adjusted R² is a conservative, within-structure
 estimate. Choosing the number of PCs is left to the user; too few leaves residual

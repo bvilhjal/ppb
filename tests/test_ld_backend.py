@@ -1,4 +1,4 @@
-"""Tests for the block-diagonal LD backend and the low-rank (LR8) builder."""
+"""Tests for the block-diagonal LD backend and the low-rank builder."""
 
 import numpy as np
 import pytest

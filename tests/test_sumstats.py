@@ -3,7 +3,8 @@
 import numpy as np
 import pytest
 
-from ppb import standardized_marginal, zstat_to_corr
+from ppb import standardized_marginal
+from ppb.sumstats import zstat_to_corr
 
 from experiments.per_variant_n import run  # noqa: E402
 

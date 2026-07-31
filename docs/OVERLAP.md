@@ -1,6 +1,9 @@
 # Shared training/target noise: detection and labelling
 
-Status: specification (binding). Symbols and labels:
+Status: scope — the detection/labelling policy is binding on published results;
+the fitting apparatus is experimental, does not ship in the package, and lives
+in [`../experiments/overlap_detection.py`](../experiments/overlap_detection.py).
+Symbols and labels:
 [`NOTATION.md`](NOTATION.md). Results are labelled (O1)–(O6).
 
 ## The short answer
@@ -10,7 +13,9 @@ adds to the PPB numerator. The reported R² is then an **upper bound**, not an
 accuracy — by more than tenfold in the worst real case measured here.
 
 **PPB detects and labels that; it does not correct it.** The fitting apparatus
-in this document exists, is tested, and is retained for the record, but it is
+in this document exists, is tested, and lives in
+[`../experiments/overlap_detection.py`](../experiments/overlap_detection.py),
+but it is
 **not a recommended path** and the results registry will not accept a
 correction from it. The reason is not that the method fails. It is that the
 method is dominated:
@@ -178,7 +183,7 @@ selected support off the weight list, so `Phi = diag(support)` looks
 reconstructible. It is not admissible — that is variant-count-on-the-support,
 which is (O3) under the one normalization it does not apply to.
 
-**Table 1. Trainers and the basis they admit**, probed against the shipped
+**Table 1. Trainers and the basis they admit**, probed against
 `estimate_overlap_basis` rather than classified on paper.
 
 | method | linear in `z_train`? | verdict |
@@ -208,7 +213,9 @@ For a rerunnable differentiable trainer the permitted stochastic basis is
 A generalized-degrees-of-freedom trace estimate ([Ye
 1998](https://doi.org/10.1080/01621459.1998.10474094), [Hutchinson
 1989](https://doi.org/10.1080/03610918908812806)), implemented as
-`ppb.estimate_overlap_basis` at a cost of `n_draws × len(deltas) + 1` = 97
+`estimate_overlap_basis` in
+[`../experiments/overlap_detection.py`](../experiments/overlap_detection.py) at
+a cost of `n_draws × len(deltas) + 1` = 97
 trainer runs at defaults. Two details decide whether it measures anything:
 
 - **The step is scaled to the data.** `deltas` are fractions of `‖z‖`. A step

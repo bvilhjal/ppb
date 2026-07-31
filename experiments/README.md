@@ -92,7 +92,7 @@ summary statistics. This experiment shows why it matters. Two subpopulations
 (Balding-Nichols fst) with a phenotype driven **only by ancestry** (no genetics)
 are spuriously "predicted" by a polygenic score built on the structured data —
 classic stratification. Residualizing genotypes and phenotype on the top PCs
-(`ppb.adjust`, mirroring `pldsc`'s covariate projection) before forming `z` and
+(`adjust`, mirroring `pldsc`'s covariate projection) before forming `z` and
 `D` removes it.
 
 Run:
@@ -120,7 +120,7 @@ result is averaged over replicates.
 PPB uses a genuinely held-out target cohort. The PUMAS-style path instead draws
 paired pseudo-training and pseudo-validation summary statistics from one GWAS,
 refits each data-derived score with `fit(z_train)`, and evaluates it on the paired
-`z_val` (`ppb.subsample_sumstats` / `ppb.pumas_r2`). An independent fixed score is
+`z_val` (`subsample_sumstats` / `pumas_r2`, both in this file). An independent fixed score is
 accepted through a separate API so weights trained on the full input GWAS cannot
 masquerade as independent.
 
@@ -161,7 +161,7 @@ construction. In this seeded run the PUMAS-style values are within 0.027 of the
 individual repeated-learning averages. That is a useful agreement check, not a
 claim of bit-exact PUMAS reproduction. The remaining plug-in, dense-Gaussian,
 Monte Carlo, fitted-weight bias, and binary-trait limitations are explicit in
-`ppb.pumas`; for a binary phenotype this statistic is not liability-scale R².
+this file's header notes; for a binary phenotype this statistic is not liability-scale R².
 Encoded in `tests/test_pumas.py`.
 
 ## `per_variant_n.py` — per-variant sample sizes; uniform N biases R²

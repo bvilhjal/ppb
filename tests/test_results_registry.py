@@ -330,7 +330,8 @@ def test_r2_matches_num_and_den(name, rec):
 def test_registry_never_publishes_a_correction(name, rec):
     """The registry stores detection only; corrections are not a published path.
 
-    ``ppb.overlap`` can still fit one experimentally (``docs/OVERLAP.md``), but
+    The experimental apparatus (``experiments/overlap_detection.py``) can still
+    fit one (``docs/OVERLAP.md``), but
     the correction is dominated by simply evaluating against the independent
     reference it requires, so no pack may present one as a result.
     """

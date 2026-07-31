@@ -46,7 +46,8 @@ def _validate_psd(D8, b):
     so tiny negative eigenvalues are an expected storage artefact. A negative
     eigenvalue below ``-_PSD_TOL`` is large enough to be scientifically unsafe,
     however. Exact eigendecomposition is cubic, hence limited to modest blocks;
-    callers needing a PSD guarantee for larger blocks must use LR8. The public
+    callers needing a PSD guarantee for larger blocks must use a low-rank factor
+    (:class:`ppb.ld_backend.LowRankLD`, PSD by construction). The public
     estimator still rejects any negative quadratic form it encounters, and
     :func:`_scan_psd` extends *detection* (not certification) to large blocks at
     write time.
@@ -59,7 +60,7 @@ def _validate_psd(D8, b):
             raise ValueError(
                 f"block {b} is materially non-positive semi-definite: "
                 f"smallest eigenvalue {eigmin:.6g} < {-_PSD_TOL:g}; use a "
-                "PSD LD representation such as LR8")
+                "PSD LD representation such as a low-rank factor")
 
 
 def _scan_psd(backend, b, iters):
@@ -80,7 +81,7 @@ def _scan_psd(backend, b, iters):
             f"block {b} is materially non-positive semi-definite: Lanczos "
             f"smallest Ritz value {eigmin:.6g} < {-_PSD_TOL:g} (an upper bound "
             "on its true minimum eigenvalue, so the block is definitely "
-            "indefinite); use a PSD LD representation such as LR8")
+            "indefinite); use a PSD LD representation such as a low-rank factor")
     return eigmin
 
 

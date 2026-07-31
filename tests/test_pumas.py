@@ -3,9 +3,13 @@
 import numpy as np
 import pytest
 
-from ppb import DenseLD, pumas_r2, r2, subsample_sumstats
+from ppb import DenseLD, r2
 
-from experiments.pumas_agreement import run  # noqa: E402
+from experiments.pumas_agreement import (  # noqa: E402
+    pumas_r2,
+    run,
+    subsample_sumstats,
+)
 
 
 class _SequenceRng:

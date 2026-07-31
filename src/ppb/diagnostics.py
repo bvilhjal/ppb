@@ -129,7 +129,8 @@ def r2_block_jackknife(u, v, *, groups=None, var_y: float = 1.0) -> BlockJackkni
     the SE as much as its own deviation, so that ratio is near 1 either way and
     detects nothing.
 
-    The reported ``se`` uses the same convention as ``ppb.overlap``:
+    The reported ``se`` uses the same convention as the overlap fit in
+    ``experiments/overlap_detection.py``:
     ``sqrt((K-1)/K * sum_g (theta_(g) - mean(theta_(.)))^2)``.
     """
     u, v = _blocks(u, v)

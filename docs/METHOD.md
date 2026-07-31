@@ -196,15 +196,15 @@ representations from `ldpred3/ld_repr.py`:
   full-square `DenseLDInt8` block or a losslessly packed-upper-triangle
   `PackedDenseLDInt8` block. The v2 reference uses the packed form, halving the
   int8 payload without changing the represented matrix.
-- **LR8** — `LowRankLDInt8`: an int8 low-rank factor with `R ~= U U^T`, `U` shape
+- **LR8** — an int8 low-rank factor with `R ~= U U^T`, `U` shape
   `(m, r)`, rows unit-norm so the LD diagonal is 1. ldpred3 selects this for large
-  blocks (>= ~1500); ppb implements it as a backend but does not store it — the
+  blocks (>= ~1500). **ppb does not implement it** (removed 2026-07-31) — the
   measured trade-off is in "On-disk LD store" below.
 
 The block quadratic form is then, per block `b`:
 
 - D8 block:  `w_b^T D_b w_b`  over the int8 block (square or packed triangle);
-- LR8 block: `s = U_b^T w_b` (length `r`), then `w_b^T D_b w_b = s^T s = ||s||^2`.
+- (ldpred3's) LR8 block: `s = U_b^T w_b` (length `r`), then `w_b^T D_b w_b = s^T s = ||s||^2`.
 
 **(M3) Block-diagonal accumulation.**
 
@@ -216,7 +216,7 @@ per-block `u_b` and `v_b` of Table 4 in [`NOTATION.md`](NOTATION.md) are
 computed on the way to the two totals, so (G2) and (G3) need no second pass.
 
 **PSD is representation-specific.** A low-rank `R = U U^T` is positive
-semi-definite, so LR8 guarantees `w^T D w = ||U^T w||^2 >= 0`. D8 does not:
+semi-definite by construction (`w^T D w = ||U^T w||^2 >= 0`). D8 does not:
 rounding a PSD correlation matrix entrywise can introduce negative eigenvalues.
 Three checks, in decreasing strength:
 
@@ -233,7 +233,8 @@ Three checks, in decreasing strength:
    quadratic form is negative. A check on the total alone would let one bad block
    hide among 430 good ones, and the direction of that error inflates R^2.
 
-Large D8 blocks still carry no *proof* of PSD; use LR8 when that guarantee is
+Large D8 blocks still carry no *proof* of PSD; use a low-rank factor
+(`LowRankLD`, PSD by construction) when that guarantee is
 required. No denominator is silently clamped.
 
 ldpred3 additionally applies **linear shrinkage toward the identity** to large
@@ -254,11 +255,9 @@ numba `@njit(parallel=True)` kernels in `ppb/_kernels.py` (the same scalar-loop
 int8 sweep pattern ldpred3 uses, written independently — no code copied).
 
 **Implemented in `ppb/ld_backend.py`:** `DenseLDInt8` and
-`PackedDenseLDInt8` (D8, with a diagonal that dequantises to exactly 1), and
-`LowRankLDInt8` (LR8, an int8 factor with a global `scale` and per-row
-normalisation), plus `quantize_lowrank`. Square D8 and LR8 use about one eighth
-the float64 storage; packed D8 uses about one sixteenth. Only LR8 is PSD by
-construction.
+`PackedDenseLDInt8` (D8, with a diagonal that dequantises to exactly 1).
+Square D8 uses about one eighth the float64 storage; packed D8 uses about one
+sixteenth. The PSD-by-construction fallback is the float `LowRankLD`.
 
 ### On-disk LD store: what is wired up, and why LR8 is not
 
@@ -336,24 +335,25 @@ could swap order. Note that the cross-ancestry ratio takes its two denominators
 from *different* references, where the errors are independent draws rather than
 a shared bias, so expect ~sqrt(2) times the within-reference figure.
 
-**LR8 is implemented as a backend but deliberately not as a storage format.**
-Measured on this reference, the retained rank fraction at 99% variance is
-essentially size-invariant (`r/m` ~ 0.42-0.51 from m = 220 to m = 17,304), so
-LR8@0.99 would come to ~3.9 GB — only **1.34x** better than the lossless packed
-triangle — while costing ~0.45% error in `w^T D w` on real PGS weights against
-D8's own 0.12%. At 99.9% variance it is *larger* than the triangle. There is also
-an LR8 error floor of ~0.25% from the PSD clamp, row renormalization and factor
-quantisation that no retained-variance setting removes. Revisit only if a
-distribution-size requirement forces below the packed triangle.
+**LR8 is not implemented, as a backend or a storage format (removed
+2026-07-31).** Measured on this reference, the retained rank fraction at 99%
+variance is essentially size-invariant (`r/m` ~ 0.42-0.51 from m = 220 to
+m = 17,304), so LR8@0.99 would come to ~3.9 GB — only **1.34x** better than the
+lossless packed triangle — while costing ~0.45% error in `w^T D w` on real PGS
+weights against D8's own 0.12%. At 99.9% variance it is *larger* than the
+triangle. There is also an LR8 error floor of ~0.25% from the PSD clamp, row
+renormalization and factor quantisation that no retained-variance setting
+removes. Revisit only if a distribution-size requirement forces below the
+packed triangle.
 
 **Oracle vs. production banding — a deliberate deviation to validate.** The
 preprint's published numbers use a plain cM-window banded `D` (non-PSD, and the
 source of its documented small overestimation). The PPB production evaluator will
-instead use the block-diagonal LR8/D8 representation. These are not identical
+instead use the block-diagonal D8 representation. These are not identical
 approximations, so the golden-result reproduction must (a) first match the
 paper's banding to reproduce its numbers as the oracle check, then (b) show the
-LR8/D8 path agrees within a declared tolerance and document any systematic
-difference. Do not silently substitute the LR8 path for the paper's banding when
+D8 path agrees within a declared tolerance and document any systematic
+difference. Do not silently substitute the D8 path for the paper's banding when
 claiming to reproduce a published value.
 
 ## 3. LD reference regimes
@@ -374,10 +374,10 @@ hyper-parameter selection only, not for estimating final performance.
   based). Confirm exact scaling and how monomorphic/low-MAF variants are handled.
 - Phenotype: residuals after adjusting for sex, age, and 10 principal components,
   then standardized (per the Privé et al. setup the paper follows). Implemented in
-  `ppb/covariates.py` (`residualize`/`adjust`, mirroring `pldsc`'s covariate
-  projection `X~ = P_C X`; `principal_components` derives the PCs). Forming `z` and
-  `D` from the PC-adjusted genotypes/phenotype removes population-structure
-  confounding from the estimated R² (see `experiments/pc_adjustment.py`).
+  `experiments/pc_adjustment.py` (`residualize`/`adjust`, mirroring `pldsc`'s
+  covariate projection `X~ = P_C X`; `principal_components` derives the PCs).
+  Forming `z` and `D` from the PC-adjusted genotypes/phenotype removes
+  population-structure confounding from the estimated R².
 - Allele alignment: `w` and `z` must be harmonized to the same effect allele; a
   sign convention and a variant-key (build, chr:pos:a1:a2) must be fixed.
   Implemented in `ppb/harmonize.py` (`VariantTable`, `harmonize_to`) as a
@@ -429,8 +429,10 @@ the standard rescaling of [Lee et al.
 
 `K` is the population prevalence and `P` the case fraction the observed
 statistic was computed at — one half here, and passing a study's true case
-fraction instead would describe a statistic PPB did not compute. Implemented as
-`ppb.liability_r2`.
+fraction instead would describe a statistic PPB did not compute. PPB ships **no
+implementation** of (M6): binary metrics are a v1.0 item and registry values
+stay on the observed scale. (Table 2 was produced by a liability-threshold
+simulation that no longer ships; the formula above is the record.)
 
 The factor is not a small adjustment. At `K = P = 0.5` it is exactly **π/2**,
 because dichotomizing a continuous liability discards information and the

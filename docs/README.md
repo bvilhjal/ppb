@@ -9,8 +9,8 @@ depending on why you are here.
 Three kinds of document, and it matters which you are reading:
 
 - **Specification** — what the implementation must do. [`METHOD.md`](METHOD.md),
-  [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md), [`OVERLAP.md`](OVERLAP.md),
-  [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md), [`CALIBRATION.md`](CALIBRATION.md), and
+  [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md),
+  [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md), and
   [`../results/schema.md`](../results/schema.md). A disagreement between one of
   these and the code is a defect in one of them.
 - **Record** — what was actually run, and what came out.
@@ -19,6 +19,7 @@ Three kinds of document, and it matters which you are reading:
   and are dated.
 - **Scope and intent** — what is claimed, what is refused, and what happens next.
   [`LIMITATIONS.md`](LIMITATIONS.md), [`TRANSFERABILITY.md`](TRANSFERABILITY.md),
+  [`OVERLAP.md`](OVERLAP.md), [`CALIBRATION.md`](CALIBRATION.md),
   [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md), and the reviews.
 
 [`NOTATION.md`](NOTATION.md) underlies all three: every symbol is defined there
@@ -66,8 +67,8 @@ numbered result to its module and its test, then the module.
 | [`NOTATION.md`](NOTATION.md) | reference | symbols, conventions, overloadings, index of results |
 | [`METHOD.md`](METHOD.md) | specification | the estimand and estimator (M1–M5), the hypotheses and what violating each costs, LD representation, conventions, tolerances |
 | [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | specification | target-ancestry inputs (X1), the gauge condition (X2), what is impossible without target data |
-| [`OVERLAP.md`](OVERLAP.md) | specification | shared training/target noise: the mechanism, how it is detected, and why correction is not offered |
-| [`CALIBRATION.md`](CALIBRATION.md) | specification | whether the target `z` is on the assumed scale: LD scores (C1), LD-score regression (C2), the implied rescaling (C3) |
+| [`OVERLAP.md`](OVERLAP.md) | scope | shared training/target noise: the mechanism, how it is detected, and why correction is not offered (the experimental apparatus lives in `../experiments/overlap_detection.py`) |
+| [`CALIBRATION.md`](CALIBRATION.md) | scope | whether the target `z` is on the assumed scale: LD scores (C1), LD-score regression (C2), the implied rescaling (C3); implemented in `../experiments/z_calibration.py` |
 | [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md) | specification | the score's mean (P1) and variance (P2) in a population, from allele frequencies and LD; what two moments can support |
 | [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2), controls (G3–G4), and the external check against published individual-level accuracy (G5) |
 | [`LIMITATIONS.md`](LIMITATIONS.md) | scope | what PPB does and does not establish; every known failure mode |
