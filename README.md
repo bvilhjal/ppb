@@ -56,6 +56,7 @@ defines every symbol once and indexes every numbered result — (M2), (X1), (O4)
 ```bash
 pip install -e .            # runtime: numpy, numba
 pip install -e ".[test]"    # + pytest
+pip install -e ".[ldref]"   # + rdata, for the bigsnpr LD-reference converter
 ```
 
 Requires Python ≥ 3.11 (developed on 3.14). The LD quadratic-form kernels use
@@ -72,8 +73,12 @@ acc_B = r2(w, z_B, DenseLD(D_B))     # predictive R² of w in ancestry B
 
 The estimator is ancestry-agnostic in form — within-ancestry is `z`/`D` from the
 same population. It needs only `wᵀz` and `wᵀDw`, so `D` is never materialised
-densely: dense, block-diagonal, low-rank, and int8 D8/LR8 backends are provided,
-and the loader validates block tiling, offsets, dtypes, packed diagonals, and
+densely: the backends are dense float (`DenseLD`), float low-rank (`LowRankLD`,
+PSD by construction), block-diagonal (`BlockDiagonalLD`), and int8 D8 in both
+square and packed-triangle form (`DenseLDInt8`, `PackedDenseLDInt8`). The int8
+low-rank LR8 representation is **not** implemented — it is described in
+[`docs/METHOD.md`](docs/METHOD.md) §2 along with the measurements that ruled it
+out. The loader validates block tiling, offsets, dtypes, packed diagonals, and
 low-rank definiteness ([`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) covers what
 int8 quantization does and does not guarantee).
 
@@ -126,8 +131,8 @@ blocks, GRCh37 with `pos_hg38` alongside) into ppb's LD-reference `.npz`: one
 file per chromosome holding the variant table (`chrom, pos, a1, a2`, `rsid`,
 `af_UKBB`) and the LD as dense int8 blocks (`DenseLDInt8` / D8 convention) keyed
 by the reference's own block structure — exactly block-diagonal (0 off-block
-entries). Needs `pip install rdata` (reads the R `dsCMatrix` serializations
-directly; no R required).
+entries). Needs the `ldref` extra above, which supplies `rdata` (it reads the R
+`dsCMatrix` serializations directly; no R required).
 
 ```bash
 python scripts/bigsnpr_ldref_to_ppb.py <data_dir> <out_dir>   # all 22 chromosomes

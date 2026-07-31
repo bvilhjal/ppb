@@ -26,8 +26,17 @@ label is stable when a document grows and unambiguous when cited from elsewhere:
 | **E** | [`../experiments/README.md`](../experiments/README.md) | simulation demonstrations |
 
 So (M2) is the core identity wherever it appears, and (O4) is the stochastic
-overlap basis whether you meet it in `OVERLAP.md` or in a docstring. Tables keep
-per-document numbering, since they are read where they sit.
+overlap basis whether you meet it in `OVERLAP.md` or in a docstring. Tables and
+theorems keep per-document numbering, since they are read where they sit.
+
+Procedures are set out as numbered algorithms after the fashion of Knuth's *The
+Art of Computer Programming*: a named **Algorithm V**, whose steps are **V1**,
+**V2**, … in order, each opening with a bracketed summary of what it does. The
+convention earns its keep here because the order of the steps is itself part of
+the specification — see [`METHOD.md`](METHOD.md) §1.6, where harmonizing before
+fixing the gauge, and fixing the gauge before restricting the support, are not
+interchangeable. An algorithm's letter is chosen outside the prefix set above, so
+a step **V3** is never mistaken for a numbered result `(X3)`.
 
 ## 2. Core symbols
 
@@ -69,14 +78,6 @@ All of these are on standardized scales unless stated otherwise (§3).
 | `F_ST` | population differentiation between A and B |
 | `f_j`, `sd_j` | allele frequency and genotype standard deviation of variant `j` |
 
-**Table 4a. An individual's score** ([`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md)).
-
-| symbol | meaning |
-|---|---|
-| `g_j` | one individual's dosage at variant `j`, in {0, 1, 2} |
-| `S = Σ_j w_j g_j` | that individual's raw polygenic score |
-| `F` | Wright's inbreeding coefficient: `Var(g) = 2f(1−f)(1+F)` |
-
 **Table 4. LD blocks and their storage.**
 
 | symbol | meaning |
@@ -93,6 +94,14 @@ All of these are on standardized scales unless stated otherwise (§3).
 Note that `u_b` and `v_b` are the *only* per-block quantities anything downstream
 needs. The block jackknife (G2) and the sign-flip null (G3) both consume exactly
 these, which is why they cost no extra pass over the LD reference.
+
+**Table 4a. An individual's score** ([`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md)).
+
+| symbol | meaning |
+|---|---|
+| `g_j` | one individual's dosage at variant `j`, in {0, 1, 2} |
+| `S = Σ_j w_j g_j` | that individual's raw polygenic score |
+| `F` | Wright's inbreeding coefficient: `Var(g) = 2f(1−f)(1+F)` |
 
 **Table 5. Shared training/target noise** (`OVERLAP.md`).
 
@@ -133,7 +142,7 @@ three failing.
 
 ## 4. Where a symbol is overloaded
 
-Four collisions survive, because the alternative is renaming a public interface
+Five collisions survive, because the alternative is renaming a public interface
 for the sake of a table. They are scoped, and they do not co-occur.
 
 | symbol | meaning 1 | meaning 2 | how to tell |
@@ -142,6 +151,7 @@ for the sake of a table. They are scoped, and they do not co-occur.
 | `z` | the marginal-correlation vector (Table 1) | `sign_flip_null.z`, the block-coherence statistic (G3) | the statistic is a scalar and always appears as a named field |
 | `r` | marginal correlation of one variant | retained rank of a low-rank factor | context: `r_j` is per-variant, `r` alone is a rank |
 | `n` | per-variant sample size `n_j` | number of blocks, `n_blocks` | `n_blocks` is always spelled out |
+| `max_variance_share` | largest group's share of the **jackknife** variance (G2), on `BlockJackknife` | largest block's share of the **score** variance (P2), on `ScoreDistribution` | the owning object: a jackknife answers "is one region carrying the estimate?", a score distribution "is one block carrying the tail?". Equal contributions give `1/K` in the first sense and `1/n_blocks` in the second, so the two are not even on a common scale |
 
 The block-coherence statistic in particular is a poor name — in a genomics
 package `z` means a GWAS z-statistic — and it is called `z` only because the
@@ -189,7 +199,13 @@ it to account.
 | (G5) | external check against published individual-level accuracy | `scripts/anchor_validation.py` | `tests/test_anchor_validation.py` |
 | (R1) | registry score metric | `scripts/regenerate_results.py` | `tests/test_results_registry.py` |
 | (E1) | PUMAS moment covariance `V = var_y D + z zᵀ` | `experiments/pumas_agreement.py` | `tests/test_pumas.py` |
+| (E2) | per-variant LD concordance `s_j = cos(D_A row_j, D_B row_j)` | `experiments/transferability.py` (`ld_concordance`) | `tests/test_transferability.py` |
+| (E3) | target-informed optimum `argmax_w (wᵀz_B)²/(wᵀD_Bw) ∝ D_B⁻¹z_B` | — (algebra; its consequence is demonstrated) | `tests/test_transferability.py` |
 
-(X3) is the one numbered result with no implementation. It is a stated v0.1
-completion criterion, its constant has been verified by simulation, and it is
-listed here rather than quietly omitted.
+Five rows carry no implementation, and they are not the same kind of gap. (M1)
+is a definition and (E3) is algebra, so there is nothing to implement. (M6)'s
+formula is documented and its implementation was removed on 2026-07-31; binary
+metrics are a v1.0 item. (P3) is specified, and its test pins the simulation
+that motivates the correction rather than the correction itself. **(X3) alone is
+an outstanding v0.1 completion criterion** — its constant has been verified by
+simulation, and it is listed here rather than quietly omitted.

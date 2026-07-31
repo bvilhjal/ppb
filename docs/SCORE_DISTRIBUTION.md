@@ -120,7 +120,8 @@ produced the formula: `tests/test_score_distribution.py` and the benchmark
 `experiments/score_distribution.py`.
 
 **Table 1. Moment accuracy**, 40,000 individuals, predicted from `f` and `D`
-alone. "no LD" repeats the prediction with `D = I`.
+alone. "no LD" repeats the prediction with `D = I`. Four of the eight regimes the
+benchmark runs, chosen to span the range of the "no LD" column.
 
 | regime | SD error | SD error, no LD |
 |---|---:|---:|
@@ -130,30 +131,35 @@ alone. "no LD" repeats the prediction with `D = I`.
 | few big blocks, sparse 5% | 0.08% | 13.80% |
 
 The mean is exact to under 10⁻⁴ SD everywhere. The SD is within **0.2%** in
-every regime, and the LD term is worth up to **13.8%** — it is not an
-optional refinement.
+all eight regimes — the worst is the 0.19% shown — and the LD term is worth up
+to **13.8%**: it is not an optional refinement.
 
-**Table 2. Tail calibration**, 200,000 individuals, one variant given a growing
-share of the variance. Each row reports the realized percentage of the cohort
-above the *nominal* 99th and 99.9th percentile thresholds.
+**Table 2. Tail calibration**, 200,000 individuals, one variant's weight `w[0]`
+growing until its block takes over the variance. Each row reports the realized
+percentage of the cohort above the *nominal* 99th and 99.9th percentile
+thresholds. All eight rows of the run, at the script's own precision.
 
-| `max_variance_share` | above nominal 1% | above nominal 0.1% | worst percentile error |
-|---:|---:|---:|---:|
-| 0.11 | 1.03% | 0.089% | 0.2 |
-| 0.10 | 1.11% | 0.138% | 0.3 |
-| 0.17 | 1.36% | 0.237% | 1.1 |
-| 0.27 | 1.80% | 0.391% | 2.3 |
-| 0.36 | 2.36% | 0.566% | 4.0 |
-| 0.49 | 3.42% | 0.860% | 7.4 |
-| 0.68 | 5.40% | 1.272% | 13.9 |
+| `w[0]` | `max_variance_share` | above nominal 1% | above nominal 0.1% | worst percentile error |
+|---:|---:|---:|---:|---:|
+| 0 | 0.106 | 1.03% | 0.089% | 0.2 |
+| 5 | 0.105 | 1.03% | 0.087% | 0.1 |
+| 12 | 0.098 | 1.11% | 0.138% | 0.3 |
+| 18 | 0.174 | 1.36% | 0.237% | 1.1 |
+| 24 | 0.265 | 1.80% | 0.391% | 2.3 |
+| 30 | 0.356 | 2.36% | 0.566% | 4.0 |
+| 40 | 0.492 | 3.42% | 0.860% | 7.4 |
+| 60 | 0.684 | 5.40% | 1.272% | 13.9 |
 
-This is what makes `max_variance_share` actionable rather than decorative. The
-error is monotone in it, and **the deeper the tail, the earlier it fails**: at a
-share of 0.17 the 1% tail is only 1.4× over-populated while the 0.1% tail is
-already 2.4× over-populated; by 0.49 they are 3.4× and 8.6×. Below ~0.1 the
-percentile is good to a fraction of a point across the whole range. A score
-whose variance sits in one block does not have a normal tail, and the tail is
-where the claims are.
+This is what makes `max_variance_share` actionable rather than decorative. Read
+the first three rows together: until `w[0]` reaches about 12 the loaded variant's
+block is not the largest one, the share stays near 0.10 whatever `w[0]` does, and
+the differences between those rows are Monte Carlo noise rather than a trend.
+From there the error is **monotone in the share**, and **the deeper the tail, the
+earlier it fails**: at a share of 0.17 the 1% tail is only 1.4× over-populated
+while the 0.1% tail is already 2.4× over-populated; by 0.49 they are 3.4× and
+8.6×. Below ~0.1 the percentile is good to a fraction of a point across the whole
+range. A score whose variance sits in one block does not have a normal tail, and
+the tail is where the claims are.
 
 **Table 3. A structured cohort**, two populations at `fst = 0.05`, pooled, using
 a clean single-population LD panel — the realistic mistake.
@@ -170,5 +176,8 @@ score inside a homogeneous cohort is predicted exactly. The residual is the part
 carry that.
 
 **Cost.** On 120,000 variants in 431 int8 blocks, `score_distribution` runs in
-**0.43×** the time of a full `evaluate` — it does one harmonization rather than
-two, and shares the single expensive quadratic form.
+about **0.45×** the time of a full `evaluate` (0.43× and 0.46× on two machines).
+Unlike every other number in this document, that ratio is a wall-clock
+measurement and does not reproduce exactly; what does reproduce is the reason for
+it — `score_distribution` does one harmonization rather than two, and the two
+calls share the single expensive quadratic form.

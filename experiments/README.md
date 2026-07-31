@@ -61,7 +61,13 @@ UK Biobank-derived benchmark datasets — see `FINISHING_PLAN.md`, Gate B.
 Simulates realistic **diploid 0/1/2 genotypes** (ldpred3-inspired: latent AR(1)
 haplotypes thresholded at MAF quantiles), runs four PGS methods across
 polygenicity levels, and checks that PPB's summary-statistic R^2 (independent LD
-reference; exact or LR8-approximated) agrees with the individual-level R^2.
+reference, exact or low-rank-approximated) agrees with the individual-level R^2.
+
+> **The `lr8@` labels below are a misnomer inherited from the script's dict
+> keys.** They are float `LowRankLD` factors from `ppb.lowrank_ld` at the stated
+> retained-variance fraction, *not* the int8 LR8 representation of
+> [`../docs/METHOD.md`](../docs/METHOD.md) §2 — which ppb does not implement.
+> What these rows measure is eigen-truncation error, with no quantisation in it.
 
 Methods: `causal` (oracle true effects), `marginal` (GWAS betas), `pT`
 (p-value-thresholded), `inf` (LDpred-infinitesimal / ridge).
@@ -229,7 +235,10 @@ With B target stats + B LD the estimate is exact/unbiased and recovers the
 portability loss; ancestry-A LD biases it (the LD-form ratio 1.031); substituting
 ancestry-A sumstats does not estimate R²_B at all. **Target-ancestry summary
 statistics are irreducibly required.** The +57.7% is `1/portability − 1` — an
-arithmetic consequence of the chosen `r_g`, not a measured effect size.
+arithmetic consequence of the chosen `r_g`, not a measured effect size. It is
+reported as the mean of the per-draw ratios, which Jensen's inequality puts above
+the `1/0.648 − 1 = +54.4%` you get from the ratio of the means; see
+[`../docs/CROSS_ANCESTRY.md`](../docs/CROSS_ANCESTRY.md).
 
 **Read the mismatch row as conditional on the simulated LD.** Both ancestries
 above share one LD architecture: Balding-Nichols differs their allele
@@ -278,7 +287,7 @@ python experiments/overlap_detection.py
 Observed (blockwise ridge trainer, Hutchinson basis, heterogeneous LD blocks,
 two replicates):
 
-**Table 7. Basis-aware overlap diagnostics by genetic architecture**
+**Table 8. Basis-aware overlap diagnostics by genetic architecture**
 
 | architecture | overlap | fit status | γ̂/γ_true | R² naive | R² corrected | independent anchor |
 |---|---:|---|---:|---:|---:|---:|
@@ -300,7 +309,9 @@ constant basis* — a marginal trainer over equal-sized blocks makes
 `q_b = tr(D_b)` the block size — and recorded the resulting refusal as the
 method's operating limit. It was the least identifiable configuration available.
 
-The Hutchinson basis (`ppb.estimate_overlap_basis`, `docs/OVERLAP.md` (O4)) is
+The Hutchinson basis (`estimate_overlap_basis` in this file, `docs/OVERLAP.md`
+(O4) — it does not ship in the package, which keeps only the fail-closed
+`ppb.OverlapBasis` marker) is
 checked against the exact `tr(Phi_b'K_b)` of the linear trainer it is estimating
 (0.2–0.6% error). A p+T trainer is refused at the basis: its local Jacobian is
 locally stable but misses its own selection response, which the perturbation
@@ -336,7 +347,7 @@ python experiments/transferability.py
 
 Observed (F_ST = 0.3, m = 500), change in realized `R²_B` vs the naive score:
 
-**Table 8. Effect of proposed LD-based reweighting rules**
+**Table 9. Effect of proposed LD-based reweighting rules**
 
 | reweighting | R²_B vs naive |
 |---|---|
@@ -352,7 +363,7 @@ Encoded in `tests/test_transferability.py`.
 Method ranking from `benchmark_methods.py` (mean R², individual-level vs
 PPB-exact) — correctly preserved:
 
-**Table 9. Method ranking in the benchmark simulation**
+**Table 10. Method ranking in the benchmark simulation**
 
 | method   | individual-level | PPB |
 |----------|-----------------:|----:|
@@ -363,9 +374,9 @@ PPB-exact) — correctly preserved:
 
 So PPB estimates each method's accuracy to ~0.001 and ranks them correctly
 (oracle > LDpred-inf > p+T ≈ marginal) — the benchmark's core utility, achieved
-without individual-level data. LR8 at 99% variance retention is near-exact; more
-aggressive compression (95%) introduces a small, expected bias. Encoded as
-assertions in `tests/test_benchmark.py`.
+without individual-level data. Low-rank truncation at 99% variance retention is
+near-exact; more aggressive compression (95%) introduces a small, expected bias.
+Encoded as assertions in `tests/test_benchmark.py`.
 
 ## `score_distribution.py` — benchmark of (P1)–(P2)
 
@@ -375,7 +386,8 @@ individuals: moment accuracy across LD strength and score density (SD within
 0.2%; ignoring LD costs up to 13.8%), tail calibration as one variant takes over
 the variance (the nominal 1% tail holds 5.4% of the cohort at
 `max_variance_share = 0.68`), a structured cohort (pooling deflates the SD by
-4.4%, `inbreeding` recovers half), and cost (0.43× an `evaluate`).
+4.4%, `inbreeding` recovers half), and cost (~0.45× an `evaluate` — a wall-clock
+ratio, so machine-dependent, unlike the rest).
 
 Run: `python experiments/score_distribution.py`. Numbers are recorded in
 [`../docs/SCORE_DISTRIBUTION.md`](../docs/SCORE_DISTRIBUTION.md) and pinned by

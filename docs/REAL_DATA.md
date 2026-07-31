@@ -103,6 +103,10 @@ approximation described below.
 
 ## External validation against published individual-level accuracy
 
+**(G5) External check against published individual-level accuracy.** Compare
+each `R²` from (G1) with the same score's partial `R²` measured on individual
+genotypes in its source publication, and read the *ratio*.
+
 The claim above that these magnitudes are "consistent with the literature" is
 the weakest form of validation available, and it is unnecessary. The same PGS
 Catalog scores carry **published individual-level accuracy** from their source

@@ -70,7 +70,7 @@ with **both** `z_B` and `D_B` from ancestry B:
 
 | input | definition | source |
 |---|---|---|
-| `z_B` | target-trait marginal correlations in B, by (M5) | **B GWAS** of the trait |
+| `z_B` | target-trait marginal correlations in B, by (M4) | **B GWAS** of the trait |
 | `D_B` | LD (genotype correlation) matrix in B, ideally from a panel independent of the `z_B` sample | **B reference panel** |
 | `w_B` | weights on B's standardized-genotype scale | dosage weight `b_j` times empirical `sd_B,j`; only an already A-standardized weight uses `w_A,j × sd_B,j / sd_A,j` |
 
@@ -130,8 +130,9 @@ the standardized genotypes represented by `D_B`.
 
 ## What is impossible without target-ancestry data
 
-The obstruction is structural, and it is worth stating precisely, because it
-draws the line between what PPB does and what a portability *model* does.
+The obstruction is structural, and it is worth stating as a theorem rather than
+as a difficulty, because it draws the line between what PPB does and what a
+portability *model* does.
 
 Split (X1) into its two factors and ask what distribution each one is a
 functional of:
@@ -141,16 +142,34 @@ functional of:
                                  distribution in B
 
 The denominator is therefore free: a B genotype reference panel, carrying no
-phenotypes at all, determines it. The numerator is not. `rho_B = E[x_B y_B]` is a
-property of how the trait relates to genotype *in B*, and no function of
-A-side data — `z_A`, `D_A`, `p_A`, in any combination — determines it, because
-those data are computed from a different joint distribution. Nothing about
-population A pins down `E[x_B y_B]`; you can hold every A-side quantity fixed and
-vary `rho_B` freely by varying B's causal effects.
+phenotypes at all, determines it. The numerator is not, and that is not a gap in
+anyone's method.
 
-So exactly one measurement is irreducible: **a phenotype measured in B**, i.e. a
-B GWAS of the trait. Everything else in the requirements list above is
-bookkeeping around that one input.
+**Theorem 1.** *Fix the weights `w`. Then `R²_B` is not determined by ancestry
+A's joint genotype–phenotype distribution together with ancestry B's genotype
+distribution. There exist two worlds that agree on every A-side quantity —
+`rho_A`, `Sigma_A`, `p_A`, and therefore on `z_A`, `D_A` and `R²_A` — and agree
+on `Sigma_B` and `p_B` as well, yet differ in `R²_B`.*
+
+*Proof.* Take any world in which B's phenotype follows `y_B = x_B' beta_B + e`
+with `e` uncorrelated with `x_B` and `var(y_B) = 1`, so that
+`rho_B = E[x_B y_B] = Sigma_B beta_B`. Build a second world from
+it by replacing `beta_B` with `c beta_B` for some `0 < c < 1`, enlarging the
+residual variance of `e` to keep `var(y_B) = 1`. Nothing outside B's phenotype
+has been touched: A's joint distribution is unchanged, and so is B's genotype
+distribution and hence `Sigma_B`, `p_B`, and the denominator `w' Sigma_B w`. But
+`rho_B` has become `c rho_B`, so the numerator `(w' rho_B)²` is multiplied by
+`c²`, and `R²_B` with it. The two worlds are indistinguishable to any function of
+the permitted inputs and have different `R²_B`. ∎
+
+The proof is deliberately crude: it varies only the *scale* of B's effects — that
+is, `h²_B` — and even that much already breaks determination. Varying their
+*direction* at fixed `h²_B` breaks it again, and that second freedom is what an
+imperfect `r_g` exercises in practice.
+
+**Corollary.** Exactly one measurement is irreducible: **a phenotype measured in
+B**, i.e. a B GWAS of the trait. Everything else in the requirements list above
+is bookkeeping around that one input.
 
 Substituting `z_A` does not approximate `R²_B`; it computes `R²_A`, a different
 quantity, and overstates transfer by `1/portability − 1` whenever transfer is
@@ -186,10 +205,16 @@ portability loss; using ancestry-A LD biases it by the LD-form ratio; and
 substituting ancestry-A sumstats does not estimate `R²_B` at all.
 
 The **+57.7%** figure is arithmetic, not a measured effect size: substituting
-`z_A` estimates `R²_A`, so the overstatement is `R²_A/R²_B − 1 = 1/0.648 − 1 =
-+54.3%` plus the LD term. It is fully determined by the `r_g` and `F_ST` chosen
-here, and scales as `1/portability − 1` — quote it that way rather than as a
-number the method discovered.
+`z_A` estimates `R²_A` (it tracks it to −0.16%), so the overstatement is
+`R²_A/R²_B − 1`. The two ways of averaging that over the 60 draws do not agree,
+and the difference is worth naming rather than absorbing: the ratio of the means
+is `1/0.648 − 1 = +54.4%`, while the mean of the per-draw ratios — which is what
+the table reports, since `%bias` is `mean((est − true)/true)` — is
+`E[R²_A/R²_B] − 1 = +57.9%`. The gap is **Jensen's inequality** over a
+draw-to-draw varying `R²_B`, not an LD term. Either way the quantity is fully
+determined by the `r_g` and `F_ST` chosen here and scales as
+`1/portability − 1`; quote it that way rather than as a number the method
+discovered.
 
 ### What this table does *not* show: LD-driven portability loss
 
@@ -241,3 +266,93 @@ cross-population weights — PPB scores whatever they emit), **Popcorn / S-LDXR*
 **Wang et al. 2020** (the deterministic *predict* branch that forecasts what PPB
 measures). Individual-level portability benchmarks (Martin 2019, Ding 2023) are
 the ground truth PPB substitutes for when only a B GWAS + LD panel exist.
+
+## Exercises
+
+Ratings follow [`README.md`](README.md), "Notes on the exercises". Answers begin
+below the last question.
+
+**1.** `[00]` Which single input in Table 1 cannot be replaced by anything
+computed in ancestry A?
+
+**2.** `[10]` `r_g` governs how much accuracy is lost in transfer, yet appears
+nowhere in (X1). Explain, in one sentence, why it has no slot.
+
+**3.** `[M15]` Write `C = diag(c_j)` with `c_j = sd_B,j / sd_A,j`, and suppose
+weights on A's standardization are used with B's `z_B` and `D_B`. Show that the
+error vanishes when `c_j` is the same for every `j`, and say what bounds it when
+it is not.
+
+**4.** `[M20]` Theorem 1 varies only the *scale* of `beta_B`. Show that the
+numerator can be moved with `h²_B` held fixed as well, and name the parameter of
+the "portability modelling" list that this second freedom corresponds to.
+
+**5.** `[20]` Table 2's first row reports portability 1.001 at `r_g = 1.0`. Why
+is that not reassuring, and what does it imply about quoting the −3.02% mismatch
+figure?
+
+**6.** `[M20]` The A-only row reports +57.7%, while `1/portability − 1` at
+portability 0.648 is +54.4%. Reconcile them.
+
+**7.** `[50]` Evaluate (X1) against a real non-European target GWAS for one of
+the six traits in [`REAL_DATA.md`](REAL_DATA.md) Table 4, and compare the answer
+with that table's published individual-level portability column.
+
+## Answers to the exercises
+
+**1.** `z_B`, the target-ancestry GWAS of the trait. That is Theorem 1: `D_B`
+and the frequencies `p_B` come from a genotype panel with no phenotypes in it,
+and `z_B` cannot.
+
+**2.** Because `z_B` is *measured* in B, it already carries B's true effects
+tagged through B's LD, and the estimator never decomposes it into causal
+effects — `r_g` is a parameter of exactly that decomposition, so there is nothing
+for it to be an argument of.
+
+**3.** The correct statistic is `((Cw)ᵀz_B)² / ((Cw)ᵀD_B(Cw))` and the computed
+one is `(wᵀz_B)² / (wᵀD_B w)`. If `C = cI` the factor `c²` appears in both
+numerator and denominator and cancels, so the two agree. Otherwise nothing bounds
+the discrepancy in general: it depends on how `c` lines up with `z_B` and with
+`D_B w`, and `c_j` is a ratio of per-variant genotype SDs, which admixture can
+make differ arbitrarily between the two populations. This is (X2), and it is why
+the operational rule is *empirical* B genotype SDs — the HWE scale
+`√(2p_B(1−p_B))` is correct only under Hardy–Weinberg in B, which a structured or
+admixed target is not.
+
+**4.** Hold `h²_B = beta_Bᵀ Sigma_B beta_B` fixed and move `beta_B` around that
+ellipsoid. The numerator `wᵀrho_B = wᵀ Sigma_B beta_B` is a linear functional of
+`beta_B` and is certainly not constant on an ellipsoid — it is largest when
+`beta_B` aligns with `Sigma_B w` and vanishes on the orthogonal complement — so
+`R²_B` moves while `h²_B` and every A-side quantity stay exactly where they were.
+The freedom being exercised is the per-variant effect map, and `r_g` fixes only a
+*correlation* between `beta_A` and `beta_B`, not the map. That is the precise
+content of "necessary but not sufficient" above.
+
+**5.** Because in the shipped configuration both ancestries are given the same LD
+matrix: Balding-Nichols differs their allele frequencies, but `ppb.simulate`
+draws haplotypes with the same latent correlation `rho**|i-j|` for both, so
+`F_ST` has no LD channel and there is no LD-driven portability to lose at
+`r_g = 1`. It follows that −3.02% is a property of the generator — AR(1) at
+`rho = 0.5`, which decays to `r = 0.06` within four variants, against a real HM3+
+reference whose blocks have a median of 1,901 variants — and not a transferable
+magnitude: the same code reports −64.7% at `rho = 0.9` against `rho = 0.6`. Quote
+the mechanism, not the number.
+
+**6.** They are different averages of the same quantity. The experiment's
+`%bias` is the mean of the per-draw relative errors, `mean((est − true)/true)`,
+while `portability` is a ratio of means, `mean(R²_B)/mean(R²_A)`. Jensen's
+inequality separates them over a `R²_B` that varies from draw to draw:
+`E[R²_A/R²_B] − 1 = +57.9%` against `E[R²_A]/E[R²_B] − 1 = +54.4%`. The A-only
+estimate tracks `R²_A` to −0.16%, which accounts for the remaining fifth of a
+point. No LD term enters — the A-only row uses `D_A`, which is the *correct*
+panel for `R²_A`.
+
+**7.** Open, and it is the project's reason for existing. Everything except the
+target GWAS is already in place: the scores, the estimator, and — in Table 4 of
+[`REAL_DATA.md`](REAL_DATA.md) — a published individual-level portability curve
+across nine ancestry groups for these exact scores, which is a validation target
+rather than a simulation. What has to be built alongside the evaluation is a
+B-side LD reference carrying **empirical per-variant genotype SDs** rather than
+allele frequencies, since the current real-data path uses the HWE scale that the
+gauge rule above warns against: tolerable for the EUR anchor, not for a
+structured target. Phase 4 of [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md).

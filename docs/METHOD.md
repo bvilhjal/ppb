@@ -3,7 +3,7 @@
 Status: specification (binding). Revised 2026-07-25.
 
 Symbols are defined in [`NOTATION.md`](NOTATION.md) and are not redefined here.
-Equations carry the stable labels (M1)–(M4); see `NOTATION.md` §1 for the
+Equations carry the stable labels (M1)–(M6); see `NOTATION.md` §1 for the
 scheme and §5 for the index tying each to its implementation and test.
 
 This is the contract for the reimplementation. PPB is being rebuilt from the
@@ -14,7 +14,7 @@ this implementation reproduces the published numbers; no legacy logic is copied.
 Source (foundation): Witteveen, Pedersen, Meijsen, Andersen, Privé, Speed,
 Vilhjalmsson, *Publicly Available Privacy-preserving Benchmarks for Polygenic
 Prediction*, bioRxiv 2022, doi:10.1101/2022.10.10.510645 (CC-BY). Results here are
-re-derived rather than transcribed, and are labelled (M1)–(M4) in this project's
+re-derived rather than transcribed, and are labelled (M1)–(M6) in this project's
 own scheme; they do not correspond to the preprint's numbering.
 
 **Project focus: cross-ancestry portability.** The estimator below is
@@ -153,6 +153,73 @@ come from different samples — every real use — nothing constrains the ratio,
 ppb does not clamp it. A value near or above 1 is therefore a *diagnostic that
 one of (H1)–(H3) has failed*, not a very good score.
 
+### 1.6 The evaluation procedure
+
+The estimator is one line of algebra; an evaluation is not. Three variant tables
+have to be reconciled before the line can be written down, and the order in which
+that happens is part of the specification rather than an implementation detail.
+
+**Algorithm V** (*eValuate a score from summary-level data*). Given PGS weights
+`w` with their own variant table, target summary statistics with theirs, and a
+block-diagonal LD reference `D` with a third, this algorithm computes the
+`R^2_hat` of §1.3 together with the diagnostics (G2) and (G3). The reference's
+table is the frame: the other two are brought to it, and nothing is ever brought
+to them.
+
+**V1.** [Convert the GWAS.] Form `z_j = t_j/sqrt(t_j^2 + n_j - 2)` by (M4) from
+each variant's reported `(beta_j, se_j, n_j)`, using a per-variant `n_j` wherever
+the file carries one — a single uniform `N` biases `R^2_hat` downward, by up to
+42% when the sizes really do vary (`experiments/per_variant_n.py`). For a
+case/control GWAS `n_j` is the effective size `4/(1/n_case + 1/n_ctrl)`, and what
+comes out is on the observed scale at a case fraction of one half (§5).
+
+**V2.** [Harmonize to the reference.] Match the weight and summary-statistic
+tables to the reference's on normalized `(chrom, pos)`; negate the value on an
+allele swap or a strand flip; drop strand-ambiguous palindromes. Record the
+matched fractions — they are the evidence that this step did what it claims.
+
+**V3.** [Fix the gauge.] If `w` is on the per-allele dosage scale, multiply each
+`w_j` by the target cohort's empirical genotype standard deviation `sd_j`. If it
+is already on the standardized scale that `D` represents, do nothing. There is no
+third possibility, and the caller must declare which of the two applies. This
+step is where (H3) is discharged, and (X2) is what it discharges.
+
+**V4.** [Restrict to the joint support.] Let `J` be the set of reference variants
+matched by *both* other tables, and set `w_j <- 0`, `z_j <- 0` for every `j`
+outside `J`. A variant carrying a weight but no target association is not
+evidence of no association; leaving it in the denominator alone would evaluate a
+score nobody submitted. Record `|J|`.
+
+**V5.** [Sweep the blocks.] For each block `b` accumulate `u_b <- w_b^T z_b` and
+`v_b <- w_b^T D_b w_b`, the latter by the int8 kernel of §2. This is the only
+pass over the LD reference that anything below needs.
+
+**V6.** [Accumulate.] Report `R^2_hat <- (sum_b u_b)^2 / (var_y * sum_b v_b)`,
+which is (G1), and `MSE <- var_y - 2 sum_b u_b + sum_b v_b`, which is (M5).
+Refuse the evaluation if `sum_b v_b <= 0` — and refuse it also if any single
+`v_b < 0`, because one indefinite block hiding among 430 sound ones deflates the
+denominator and inflates `R^2_hat` without disturbing the total.
+
+**V7.** [Diagnose.] From the same `u_b` and `v_b`, with no second pass, form the
+delete-one-block jackknife (G2) and the sign-flip null (G3). Read `R^2_hat`
+against `null_mean` rather than against zero. ∎
+
+Steps V1–V4 are bookkeeping and V5–V7 are arithmetic, and that is not a
+hierarchy. Two rows of Table 1 — the per-variant gauge mismatch and the support
+mismatch — are V3 and V4 failing; and the mis-scaled `z_hat` that is this
+project's largest *measured* error enters at V1, where the reported
+`(beta, se, n)` triple is taken at face value. The arithmetic has never been the
+problem.
+
+**Running time.** V5 costs `O(sum_b m_b^2)`; V2 is linear in `M` on average (the
+reference's position index is a hash table); everything else is linear. On the
+shipped reference the constants invert that ordering — a full 22-chromosome sweep
+of a 922,538-variant score spends more time in V2 than in V5 (§2, "On-disk LD
+store"), which is worth knowing before optimizing the quadratic form.
+
+**Implemented in** `ppb.evaluate` (V2–V6 for a single bundle) and
+`scripts/regenerate_results.py` (V1–V7, genome-wide, one chromosome at a time).
+
 ## 2. Exact vs. banded LD
 
 - **Exact:** with the full `D`, the formula is exact — equal to the
@@ -179,7 +246,7 @@ above are the source paper's, and are not a property of this implementation.
 Instead of a raw cM-banded dense matrix, PPB uses the same compact int8 block-LD
 scheme as the local `ldpred3` project (Privé, a co-author of the source preprint,
 develops ldpred3, the working successor of the LDpred/bigsnpr lineage), but
-**reimplemented independently from the published scheme** — `ppb/ld_backend.py` is
+**reimplemented independently from the published scheme** — `src/ppb/ld_backend.py` is
 original MIT-licensed code, not ported from ldpred3 (which cannot even be imported
 into the Python 3.14 env). The whole estimator only ever needs two reductions over
 `D`:
@@ -251,17 +318,17 @@ no-op. It would also bias ppb's estimand in a known direction:
 denominator and *inflates* R².
 
 **Kernels: numba.** The block sweeps for `w^T D w` are implemented as original
-numba `@njit(parallel=True)` kernels in `ppb/_kernels.py` (the same scalar-loop
+numba `@njit(parallel=True)` kernels in `src/ppb/_kernels.py` (the same scalar-loop
 int8 sweep pattern ldpred3 uses, written independently — no code copied).
 
-**Implemented in `ppb/ld_backend.py`:** `DenseLDInt8` and
+**Implemented in `src/ppb/ld_backend.py`:** `DenseLDInt8` and
 `PackedDenseLDInt8` (D8, with a diagonal that dequantises to exactly 1).
 Square D8 uses about one eighth the float64 storage; packed D8 uses about one
 sixteenth. The PSD-by-construction fallback is the float `LowRankLD`.
 
 ### On-disk LD store: what is wired up, and why LR8 is not
 
-The `.npz` LD-reference format (`ppb/ldref.py`) is versioned:
+The `.npz` LD-reference format (`src/ppb/ldref.py`) is versioned:
 
 - **v1** — every block a full `m x m` int8 square in `ld8`. What the converted
   HM3+ reference originally shipped.
@@ -275,7 +342,7 @@ The `.npz` LD-reference format (`ppb/ldref.py`) is versioned:
 reference (1,444,196 variants in 431 blocks; block sizes min 216, median 1,901,
 mean 3,351, max 17,304), per chr22 and scaling with `sum_b m_b^2`:
 
-**Table 1. Measured LD-reference storage layouts.**
+**Table 2. Measured LD-reference storage layouts.**
 
 | layout | in memory | on disk | read (chr22) | note |
 |---|---|---|---|---|
@@ -306,7 +373,7 @@ Measured genome-wide against the float bigsnpr source (diagonal forced to 1 in
 both, so this isolates quantisation), for the six real PGS Catalog scores of
 `docs/REAL_DATA.md`:
 
-**Table 2. Genome-wide D8 quantisation error.**
+**Table 3. Genome-wide D8 quantisation error.**
 
 | trait | error in `w^T D w` | error in R² |
 |---|---:|---:|
@@ -380,13 +447,13 @@ hyper-parameter selection only, not for estimating final performance.
   population-structure confounding from the estimated R².
 - Allele alignment: `w` and `z` must be harmonized to the same effect allele; a
   sign convention and a variant-key (build, chr:pos:a1:a2) must be fixed.
-  Implemented in `ppb/harmonize.py` (`VariantTable`, `harmonize_to`) as a
+  Implemented in `src/ppb/harmonize.py` (`VariantTable`, `harmonize_to`) as a
   bigsnpr-`snp_match`-style pass, mirroring `ldpred3.harmonize`: match by
   normalized `(chrom, pos)`, flip the value sign on allele swaps and strand
   flips (reverse-complement, indel-aware), and drop strand-ambiguous
   palindromes. `ppb.evaluate` composes harmonization with the estimator.
 - Per-variant sample size — **(M4)**: `z_j = t_j/√(t_j²+n_j−2)`, implemented by
-  `ppb/sumstats.py` (`standardized_marginal(beta, se, n)`), which recovers the
+  `src/ppb/sumstats.py` (`standardized_marginal(beta, se, n)`), which recovers the
   standardized marginal correlation per variant. Assuming a uniform
   `N` when the true `n_j` vary biases R² downward (see
   `experiments/per_variant_n.py`), so summary-statistic bundles should carry
@@ -431,7 +498,7 @@ the standard rescaling of [Lee et al.
 statistic was computed at — one half here, and passing a study's true case
 fraction instead would describe a statistic PPB did not compute. PPB ships **no
 implementation** of (M6): binary metrics are a v1.0 item and registry values
-stay on the observed scale. (Table 2 was produced by a liability-threshold
+stay on the observed scale. (Table 4 was produced by a liability-threshold
 simulation that no longer ships; the formula above is the record.)
 
 The factor is not a small adjustment. At `K = P = 0.5` it is exactly **π/2**,
@@ -440,7 +507,7 @@ observed scale *understates*. At `K = 0.01, P = 0.5` it is **0.55**, because a
 balanced sample of a rare disease is enormously enriched and the observed scale
 *overstates*.
 
-**Table 2. What (M6) recovers**, from a liability-threshold simulation that
+**Table 4. What (M6) recovers**, from a liability-threshold simulation that
 ascertains a balanced case/control sample exactly as a study would. The
 liability-scale R² is known by construction.
 
@@ -489,3 +556,115 @@ target population must be named.
 - Known failure mode: MDD prediction R^2 is overestimated (~+4.5% at large
   windows), hypothesized to stem from assortative mating; a validation target for
   the "known failure modes" work, not a bug to eliminate.
+
+## 8. Exercises
+
+Ratings follow [`README.md`](README.md), "Notes on the exercises". Answers begin
+below the last question; nothing here is left to the reader.
+
+**1.** `[00]` The estimator is invariant to a global rescale of exactly one of
+`w`, `z_hat`, `D_hat`. Which one, and what happens under a global rescale of each
+of the other two?
+
+**2.** `[10]` Exhibit summary-level inputs `w`, `z_hat`, `D_hat` for which
+`R^2_hat > 1`. Which of (H1)–(H3) does your example violate?
+
+**3.** `[M15]` The proof of (M2) uses that the columns of `X` are centered and
+that `var(y) = 1`. Where does it use that the columns are scaled to unit
+variance? What does that scaling buy, then?
+
+**4.** `[M20]` Verify §5's claim that the factor in (M6) is exactly `pi/2` when
+`K = P = 1/2`, and say which way the observed scale errs.
+
+**5.** `[M20]` Negating every weight in one LD block flips `u_b` and leaves `v_b`
+alone. Why? Why does that make (G3) an *exact* null rather than a simulated one,
+and what breaks if `D` carries off-block entries?
+
+**6.** `[M25]` Derive §1.3's `E[R^2_hat] - R^2(w) ~= (1 - R^2)/N` from
+`var(w^T z_hat) ~= w^T Sigma w (1 - R^2)/N`. Which term does the derivation drop,
+and what does (X3) do about it?
+
+**7.** `[20]` §2 finds the genome-wide D8 quantisation error about 25 times
+smaller than the per-block error. Account for the factor, and state the condition
+under which the argument would fail.
+
+**8.** `[40]` Implement (X3). Explain why it is rated `[40]` and not `[20]`,
+given that the formula is one subtraction.
+
+**9.** `[50]` §2 leaves large D8 blocks with no *proof* of positive
+semi-definiteness: the Lanczos scan can refute, never certify. Find a block
+representation that is PSD by construction, no larger than the packed triangle,
+and no more costly in genome-wide `R^2` than D8's measured 0.02%.
+
+## Answers to the exercises
+
+**1.** `w`. Replacing `w` by `c w` multiplies numerator and denominator by `c^2`.
+Replacing `z_hat` by `c z_hat` sends `R^2_hat` to `c^2 R^2_hat` — `z` appears in
+the numerator alone — and replacing `D_hat` by `c D_hat` sends it to
+`R^2_hat / c`. Only the middle one happens in practice, and it is row three of
+Table 1.
+
+**2.** Take `D_hat = I` and `w = z_hat`; then
+`R^2_hat = (z_hat^T z_hat)^2 / (z_hat^T z_hat) = ||z_hat||^2`, which exceeds 1 as
+soon as the summary statistics have norm above one — two variants at
+`z_j = 0.8` will do. It violates (H2), since `w` was chosen as a function of
+`z_hat`. It is also the mechanism behind the leaderboard warning in
+[`../results/schema.md`](../results/schema.md): the ratio is maximized at
+`w ∝ D^{-1} z`, so a public bundle makes a high score a linear solve.
+
+**3.** Nowhere. Replace `X` by `X C` for a positive diagonal `C`: then
+`z_hat -> C z_hat` and `D_hat -> C D_hat C`, so the ratio evaluated at `w` on the
+rescaled data equals the ratio evaluated at `C w` on the original — the identity
+is *covariant* under a change of gauge rather than dependent on one, which is
+also what `corr(X C w, y)^2` says on the right-hand side. Unit scaling is a
+reporting convenience: it makes `D_hat` a correlation matrix and `z_hat` a vector
+of marginal correlations. What (H3) demands is therefore only that `w`, `z_hat`
+and `D_hat` use the *same* `C`; (X2) is what fixes `C` when the weights arrive
+from another population, and step V3 of Algorithm V is where it is applied.
+
+**4.** `t = Phi^{-1}(1/2) = 0` and `phi(0) = 1/sqrt(2 pi)`, so the factor is
+`K^2 (1-K)^2 / (phi(t)^2 P (1-P)) = (1/16) / ((1/(2 pi)) (1/4)) = pi/2 ~= 1.5708`.
+It exceeds 1, so the observed scale **understates**: dichotomizing a continuous
+liability discards information, and the rescaling puts it back.
+
+**5.** `u_b = w_b^T z_b` is linear in `w_b` and `v_b = w_b^T D_b w_b` is
+quadratic, so negation flips the first and fixes the second. Because `D` is
+*exactly* block-diagonal, `sum_b v_b` is the same for all `2^n_blocks` sign
+patterns; the whole null family therefore shares the observed denominator, and
+its mean `sum_b u_b^2 / sum_b v_b` is available in closed form with no
+resampling. With off-block entries the cross terms `w_b^T D_bb' w_b'` change sign
+whenever exactly one of the two blocks is flipped, the denominator moves with the
+pattern, and the null stops being exact.
+
+**6.** Hold the denominator at `w^T Sigma w`. Then
+`E[(w^T z_hat)^2] = (w^T rho)^2 + var(w^T z_hat)`, and dividing through gives
+`R^2 + (1 - R^2)/N`. The derivation drops the denominator's own sampling
+variability, which enters at the same order — this is why the statement carries
+`~=` and not `=`. (X3) removes the leading term directly, subtracting
+`w^T D_B w / N_B` from the squared numerator before the division.
+
+**7.** The per-block rounding errors are independent and of both signs, so their
+sum grows like `sqrt(n_blocks)` while the total `sum_b v_b` grows like
+`n_blocks`; the relative error therefore falls like `1/sqrt(n_blocks)`, and
+`sqrt(431) ~= 20.8` is the right size for the measured factor. The argument fails
+if the errors are common-mode — and §2 measures that they are not, the signs
+differing across the six scores. That same fact is why the error does *not*
+cancel in a ratio of two denominators, so magnitude rather than cancellation is
+what saves the cross-ancestry ratio.
+
+**8.** The formula is indeed one subtraction. The work is in what has to be true
+around it. `N_B` is per-variant on a meta-analysis target, where no single sample
+size exists ([`LIMITATIONS.md`](LIMITATIONS.md)), so the "sample size the
+estimator used" that [`../results/schema.md`](../results/schema.md) records has to
+be the same quantity that enters the correction. A corrected value also cannot
+replace a published one without the (G2) standard error beside it, since the
+correction is `~1/N` and the jackknife SE is routinely larger. Tracked as a v0.1
+completion criterion in [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md).
+
+**9.** Open. The obvious candidate, LR8, satisfies the first two conditions and
+fails the third: measured on this reference it is 1.34x smaller than the packed
+triangle at 99% retained variance, but costs ~0.45% error in `w^T D w` against
+D8's own 0.12%, with a ~0.25% floor from the PSD clamp, row renormalization and
+factor quantisation that no retained-variance setting removes. §2 records the
+measurements and the condition — a distribution-size requirement below the packed
+triangle — under which it should be reconsidered anyway.

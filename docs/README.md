@@ -33,9 +33,10 @@ and the test that pins it.
 1. [`NOTATION.md`](NOTATION.md) §2–3 — the symbols and the standardization
    conventions. Ten minutes, and everything afterwards is unambiguous.
 2. [`METHOD.md`](METHOD.md) §1 — the estimand (M1), the exact in-sample
-   identity (M2), the three hypotheses that turn it into an estimator, and a
-   table of what each violated hypothesis costs. That table is the map of every
-   failure mode in the rest of these documents.
+   identity (M2), the three hypotheses that turn it into an estimator, a table
+   of what each violated hypothesis costs, and Algorithm V (§1.6), which is the
+   whole evaluation in seven steps. That table is the map of every failure mode
+   in the rest of these documents, and Algorithm V is where each of them enters.
 3. [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) — what changes when the target is a
    different ancestry. Mostly: nothing changes in the algebra, and a great deal
    changes in what the inputs must be.
@@ -45,9 +46,10 @@ and the test that pins it.
 the estimator's denominator, read on its own, is the score's variance in the
 population — which is what standardizes an individual's score.
 
-**To evaluate a score**, read [`METHOD.md`](METHOD.md) §4 (conventions you must
-match), the "Command line" section of the [root README](../README.md), and
-[`LIMITATIONS.md`](LIMITATIONS.md) on gauge consistency and the scale of `z`.
+**To evaluate a score**, read [`METHOD.md`](METHOD.md) §1.6 (Algorithm V — what
+happens, in what order, and why the order is not free) and §4 (conventions you
+must match), then the "Command line" section of the [root README](../README.md),
+and [`LIMITATIONS.md`](LIMITATIONS.md) on gauge consistency and the scale of `z`.
 
 **To judge whether a published number means anything**, read
 [`REAL_DATA.md`](REAL_DATA.md) — both the results and the caveats — then
@@ -65,8 +67,8 @@ numbered result to its module and its test, then the module.
 | document | kind | contents |
 |---|---|---|
 | [`NOTATION.md`](NOTATION.md) | reference | symbols, conventions, overloadings, index of results |
-| [`METHOD.md`](METHOD.md) | specification | the estimand and estimator (M1–M5), the hypotheses and what violating each costs, LD representation, conventions, tolerances |
-| [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | specification | target-ancestry inputs (X1), the gauge condition (X2), what is impossible without target data |
+| [`METHOD.md`](METHOD.md) | specification | the estimand and estimator (M1–M6), the hypotheses and what violating each costs, Algorithm V, LD representation, conventions, tolerances, exercises |
+| [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | specification | target-ancestry inputs (X1), the gauge condition (X2), Theorem 1 on what is impossible without target data, exercises |
 | [`OVERLAP.md`](OVERLAP.md) | scope | shared training/target noise: the mechanism, how it is detected, and why correction is not offered (the experimental apparatus lives in `../experiments/overlap_detection.py`) |
 | [`CALIBRATION.md`](CALIBRATION.md) | scope | whether the target `z` is on the assumed scale: LD scores (C1), LD-score regression (C2), the implied rescaling (C3); implemented in `../experiments/z_calibration.py` |
 | [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md) | specification | the score's mean (P1) and variance (P2) in a population, from allele frequencies and LD; what two moments can support |
@@ -76,6 +78,7 @@ numbered result to its module and its test, then the module.
 | [`../results/schema.md`](../results/schema.md) | specification | the result-pack format (R1) and the rules CI enforces |
 | [`../experiments/README.md`](../experiments/README.md) | record | each simulation, what it demonstrates, and the numbers it produces |
 | [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md) | intent | objective, gates, delivery plan, claims discipline |
+| [`../archive/README.md`](../archive/README.md) | record | what the original notebook is, and why it is an oracle rather than a source |
 
 ## Reviews
 
@@ -101,3 +104,39 @@ specification above, the specification wins.
 - Historical and attribution notes are given where the idea is introduced, not
   collected in a bibliography, so that credit is attached to the claim it
   belongs to.
+- Procedures whose *order* is normative are set out as numbered algorithms
+  (**Algorithm V**, with steps **V1**, **V2**, …), and results that come with a
+  proof are stated as theorems. Both keep per-document numbering, as tables do;
+  see [`NOTATION.md`](NOTATION.md) §1.
+
+## Notes on the exercises
+
+[`METHOD.md`](METHOD.md) and [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) end with
+exercises, each followed by its answer. They are there because those two
+documents are meant to be read rather than consulted, and because several of the
+claims in them are one line of algebra away from being checkable by the reader —
+who will then believe the rest for a better reason than that it is written down.
+
+The bracketed number is a difficulty rating, on the scale Knuth uses in *The Art
+of Computer Programming*:
+
+**Table 2. Difficulty ratings.**
+
+| rating | what to expect |
+|---:|---|
+| 00 | immediate — answerable from the text, with no pencil and paper |
+| 10 | a minute's thought |
+| 20 | a quarter of an hour |
+| 30 | a couple of hours |
+| 40 | a substantial piece of work; here, always a tracked completion item |
+| 50 | an open problem — nothing in this repository solves it |
+
+An `M` before the number (`[M20]`) marks an exercise that is mathematical rather
+than about the code. The scale is logarithmic: a `[30]` is a great deal more than
+three times a `[10]`.
+
+The `[40]` and `[50]` exercises are not rhetorical. (X3) is the outstanding v0.1
+completion criterion listed in [`NOTATION.md`](NOTATION.md) §5, and the first
+real cross-ancestry evaluation is Phase 4 of
+[`../FINISHING_PLAN.md`](../FINISHING_PLAN.md). They are exercises in the sense
+that a reader could do them, and open in the sense that nobody has.
