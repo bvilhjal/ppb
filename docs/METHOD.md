@@ -133,7 +133,7 @@ lives where the third column points.
 | (H1) `D_hat` from the wrong population | `R^2_hat = R^2 · (w^T Sigma_B w)/(w^T Sigma_A w)` | either; downward when the wrong panel has more LD | (X1), `CROSS_ANCESTRY.md` | −3% to −65% in simulation, depending on how far the LD architectures diverge |
 | (H1) `z_hat` from the wrong population | estimates that population's accuracy instead | overstates transfer | `CROSS_ANCESTRY.md` §impossible | `1/portability − 1`; +58% at the demo's `r_g = 0.8` |
 | (H1) `z_hat` mis-scaled by `c` | `R^2_hat -> c^2 R^2_hat`; nothing cancels it | as `c^2`; genomic control deflates | [`LIMITATIONS.md`](LIMITATIONS.md) | 1.5–2× low on GIANT targets, (G5) |
-| (H2) `w` fitted on the target's noise | numerator gains `gamma q` | **upward**, without limit | (O1), [`OVERLAP.md`](OVERLAP.md) | up to 30× on real data (T2D 0.509 vs 0.044) |
+| (H2) `w` fitted on the target's noise | numerator gains `gamma q` | **upward**, without limit | (O1), [`OVERLAP.md`](OVERLAP.md) | 11.6× on real data (T2D 0.509 vs 0.044); ~29× in simulation at full overlap |
 | (H2) `w` fitted on the LD panel's noise | `w` overfits that panel, so `w^T D_hat w` is *overstated* | downward | §3, `experiments/figure_s1.py` | −9.0% using training-set LD |
 | (H3) per-variant gauge mismatch | scale factors `c_j` do not cancel | either | (X2) | small within EUR, unbounded under admixture |
 | support(`w`) ≠ support(`z_hat`) | a *different*, restricted score is evaluated | usually downward | [`LIMITATIONS.md`](LIMITATIONS.md) | 88.6–92.1% support on the GIANT/GLGC rows |
