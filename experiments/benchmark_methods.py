@@ -68,7 +68,11 @@ def run(m=400, block_size=40, rho=0.6, n=2500, h2=0.5, n_reps=20,
     D_ref = (Xref.T @ Xref) / n
     ld = {"exact": DenseLD(D_ref)}
     for v in variances:
-        ld[f"lr8@{v}"] = lowrank_ld(D_ref, variance=v)
+        # Float LowRankLD at retained-variance v -- eigen-truncation error only,
+        # no quantisation. Not ldpred3's int8 LR8, which ppb does not implement
+        # (docs/METHOD.md section 2); an earlier key named these "lr8@" and said
+        # so by accident.
+        ld[f"lowrank@{v}"] = lowrank_ld(D_ref, variance=v)
 
     archs = {"sparse": max(5, m // 20), "medium": max(20, m // 4), "polygenic": m}
 

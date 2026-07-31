@@ -407,7 +407,9 @@ def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
     Keeps the fewest top eigenvectors explaining ``variance`` of the spectrum
     (capped at ``max_rank``), folds ``sqrt(eigenvalue)`` into ``U``, and
     row-normalizes so the reconstruction ``U U^T`` has unit diagonal -- the
-    LR8 / SBayesRC-style construction (mirrors ``ldpred3.ld_repr.lowrank_ld``).
+    construction LR8 and SBayesRC share (mirrors ``ldpred3.ld_repr.lowrank_ld``).
+    Only the construction: ``U`` stays float64 here, where LR8 goes on to
+    quantise it to int8, which ppb does not implement (``docs/METHOD.md`` s2).
     ``variance=1.0`` keeps full rank and reproduces ``corr`` exactly.
 
     The retained rank is raised past the ``variance`` rule if that rule would

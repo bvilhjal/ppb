@@ -63,11 +63,11 @@ haplotypes thresholded at MAF quantiles), runs four PGS methods across
 polygenicity levels, and checks that PPB's summary-statistic R^2 (independent LD
 reference, exact or low-rank-approximated) agrees with the individual-level R^2.
 
-> **The `lr8@` labels below are a misnomer inherited from the script's dict
-> keys.** They are float `LowRankLD` factors from `ppb.lowrank_ld` at the stated
-> retained-variance fraction, *not* the int8 LR8 representation of
-> [`../docs/METHOD.md`](../docs/METHOD.md) §2 — which ppb does not implement.
-> What these rows measure is eigen-truncation error, with no quantisation in it.
+The `lowrank@` rows below are float `LowRankLD` factors from `ppb.lowrank_ld` at
+the stated retained-variance fraction, so what they measure is eigen-truncation
+error with no quantisation in it. They are *not* the int8 LR8 representation of
+[`../docs/METHOD.md`](../docs/METHOD.md) §2, which ppb does not implement — an
+earlier version of this script keyed them `lr8@` and so implied otherwise.
 
 Methods: `causal` (oracle true effects), `marginal` (GWAS betas), `pT`
 (p-value-thresholded), `inf` (LDpred-infinitesimal / ridge).
@@ -85,8 +85,8 @@ Observed (m=400, n=2500, h²=0.5, 20 reps × 3 architectures):
 | LD reference | Pearson | Spearman | mean % bias |
 |--------------|--------:|---------:|------------:|
 | exact        |  0.975  |  0.974   |    +0.19    |
-| lr8@0.99     |  0.976  |  0.974   |    −0.20    |
-| lr8@0.95     |  0.976  |  0.975   |    −1.91    |
+| lowrank@0.99 |  0.976  |  0.974   |    −0.20    |
+| lowrank@0.95 |  0.976  |  0.975   |    −1.91    |
 
 Method ranking (mean R², individual-level vs PPB-exact) — correctly preserved (see
 below).
