@@ -1,11 +1,24 @@
 """Tests for the file I/O layer and the ``ppb evaluate`` CLI."""
 
+import gc
 import json
+import weakref
 
 import numpy as np
 import pytest
 
-from ppb import DenseLD, VariantTable, evaluate, read_bundle, read_weights, write_bundle
+from ppb import (
+    DenseLD,
+    DenseLDInt8,
+    VariantTable,
+    evaluate,
+    evaluate_ldrefs,
+    read_bundle,
+    read_sumstats,
+    read_weights,
+    write_bundle,
+    write_ldref,
+)
 from ppb.cli import main
 
 
@@ -35,6 +48,28 @@ def _fixture(tmp_path, seed=0, m=8):
     wv, wr = read_weights(weights_path)
     truth = evaluate(DenseLD(D), variants, wv, wr, variants, z).r2
     return weights_path, bundle_path, truth
+
+
+def _ldref_fixture(tmp_path):
+    directory = tmp_path / "ldref"
+    directory.mkdir()
+    for chrom in ("1", "2"):
+        variants = VariantTable(
+            [chrom, chrom], [1, 2], ["A", "A"], ["C", "C"])
+        block = DenseLDInt8.from_dense(np.eye(2)).packed()
+        write_ldref(
+            directory / f"ldref_chr{chrom}.npz",
+            variants, [(block, np.arange(2))], af=[0.2, 0.3],
+            psd_scan=False)
+
+    # Interleaving exercises the non-contiguous chromosome partition path.
+    variants = VariantTable(
+        ["1", "2", "1", "2"], [1, 1, 2, 2],
+        ["A", "A", "A", "A"], ["C", "C", "C", "C"])
+    weights = np.array([1.0, 3.0, 2.0, 4.0])
+    z = np.array([0.1, 0.3, 0.2, 0.4])
+    paths = [directory / "ldref_chr1.npz", directory / "ldref_chr2.npz"]
+    return directory, paths, variants, weights, z
 
 
 def test_read_weights_recognises_pgs_catalog_columns(tmp_path):
@@ -191,3 +226,196 @@ def test_mse_is_flagged_uninterpretable_for_dosage_weights(tmp_path):
         assert main(["evaluate", "--weights", str(weights), "--bundle", str(bundle),
                      "--weight-scale", scale, "--out", str(out)]) == 0
         assert json.loads(out.read_text(encoding="utf-8"))["mse_interpretable"] is expected
+
+
+def test_sharded_ldref_evaluation_forms_one_global_ratio(tmp_path):
+    _, paths, variants, weights, z = _ldref_fixture(tmp_path)
+    result = evaluate_ldrefs(
+        paths, variants, weights, variants, z,
+        # An unused column must not make standardized weights fail.
+        genotype_sd=np.ones(variants.n))
+
+    numerator = float(weights @ z)
+    denominator = float(weights @ weights)
+    assert result.r2 == pytest.approx(numerator ** 2 / denominator)
+    assert result.mse == pytest.approx(1.0 - 2.0 * numerator + denominator)
+    assert result.mse_interpretable is True
+    assert result.n_ldref_files == 2
+    assert result.chromosomes == ("1", "2")
+    assert result.weights_report["n_matched"] == 4
+    assert result.sumstats_report["n_matched"] == 4
+
+
+def test_sharded_ldref_uses_joint_support_and_dosage_scale(tmp_path):
+    _, paths, variants, weights, z = _ldref_fixture(tmp_path)
+    subset = np.array([0, 1, 2])
+    target = VariantTable(
+        variants.chrom[subset], variants.pos[subset],
+        variants.a1[subset], variants.a2[subset])
+    target_z = z[subset]
+    target_sd = np.array([0.5, 2.0, 1.0])
+
+    result = evaluate_ldrefs(
+        paths, variants, weights, target, target_z,
+        weight_scale="dosage", genotype_sd=target_sd)
+
+    scaled = weights[subset] * target_sd
+    numerator = float(scaled @ target_z)
+    denominator = float(scaled @ scaled)
+    assert result.r2 == pytest.approx(numerator ** 2 / denominator)
+    assert result.n_variants_scored == 3
+    assert result.mse_interpretable is False
+    assert result.genotype_sd_source == "sumstats_empirical"
+
+
+def test_sharded_ldref_dosage_requires_exactly_one_sd_source(tmp_path):
+    _, paths, variants, weights, z = _ldref_fixture(tmp_path)
+    with pytest.raises(ValueError, match="exactly one"):
+        evaluate_ldrefs(
+            paths, variants, weights, variants, z, weight_scale="dosage")
+    with pytest.raises(ValueError, match="exactly one"):
+        evaluate_ldrefs(
+            paths, variants, weights, variants, z, weight_scale="dosage",
+            genotype_sd=np.ones(variants.n), hwe_genotype_sd=True)
+
+    result = evaluate_ldrefs(
+        paths, variants, weights, variants, z, weight_scale="dosage",
+        hwe_genotype_sd=True)
+    sd = np.sqrt(2.0 * np.array([0.2, 0.2, 0.3, 0.3])
+                 * (1.0 - np.array([0.2, 0.2, 0.3, 0.3])))
+    scaled = weights * sd
+    assert result.r2 == pytest.approx((scaled @ z) ** 2 / (scaled @ scaled))
+    assert result.genotype_sd_source == "ldref_hwe"
+
+
+def test_read_sumstats_and_cli_sharded_mode(tmp_path, capsys):
+    directory, _, variants, weights, z = _ldref_fixture(tmp_path)
+    weights_path = tmp_path / "weights.tsv"
+    sumstats_path = tmp_path / "sumstats.tsv"
+    header = "chrom\tpos\ta1\ta2"
+    weights_path.write_text(
+        header + "\tweight\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t{weights[i]}\n"
+            for i in range(variants.n)),
+        encoding="utf-8")
+    sumstats_path.write_text(
+        header + "\tz\tgenotype_sd\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t{z[i]}\t1\n"
+            for i in range(variants.n)),
+        encoding="utf-8")
+
+    parsed, parsed_z, parsed_sd = read_sumstats(sumstats_path)
+    assert parsed.n == variants.n
+    assert np.array_equal(parsed_z, z)
+    assert np.array_equal(parsed_sd, np.ones(variants.n))
+
+    assert main([
+        "evaluate", "--weights", str(weights_path),
+        "--ldref-dir", str(directory), "--sumstats", str(sumstats_path),
+        "--weight-scale", "standardized"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["r2"] == pytest.approx((weights @ z) ** 2 / (weights @ weights))
+    assert result["source"] == "ldref_shards"
+    assert result["n_ldref_files"] == 2
+
+
+def test_cli_hwe_flag_overrides_optional_empirical_sd(tmp_path, capsys):
+    directory, _, variants, weights, z = _ldref_fixture(tmp_path)
+    weights_path = tmp_path / "weights.tsv"
+    sumstats_path = tmp_path / "sumstats.tsv"
+    rows = "".join(
+        f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t"
+        f"{weights[i]}\t{z[i]}\tnot-an-sd\n"
+        for i in range(variants.n)
+    )
+    weights_path.write_text(
+        "chrom\tpos\ta1\ta2\tweight\tz\tgenotype_sd\n" + rows,
+        encoding="utf-8")
+    sumstats_path.write_text(
+        "chrom\tpos\ta1\ta2\tweight\tz\tgenotype_sd\n" + rows,
+        encoding="utf-8")
+
+    assert main([
+        "evaluate", "--weights", str(weights_path),
+        "--ldref-dir", str(directory), "--sumstats", str(sumstats_path),
+        "--weight-scale", "dosage", "--hwe-genotype-sd"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["genotype_sd_source"] == "ldref_hwe"
+
+
+def test_cli_standardized_weights_ignore_optional_empirical_sd(tmp_path, capsys):
+    directory, _, variants, weights, z = _ldref_fixture(tmp_path)
+    weights_path = tmp_path / "weights.tsv"
+    sumstats_path = tmp_path / "sumstats.tsv"
+    weights_path.write_text(
+        "chrom\tpos\ta1\ta2\tweight\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t{weights[i]}\n"
+            for i in range(variants.n)),
+        encoding="utf-8")
+    sumstats_path.write_text(
+        "chrom\tpos\ta1\ta2\tz\tgenotype_sd\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t{z[i]}\tbad\n"
+            for i in range(variants.n)),
+        encoding="utf-8")
+
+    assert main([
+        "evaluate", "--weights", str(weights_path),
+        "--ldref-dir", str(directory), "--sumstats", str(sumstats_path),
+        "--weight-scale", "standardized"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["genotype_sd_source"] == "not_used"
+
+
+def test_read_sumstats_validates_empirical_sd_by_default(tmp_path):
+    path = tmp_path / "sumstats.tsv"
+    path.write_text(
+        "chrom\tpos\ta1\ta2\tz\tgenotype_sd\n"
+        "1\t1\tA\tC\t0.1\tbad\n",
+        encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        read_sumstats(path)
+
+
+def test_cli_validates_sharded_mode_before_reading_large_tables(tmp_path):
+    with pytest.raises(ValueError, match="--sumstats is required"):
+        main([
+            "evaluate", "--weights", str(tmp_path / "missing.tsv"),
+            "--ldref-dir", str(tmp_path / "missing-ldref"),
+            "--weight-scale", "standardized"])
+
+
+def test_sharded_evaluation_releases_ld_before_reading_next(monkeypatch):
+    import ppb.io as io
+
+    previous = None
+    calls = 0
+
+    class IdentityLD:
+        m = 1
+
+        @staticmethod
+        def quad(w):
+            return float(w @ w)
+
+    def fake_read(path):
+        nonlocal calls, previous
+        gc.collect()
+        if previous is not None:
+            assert previous() is None
+        calls += 1
+        ld = IdentityLD()
+        previous = weakref.ref(ld)
+        chrom = str(calls)
+        return {
+            "variants": VariantTable([chrom], [1], ["A"], ["C"]),
+            "ld": ld,
+        }
+
+    monkeypatch.setattr(io, "read_ldref", fake_read)
+    both = VariantTable(["1", "2"], [1, 1], ["A", "A"], ["C", "C"])
+    result = io.evaluate_ldrefs(
+        ["one", "two"], both, np.ones(2), both, np.full(2, 0.1))
+
+    assert calls == 2
+    assert result.n_ldref_files == 2

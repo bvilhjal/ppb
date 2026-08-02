@@ -5,7 +5,7 @@ import pytest
 
 from ppb.harmonize import VariantTable
 from ppb.ld_backend import (
-    BlockDiagonalLD, DenseLD, DenseLDInt8, PackedDenseLDInt8)
+    BlockDiagonalLD, DenseLDInt8, PackedDenseLDInt8)
 from ppb.ldref import read_ldref, write_ldref
 from scripts.repack_ldref import repack_one
 
@@ -167,9 +167,13 @@ def test_write_ldref_rejects_asymmetric_and_bad_diagonal_blocks(tmp_path, synth)
     with pytest.raises(ValueError, match="diagonal"):
         write_ldref(tmp_path / "b.npz", variants, [(DenseLDInt8(baddiag), i0)] + blocks[1:])
 
-    # ...and validate=False is the escape hatch for a deliberately odd block.
+    # The public backend now rejects malformed input itself. Simulate
+    # post-construction mutation to pin that validate=False remains the file
+    # writer's explicit escape hatch.
+    odd = DenseLDInt8(b0.D8.copy())
+    odd.D8[2, 2] = 100
     write_ldref(tmp_path / "c.npz", variants,
-                [(DenseLDInt8(baddiag), i0)] + blocks[1:], validate=False)
+                [(odd, i0)] + blocks[1:], validate=False)
 
     # The escape hatch affects writing only. A normal reader must never accept
     # the resulting corrupt operator.

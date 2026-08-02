@@ -1,5 +1,8 @@
 """Focused contracts for the real-data result regeneration path."""
 
+import gc
+import weakref
+
 import numpy as np
 import pytest
 
@@ -77,6 +80,87 @@ def test_sweep_uses_each_targets_joint_variant_support(monkeypatch):
     assert blocks["u"]["complete"][0] == pytest.approx(140.0 / np.sqrt(2.0))
     assert blocks["v"]["complete"][0] == pytest.approx(7.0)
     assert totals["n_variants_scored"] == {"partial": 2, "complete": 3}
+
+
+def test_sweep_harmonizes_only_the_current_chromosome(monkeypatch):
+    variants = VariantTable(
+        ["1", "1", "2", "2"], [1, 2, 1, 2],
+        ["A"] * 4, ["C"] * 4)
+    values = np.arange(1.0, 5.0)
+    references = {
+        chrom: VariantTable([chrom, chrom], [1, 2], ["A", "A"], ["C", "C"])
+        for chrom in ("1", "2")
+    }
+
+    class LocalLD:
+        def __init__(self):
+            self.blocks = [(_IdentityBlock(), np.arange(2))]
+
+    monkeypatch.setattr(regenerate, "CHROMS", ["1", "2"])
+    monkeypatch.setattr(
+        regenerate, "read_weights", lambda path: (variants, values))
+
+    def fake_read(path):
+        chrom = "1" if "chr1.npz" in str(path) else "2"
+        return {
+            "variants": references[chrom],
+            "af": np.full(2, 0.5),
+            "ld": LocalLD(),
+        }
+
+    monkeypatch.setattr(regenerate, "read_ldref", fake_read)
+    original = regenerate.harmonize_to
+    target_sizes = []
+
+    def tracked(reference, target, value, **kwargs):
+        target_sizes.append(target.n)
+        return original(reference, target, value, **kwargs)
+
+    monkeypatch.setattr(regenerate, "harmonize_to", tracked)
+    _, totals = regenerate.sweep(
+        "PGS000000", {"target": (variants, values, {})})
+
+    # One weight and one target pass per chromosome, each over two local rows.
+    assert target_sizes == [2, 2, 2, 2]
+    assert totals["w_matched"] == 4
+    assert totals["z_matched"]["target"] == 4
+
+
+def test_sweep_releases_block_backend_before_next_ld_read(monkeypatch):
+    variants = _variants([1, 2, 3])
+    weights = np.ones(3)
+    previous = None
+    calls = 0
+
+    class LocalLD:
+        def __init__(self):
+            self.blocks = [(_IdentityBlock(), np.arange(3))]
+
+    monkeypatch.setattr(regenerate, "CHROMS", ["1", "2"])
+    monkeypatch.setattr(
+        regenerate, "read_weights", lambda path: (variants, weights))
+
+    def fake_read(path):
+        nonlocal previous, calls
+        gc.collect()
+        if previous is not None:
+            assert previous() is None
+        calls += 1
+        ld = LocalLD()
+        previous = weakref.ref(ld.blocks[0][0])
+        chrom = str(calls)
+        reference = VariantTable(
+            [chrom] * 3, [1, 2, 3], ["A"] * 3, ["C"] * 3)
+        return {"variants": reference, "af": np.full(3, 0.5), "ld": ld}
+
+    monkeypatch.setattr(regenerate, "read_ldref", fake_read)
+    target = VariantTable(
+        ["1"] * 3 + ["2"] * 3, [1, 2, 3] * 2,
+        ["A"] * 6, ["C"] * 6)
+    regenerate.sweep(
+        "PGS000000", {"target": (target, np.ones(6), {})})
+
+    assert calls == 2
 
 
 def test_build_records_fails_closed_and_labels_metric_scale(monkeypatch):

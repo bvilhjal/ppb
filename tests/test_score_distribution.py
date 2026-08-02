@@ -115,7 +115,7 @@ def test_block_variance_share_flags_a_dominating_variant():
 
 
 def test_allele_frequency_is_not_harmonized_but_weights_are():
-    """A flipped submission must give the same distribution, not a mirrored one."""
+    """A swapped effect allele uses its complemented raw dosage."""
     m = 12
     rng = np.random.default_rng(4)
     f = rng.uniform(0.2, 0.8, size=m)
@@ -127,10 +127,34 @@ def test_allele_frequency_is_not_harmonized_but_weights_are():
     direct = score_distribution(DenseLD(np.eye(m)), reference, reference, w, f)
     swapped = score_distribution(DenseLD(np.eye(m)), reference, flipped, w, f)
 
-    # harmonize_to negates a swapped weight, so the mean flips sign about 0 only
-    # after accounting for f being the reference allele's frequency throughout.
-    assert swapped.mean == pytest.approx(-direct.mean)
+    assert direct.mean == pytest.approx(2.0 * float(w @ f))
+    assert swapped.mean == pytest.approx(2.0 * float(w @ (1.0 - f)))
     assert swapped.variance == pytest.approx(direct.variance)
+
+
+def test_swapped_allele_percentile_keeps_the_raw_dosage_intercept():
+    reference = _table(1)
+    swapped = VariantTable([1], [1], ["G"], ["A"])
+    dist = score_distribution(
+        DenseLD(np.eye(1)), reference, swapped, [1.0], [0.2])
+
+    # The submitted effect-allele dosage is 2 - g_A, hence E[S] = 1.6.
+    assert dist.mean == pytest.approx(1.6)
+    assert dist.standardize(1.0) == pytest.approx(
+        (1.0 - 1.6) / np.sqrt(2.0 * 0.2 * 0.8))
+
+
+def test_swapped_mean_is_stable_next_to_frequency_one():
+    reference = _table(1)
+    swapped = VariantTable([1], [1], ["G"], ["A"])
+    frequency = np.nextafter(1.0, 0.0)
+    weight = 1.0e16
+
+    dist = score_distribution(
+        DenseLD(np.eye(1)), reference, swapped, [weight], [frequency])
+
+    assert dist.mean == pytest.approx(
+        2.0 * weight * (1.0 - frequency), rel=1e-15)
 
 
 def test_inbreeding_inflates_the_variance_but_not_the_mean():

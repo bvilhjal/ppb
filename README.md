@@ -72,11 +72,12 @@ acc_B = r2(w, z_B, DenseLD(D_B))     # predictive R² of w in ancestry B
 ```
 
 The estimator is ancestry-agnostic in form — within-ancestry is `z`/`D` from the
-same population. It needs only `wᵀz` and `wᵀDw`, so `D` is never materialised
-densely: the backends are dense float (`DenseLD`), float low-rank (`LowRankLD`,
-PSD by construction), block-diagonal (`BlockDiagonalLD`), and int8 D8 in both
-square and packed-triangle form (`DenseLDInt8`, `PackedDenseLDInt8`). The int8
-low-rank LR8 representation is **not** implemented — it is described in
+same population. It needs only `wᵀz` and `wᵀDw`. Small exact problems may use an
+explicit dense float matrix (`DenseLD`); the genome-scale path instead streams
+block-diagonal int8 references (`BlockDiagonalLD`, `DenseLDInt8`, and
+`PackedDenseLDInt8`) one chromosome at a time. `LowRankLD` provides a
+PSD-by-construction float factor. The int8 low-rank LR8 representation is **not**
+implemented — it is described in
 [`docs/METHOD.md`](docs/METHOD.md) §2 along with the measurements that ruled it
 out. The loader validates block tiling, offsets, dtypes, packed diagonals, and
 low-rank definiteness ([`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) covers what
@@ -158,22 +159,32 @@ human-readable single-target tables).
 ```bash
 ppb evaluate --weights weights.tsv --bundle benchmark.npz \
   --weight-scale dosage [--out result.json]
+
+ppb evaluate --weights weights.tsv --ldref-dir ldref/ \
+  --sumstats target-z.tsv --weight-scale dosage [--out result.json]
 ```
 
 - **weights**: a TSV/CSV with chromosome, position, effect allele, other allele,
   and weight (PGS Catalog column names recognised; `#` comment lines skipped).
 - **weight scale**: this must be explicit. Use `dosage` for ordinary PGS Catalog
-  per-allele weights; the bundle must then carry target-cohort empirical
-  `genotype_sd`, and PPB converts `w_j` to `w_j * genotype_sd_j`. Use
-  `standardized` only when the file already contains weights for the
-  standardized genotypes represented by the bundle LD.
+  per-allele weights. The bundle or target-z table must then carry target-cohort
+  empirical `genotype_sd`, and PPB converts `w_j` to
+  `w_j * genotype_sd_j`. With sharded LD only, `--hwe-genotype-sd` explicitly
+  opts into the approximation `sqrt(2 f_j (1-f_j))` from the LD reference. Use
+  `standardized` only when weights already multiply standardized genotypes.
 - **bundle**: an `.npz` with the target-ancestry variant table (`chrom, pos, a1,
   a2`), summary statistics `z`, and an LD reference (dense `D` or low-rank `U`).
   Version-2 bundles may also carry `genotype_sd`; build one with
   `ppb.write_bundle(..., genotype_sd=target_sd)`.
+- **sharded LD**: `--ldref-dir` reads `ldref_chr*.npz` files one at a time. The
+  required `--sumstats` table has `chrom, pos, a1, a2, z` and may carry
+  `genotype_sd`. Here `z` means the standardized marginal correlation used by
+  the estimator; PPB deliberately does not guess a beta/SE/N conversion.
 
-The command harmonizes the weights to the bundle's variants and prints a JSON
-`EvaluationResult` with `R²`, `MSE`, and harmonization counts. For case/control
+The command harmonizes both inputs to the LD variants and prints a JSON
+`EvaluationResult` with `R²`, `MSE`, and harmonization counts. Sharded
+evaluation sums chromosome numerators and denominators before forming the one
+genome-wide ratio; it never averages chromosome `R²` values. For case/control
 GWAS, this summary-statistic `R²` is an approximation on the chosen standardized
 scale; it is **not** liability-scale `R²`.
 

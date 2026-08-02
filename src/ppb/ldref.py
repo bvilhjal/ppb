@@ -93,20 +93,17 @@ def _validate_square(backend, b):
     corruption shape to expect -- and one that would otherwise load cleanly and
     silently yield a wrong ``D``.
     """
-    D8 = backend.D8
-    if not np.array_equal(D8, D8.T):
-        raise ValueError(f"block {b} is not symmetric; LD must be")
-    bad = np.flatnonzero(np.diag(D8) != 127)
-    if bad.size:
-        raise ValueError(
-            f"block {b} has {bad.size} diagonal entry/entries != 127 (e.g. index "
-            f"{int(bad[0])} = {int(np.diag(D8)[bad[0]])}); the int8 LD diagonal "
-            "must dequantise to exactly 1")
-    _validate_psd(D8, b)
+    # The backend constructor enforces this too, because DenseLDInt8 is public.
+    # Repeat it at the write boundary in case a caller mutated the exposed array
+    # after construction.
+    backend._validate()
+    _validate_psd(backend.D8, b)
 
 
 def _validate_packed(backend, b):
     """Validate a packed block; symmetry and length are structural."""
+    # As above, protect the file boundary from post-construction mutation.
+    backend._validate()
     # PackedDenseLDInt8 validates its unit diagonal at construction. Rebuild the
     # square only for the modest blocks on which an exact PSD check is practical.
     if backend.m <= _PSD_CHECK_MAX:
@@ -284,7 +281,9 @@ def read_ldref(path):
                 raise ValueError(
                     f"block at {start} needs {need} square entries, found {chunk.size}")
             backend = DenseLDInt8(chunk.reshape(m, m))
-            _validate_square(backend, b)
+            # Structure was checked by the public backend constructor. Do not
+            # scan a potentially huge square a second time on every read.
+            _validate_psd(backend.D8, b)
             blocks.append((backend, idx))
         elif kind == _KIND_PACKED:
             need = m * (m + 1) // 2
@@ -293,7 +292,10 @@ def read_ldref(path):
                 raise ValueError(
                     f"block at {start} needs {need} packed entries, found {chunk.size}")
             backend = PackedDenseLDInt8(chunk, m)
-            _validate_packed(backend, b)
+            # The constructor checked payload and diagonal. Only the modest
+            # exact PSD check remains at read time.
+            if backend.m <= _PSD_CHECK_MAX:
+                _validate_psd(backend.to_dense_int8(), b)
             blocks.append((backend, idx))
         used[kind] += need
     # Catch a payload longer than the blocks consume, which would otherwise mean

@@ -1,5 +1,7 @@
 """Tests for allele harmonization and high-level evaluation."""
 
+import pickle
+
 import numpy as np
 import pytest
 
@@ -120,6 +122,59 @@ def test_nonfinite_harmonization_value_raises():
         harmonize_to(ref, tgt, [np.nan])
 
 
+def test_duplicate_target_variant_is_rejected_not_resolved_by_row_order():
+    ref = VariantTable([1], [100], ["A"], ["G"])
+    target = VariantTable([1, 1], [100, 100], ["A", "G"], ["G", "A"])
+    with pytest.raises(ValueError, match="duplicate variants"):
+        harmonize_to(ref, target, [1.0, 2.0])
+
+
+def test_same_position_multiallelic_records_remain_distinct():
+    ref = VariantTable([1, 1], [100, 100], ["A", "A"], ["G", "C"])
+    target = VariantTable([1, 1], [100, 100], ["A", "A"], ["C", "G"])
+    aligned, report = harmonize_to(ref, target, [2.0, 1.0])
+    assert aligned.tolist() == [1.0, 2.0]
+    assert report.n_matched == 2
+
+
+def test_multiple_compatible_reference_variants_are_rejected():
+    ref = VariantTable([1, 1], [100, 100], ["A", "G"], ["G", "A"])
+    target = VariantTable([1], [100], ["A"], ["G"])
+    with pytest.raises(ValueError, match="multiple allele-compatible"):
+        harmonize_to(ref, target, [1.0])
+
+
+def test_variant_table_owns_read_only_arrays_and_invalidates_on_replacement():
+    pos = np.array([100, 200])
+    variants = VariantTable([1, 1], pos, ["a", "c"], ["g", "t"])
+    first_index = variants.position_index()
+
+    pos[0] = 999
+    assert variants.pos.tolist() == [100, 200]
+    with pytest.raises(ValueError, match="read-only"):
+        variants.pos[0] = 999
+
+    variants.pos = [300, 400]
+    assert variants.position_index() is not first_index
+    assert tuple(variants.position_index()) == (("1", 300), ("1", 400))
+
+
+def test_variant_table_pickle_omits_caches_and_restores_immutable_arrays():
+    variants = VariantTable(["chr1", "2"], [100, 200], ["a", "c"], ["g", "t"])
+    variants.norm_chrom
+    variants.allele_lists()
+    variants.position_index()
+
+    restored = pickle.loads(pickle.dumps(variants))
+
+    assert restored.norm_chrom.tolist() == ["1", "2"]
+    assert restored.position_index() == variants.position_index()
+    assert all(
+        not getattr(restored, name).flags.writeable
+        for name in ("chrom", "pos", "a1", "a2")
+    )
+
+
 def test_evaluate_matches_prealigned_r2():
     """End-to-end: harmonizing swapped + reordered inputs recovers the same R^2
     as evaluating already-aligned vectors."""
@@ -140,7 +195,8 @@ def test_evaluate_matches_prealigned_r2():
     order = np.array([3, 0, 5, 1, 4, 2])
     a1s, a2s = np.array(ref.a1), np.array(ref.a2)
     a1s[0], a2s[0] = ref.a2[0], ref.a1[0]
-    tw = w.copy(); tw[0] = -tw[0]
+    tw = w.copy()
+    tw[0] = -tw[0]
     weights_tbl = VariantTable(np.ones(m, dtype=int)[order], np.arange(1, m + 1)[order],
                                a1s[order], a2s[order])
     sumstats_tbl = VariantTable(np.ones(m, dtype=int), np.arange(1, m + 1),
@@ -175,6 +231,13 @@ def test_dosage_weights_are_scaled_by_target_genotype_sd():
     expected = r2(np.array([0.5, 2.0]), z, DenseLD(np.eye(2)))
     assert res.r2 == pytest.approx(expected)
     assert res.weight_scale == "dosage"
+    assert res.mse_interpretable is False
+
+    calibrated = evaluate(
+        DenseLD(np.eye(2)), ref, ref, [1.0, 1.0], ref, z,
+        weight_scale="dosage", genotype_sd=[0.5, 2.0],
+        mse_interpretable=True)
+    assert calibrated.mse_interpretable is True
 
 
 def test_dosage_weights_require_valid_target_genotype_sd():

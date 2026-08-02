@@ -69,6 +69,21 @@ def dense_quad(D, w):
 
 
 @njit(cache=True)
+def dense_quad_sparse(D, w, nz):
+    """Dense-float quadratic form restricted to the sorted support ``nz``."""
+    total = 0.0
+    for a in range(nz.size):
+        i = nz[a]
+        wi = w[i]
+        row_acc = 0.0
+        for b in range(nz.size):
+            j = nz[b]
+            row_acc += D[i, j] * w[j]
+        total += wi * row_acc
+    return total
+
+
+@njit(cache=True)
 def dense_quad_int8(D8, w):
     """``sum_ij D8[i, j] w[i] w[j]`` for int8 dense ``D8`` (caller divides by 127)."""
     m = D8.shape[0]
@@ -84,6 +99,21 @@ def dense_quad_int8(D8, w):
     return total
 
 
+@njit(cache=True)
+def dense_quad_int8_sparse(D8, w, nz):
+    """Square-D8 quadratic form restricted to the sorted support ``nz``."""
+    total = 0.0
+    for a in range(nz.size):
+        i = nz[a]
+        wi = w[i]
+        row_acc = 0.0
+        for b in range(nz.size):
+            j = nz[b]
+            row_acc += D8[i, j] * w[j]
+        total += wi * row_acc
+    return total
+
+
 @njit(parallel=True, cache=True)
 def dense_matvec_int8(D8, w, out):
     """``out = D8 @ w`` for a square int8 block (caller divides by 127).
@@ -95,6 +125,93 @@ def dense_matvec_int8(D8, w, out):
         acc = 0.0
         for j in range(m):
             acc += D8[i, j] * w[j]
+        out[i] = acc
+    return out
+
+
+@njit(parallel=True, cache=True)
+def dense_int8_structure_counts(D8):
+    """Count forbidden values, wrong diagonals, and asymmetric pairs in D8.
+
+    The reductions avoid allocating full-size boolean comparison arrays during
+    backend construction.  Only the upper triangle is visited; both entries of
+    each off-diagonal pair are inspected there.
+    """
+    m = D8.shape[0]
+    n_forbidden = 0
+    n_bad_diag = 0
+    n_asymmetric = 0
+    for i in prange(m):
+        if D8[i, i] == -128:
+            n_forbidden += 1
+        if D8[i, i] != 127:
+            n_bad_diag += 1
+        for j in range(i + 1, m):
+            upper = D8[i, j]
+            lower = D8[j, i]
+            if upper == -128:
+                n_forbidden += 1
+            if lower == -128:
+                n_forbidden += 1
+            if upper != lower:
+                n_asymmetric += 1
+    return n_forbidden, n_bad_diag, n_asymmetric
+
+
+@njit(parallel=True, cache=True)
+def int8_forbidden_count(a):
+    """Number of forbidden ``-128`` entries in a one-dimensional D8 payload."""
+    n = 0
+    for i in prange(a.size):
+        if a[i] == -128:
+            n += 1
+    return n
+
+
+@njit(parallel=True, cache=True)
+def pack_upper_int8(D8, out):
+    """Pack a square matrix's upper triangle row-by-row without index arrays."""
+    m = D8.shape[0]
+    for i in prange(m):
+        base = i * m - (i * (i - 1)) // 2
+        for j in range(i, m):
+            out[base + (j - i)] = D8[i, j]
+    return out
+
+
+@njit(parallel=True, cache=True)
+def unpack_upper_int8(p8, m, out):
+    """Mirror a packed upper triangle into ``out`` without index arrays."""
+    for i in prange(m):
+        base = i * m - (i * (i - 1)) // 2
+        for j in range(i, m):
+            value = p8[base + (j - i)]
+            out[i, j] = value
+            out[j, i] = value
+    return out
+
+
+@njit(parallel=True, cache=True)
+def packed_row_sq_sums_int8(p8, m):
+    """Integer row sums of squares directly from a packed upper triangle.
+
+    Rows are independent and parallel. Off-diagonal entries are consequently
+    read once for each owning row, trading twice the payload reads for thread
+    parallelism without a per-thread ``m``-vector reduction. The length-``m``
+    int64 result is the only work array; no dense matrix or triangular index
+    vectors are formed.
+    """
+    out = np.empty(m, dtype=np.int64)
+    for i in prange(m):
+        acc = np.int64(0)
+        for j in range(i):
+            base_j = j * m - (j * (j - 1)) // 2
+            value = np.int64(p8[base_j + (i - j)])
+            acc += value * value
+        base_i = i * m - (i * (i - 1)) // 2
+        for j in range(i, m):
+            value = np.int64(p8[base_i + (j - i)])
+            acc += value * value
         out[i] = acc
     return out
 
@@ -146,4 +263,23 @@ def packed_quad_int8(p8, w, m):
     total = 0.0
     for i in range(m):
         total += partial[i]
+    return total
+
+
+@njit(cache=True)
+def packed_quad_int8_sparse(p8, w, m, nz):
+    """Packed-D8 quadratic form restricted to sorted support ``nz``.
+
+    The diagonal is added once and each supported off-diagonal pair twice.
+    Work is ``O(len(nz)^2)`` rather than proportional to the full triangle.
+    """
+    total = 0.0
+    for a in range(nz.size):
+        i = nz[a]
+        wi = w[i]
+        base = i * m - (i * (i - 1)) // 2
+        total += p8[base] * wi * wi
+        for b in range(a + 1, nz.size):
+            j = nz[b]
+            total += 2.0 * p8[base + (j - i)] * wi * w[j]
     return total

@@ -85,11 +85,32 @@ def test_lowrank_reconstruction_has_unit_diagonal():
     assert np.allclose(recon_diag, 1.0, atol=1e-8)
 
 
+def test_lowrank_stores_factor_columns_contiguously():
+    U = np.arange(60.0).reshape(12, 5) + 1.0
+    low = LowRankLD(U)
+    assert low.U.flags.f_contiguous
+    w = _rng(71).standard_normal(12)
+    projected = U.T @ w
+    assert low.quad(w) == pytest.approx(projected @ projected)
+
+
 def test_block_diagonal_rejects_overlapping_blocks():
     C = _corr_block(4, seed=8)
     with pytest.raises(ValueError):
         BlockDiagonalLD([(DenseLD(C), [0, 1, 2, 3]),
                          (DenseLD(C), [3, 4, 5, 6])])   # index 3 overlaps
+
+
+def test_block_diagonal_rejects_duplicate_positions_within_one_block():
+    C = _corr_block(3, seed=18)
+    with pytest.raises(ValueError, match="duplicate positions"):
+        BlockDiagonalLD([(DenseLD(C), [0, 0, 1])])
+
+
+def test_block_diagonal_rejects_noninteger_positions():
+    C = _corr_block(2, seed=19)
+    with pytest.raises(ValueError, match="only integers"):
+        BlockDiagonalLD([(DenseLD(C), [0.0, 1.0])])
 
 
 def test_block_diagonal_rejects_size_mismatch():
@@ -201,6 +222,21 @@ def test_block_diagonal_tolerates_rounding_on_a_psd_block():
         w -= w.mean()
         assert ld.quad(w) >= 0.0
     assert ld.quad(np.zeros(60)) == 0.0
+
+
+def test_block_diagonal_skips_an_all_zero_block():
+    first = DenseLD(np.eye(2))
+    second = DenseLD(np.eye(2))
+    ld = BlockDiagonalLD([
+        (first, np.array([0, 1])),
+        (second, np.array([2, 3])),
+    ])
+
+    def must_not_run(_w):
+        raise AssertionError("an all-zero block must not invoke its LD kernel")
+
+    first.quad = must_not_run
+    assert ld.quad(np.array([0.0, 0.0, 3.0, 4.0])) == pytest.approx(25.0)
 
 
 def test_min_eig_upper_bound_detects_an_indefinite_block():

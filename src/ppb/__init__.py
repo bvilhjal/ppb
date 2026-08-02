@@ -16,7 +16,14 @@ from .estimator import mse, r2
 from .evaluate import EvaluationResult, evaluate
 from .score_distribution import score_distribution
 from .harmonize import HarmonizeReport, VariantTable, harmonize_to
-from .io import read_bundle, read_weights, write_bundle
+from .io import (
+    LDRefEvaluationResult,
+    evaluate_ldrefs,
+    read_bundle,
+    read_sumstats,
+    read_weights,
+    write_bundle,
+)
 from .ldref import read_ldref, write_ldref
 from .overlap import OverlapBasis
 from .ld_backend import (
@@ -39,9 +46,10 @@ __all__ = [
     "VariantTable", "harmonize_to", "HarmonizeReport",
     "evaluate", "EvaluationResult",
     "score_distribution",
-    "read_weights", "read_bundle", "write_bundle",
+    "read_weights", "read_sumstats", "read_bundle", "write_bundle",
+    "evaluate_ldrefs", "LDRefEvaluationResult",
     "read_ldref", "write_ldref",
     "OverlapBasis",
     "standardized_marginal",
 ]
-__version__ = "0.0.1.dev0"
+__version__ = "0.0.1.dev1"

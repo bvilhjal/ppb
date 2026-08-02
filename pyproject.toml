@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ppb"
-version = "0.0.1.dev0"
+version = "0.0.1.dev1"
 description = "Measure polygenic-score accuracy in a target ancestry from summary statistics alone"
 readme = "README.md"
 requires-python = ">=3.11"

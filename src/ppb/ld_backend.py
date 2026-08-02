@@ -15,15 +15,48 @@ from __future__ import annotations
 import numpy as np
 
 from ._kernels import (
+    dense_int8_structure_counts,
     dense_matvec_int8,
-    dense_quad,
-    dense_quad_int8,
-    lowrank_quad_par,
+    dense_quad_int8_sparse,
+    dense_quad_sparse,
+    int8_forbidden_count,
+    pack_upper_int8,
     packed_matvec_int8,
     packed_quad_int8,
+    packed_quad_int8_sparse,
+    packed_row_sq_sums_int8,
+    unpack_upper_int8,
 )
 
 _Q8 = 127.0  # int8 quantisation: correlations in [-1, 1] <-> [-127, 127]
+_SPARSE_QUAD_DIVISOR = 8
+_LDSCORE_WORK_BYTES = 64 * 1024 ** 2
+
+
+def _sparse_support(w):
+    """Return sparse support, or ``None`` when the dense path is preferable.
+
+    The one-eighth cutoff is deliberately conservative: support-index kernels
+    trade contiguous row sweeps for gathers. Benchmarks over float and D8 blocks
+    put the crossover above this density, while this threshold retains a clear
+    win and caps the support array at ``m`` bytes on a 64-bit build.
+    """
+    nnz = int(np.count_nonzero(w))
+    if nnz == 0:
+        return np.empty(0, dtype=np.intp)
+    if nnz * _SPARSE_QUAD_DIVISOR <= w.size:
+        return np.flatnonzero(w)
+    return None
+
+
+def _all_finite(a, chunk_rows=512):
+    """Finite check with a bounded boolean temporary for a large matrix."""
+    if a.ndim < 2:
+        return bool(np.isfinite(a).all())
+    for start in range(0, a.shape[0], chunk_rows):
+        if not np.isfinite(a[start:start + chunk_rows]).all():
+            return False
+    return True
 
 
 class LDBackend:
@@ -63,7 +96,15 @@ class DenseLD(LDBackend):
 
     def quad(self, w) -> float:
         w = self._check(w)
-        return float(dense_quad(self.D, w))
+        support = _sparse_support(w)
+        if support is not None:
+            if support.size == 0:
+                return 0.0
+            return float(dense_quad_sparse(self.D, w, support))
+        # NumPy's BLAS is available through the required numpy dependency; it
+        # does not need scipy and is substantially faster than a scalar njit
+        # sweep for a dense weight vector.
+        return float(np.dot(w, self.D @ w))
 
     def ld_scores(self) -> np.ndarray:
         return np.einsum("ij,ij->i", self.D, self.D)
@@ -77,16 +118,19 @@ class LowRankLD(LDBackend):
     """
 
     def __init__(self, U):
-        U = np.ascontiguousarray(np.asarray(U, dtype=np.float64))
+        U = np.asarray(U, dtype=np.float64)
         if U.ndim != 2:
             raise ValueError(f"U must be 2-D (m, r); got shape {U.shape}")
         if not 1 <= U.shape[1] <= U.shape[0]:
             raise ValueError(
                 f"rank must be in [1, m]; got U.shape={U.shape}")
+        # BLAS consumes U.T. Keeping factor columns contiguous avoids the
+        # strided C-order access that otherwise dominates a low-rank sweep.
+        U = np.asfortranarray(U)
         # An all-zero row means U U^T has a zero on the diagonal there, so quad()
         # drops that variant's self term and understates w^T D w -- an inflated
         # R^2 with nothing to show for it. Always a defect for an LD operator.
-        empty = np.flatnonzero(~(U != 0.0).any(axis=1))
+        empty = np.flatnonzero(~np.any(U, axis=1))
         if empty.size:
             raise ValueError(
                 f"U has {empty.size} all-zero row(s) (e.g. index {int(empty[0])}); "
@@ -98,14 +142,24 @@ class LowRankLD(LDBackend):
 
     def quad(self, w) -> float:
         w = self._check(w)
-        return float(lowrank_quad_par(self.U, w))
+        projected = self.U.T @ w
+        return float(np.dot(projected, projected))
 
     def ld_scores(self) -> np.ndarray:
         # D = U U^T, so sum_k (u_j.u_k)^2 = u_j^T (U^T U) u_j -- O(m r^2), never
         # forming D. Exact for the factor, hence approximate for the LD it stands
         # in for, by exactly the low-rank truncation error.
         gram = self.U.T @ self.U
-        return np.einsum("ij,jk,ik->i", self.U, gram, self.U)
+        out = np.empty(self.m, dtype=np.float64)
+        # ``U @ gram`` routes the expensive contraction through BLAS. Chunk it
+        # so the temporary stays bounded for a genome-scale factor.
+        rows = max(1, _LDSCORE_WORK_BYTES // (8 * self.rank))
+        for start in range(0, self.m, rows):
+            stop = min(start + rows, self.m)
+            transformed = self.U[start:stop] @ gram
+            out[start:stop] = np.einsum(
+                "ij,ij->i", self.U[start:stop], transformed)
+        return out
 
 
 class BlockDiagonalLD(LDBackend):
@@ -119,32 +173,51 @@ class BlockDiagonalLD(LDBackend):
     """
 
     def __init__(self, blocks):
-        self.blocks = []
-        seen = np.zeros(0, dtype=bool)
+        prepared = []
+        selectors = []
         m = 0
         for backend, idx in blocks:
-            idx = np.ascontiguousarray(np.asarray(idx, dtype=np.intp))
-            if idx.ndim != 1 or idx.size == 0:
+            raw = np.asarray(idx)
+            if raw.ndim != 1 or raw.size == 0:
                 raise ValueError("each block idx must be a non-empty 1-D array")
+            if raw.dtype.kind not in "iu":
+                raise ValueError("each block idx must contain only integers")
+            idx = np.ascontiguousarray(raw, dtype=np.intp)
             if idx.size != backend.m:
                 raise ValueError(
                     f"block backend has m={backend.m} but idx has {idx.size} entries")
             if idx.min() < 0:
                 raise ValueError("block idx has negative positions")
+            ordered = idx if np.all(idx[1:] > idx[:-1]) else np.sort(idx)
+            if np.any(ordered[1:] == ordered[:-1]):
+                raise ValueError(
+                    "block idx contains duplicate positions; one backend row "
+                    "must correspond to one global variant")
             top = int(idx.max()) + 1
-            if top > seen.size:
-                seen = np.concatenate([seen, np.zeros(top - seen.size, dtype=bool)])
+            m = max(m, top)
+            prepared.append((backend, idx))
+            if idx.size == 1 or np.all(idx[1:] == idx[:-1] + 1):
+                selectors.append(slice(int(idx[0]), int(idx[-1]) + 1))
+            else:
+                selectors.append(idx)
+
+        if not prepared:
+            raise ValueError("BlockDiagonalLD needs at least one block")
+
+        # Allocate coverage once. Growing ``seen`` for every block copies all
+        # preceding entries and turns construction into O(number_of_blocks * m).
+        seen = np.zeros(m, dtype=bool)
+        for _backend, idx in prepared:
             if seen[idx].any():
                 raise ValueError("blocks overlap: a variant appears in two blocks")
             seen[idx] = True
-            m = max(m, top)
-            self.blocks.append((backend, idx))
-        if not self.blocks:
-            raise ValueError("BlockDiagonalLD needs at least one block")
         if not seen.all():
             raise ValueError(
                 f"blocks must cover every variant in [0, {seen.size}); "
                 f"{int((~seen).sum())} position(s) have no LD block")
+
+        self.blocks = prepared
+        self._selectors = selectors
         self.m = m
 
     def quad(self, w) -> float:
@@ -158,8 +231,8 @@ class BlockDiagonalLD(LDBackend):
         defines away, so these are systematically *low*. See ``docs/CALIBRATION.md``.
         """
         out = np.zeros(self.m, dtype=np.float64)
-        for backend, idx in self.blocks:
-            out[idx] = backend.ld_scores()
+        for (backend, _idx), selector in zip(self.blocks, self._selectors):
+            out[selector] = backend.ld_scores()
         return out
 
     def block_quads(self, w) -> np.ndarray:
@@ -172,8 +245,12 @@ class BlockDiagonalLD(LDBackend):
         """
         w = self._check(w)
         out = np.empty(len(self.blocks), dtype=np.float64)
-        for b, (backend, idx) in enumerate(self.blocks):
-            wb = np.ascontiguousarray(w[idx])
+        for b, ((backend, _idx), selector) in enumerate(
+                zip(self.blocks, self._selectors)):
+            wb = w[selector]
+            if not np.any(wb):
+                out[b] = 0.0
+                continue
             qb = backend.quad(wb)
             # Only the *total* being non-positive is checked downstream, and a
             # single indefinite block is easily masked by hundreds of positive
@@ -183,12 +260,13 @@ class BlockDiagonalLD(LDBackend):
             # (docs/METHOD.md), so check where the signal actually is. The
             # tolerance admits float rounding on a genuinely PSD block, whose
             # error is O(eps * m * ||w||^2), and nothing more.
-            if qb < -1e-12 * float(wb @ wb):
-                raise ValueError(
-                    f"block {b} has w^T D_b w = {qb!r} < 0: the LD block is not "
-                    "positive semi-definite, and summing it would understate "
-                    "w^T D w (inflating R^2). Use a PSD representation such as "
-                    "a low-rank factor for this block.")
+            if qb < 0.0:
+                if qb < -1e-12 * float(wb @ wb):
+                    raise ValueError(
+                        f"block {b} has w^T D_b w = {qb!r} < 0: the LD block is not "
+                        "positive semi-definite, and summing it would understate "
+                        "w^T D w (inflating R^2). Use a PSD representation such as "
+                        "a low-rank factor for this block.")
             out[b] = qb
         return out
 
@@ -205,7 +283,8 @@ def _int8_row_sq_sums(D8, chunk=512):
     out = np.empty(m, dtype=np.float64)
     for start in range(0, m, chunk):
         block = D8[start:start + chunk].astype(np.int32)
-        out[start:start + chunk] = np.einsum("ij,ij->i", block, block)
+        out[start:start + chunk] = np.einsum(
+            "ij,ij->i", block, block, dtype=np.int64)
     return out / (_Q8 * _Q8)
 
 
@@ -224,17 +303,40 @@ class DenseLDInt8(LDBackend):
     """
 
     def __init__(self, D8):
-        D8 = np.ascontiguousarray(np.asarray(D8, dtype=np.int8))
+        D8 = np.asarray(D8)
+        if D8.dtype != np.int8:
+            raise ValueError(
+                f"D8 must have dtype int8; got {D8.dtype}. "
+                "Use DenseLDInt8.from_dense() for floating-point correlations.")
+        D8 = np.ascontiguousarray(D8)
         if D8.ndim != 2 or D8.shape[0] != D8.shape[1]:
             raise ValueError(f"D8 must be square; got {D8.shape}")
-        if np.any(D8 == -128):
-            raise ValueError("int8 LD must not contain -128")
         self.D8 = D8
         self.m = D8.shape[0]
+        self._validate()
+
+    def _validate(self):
+        """Validate the public D8 invariant without matrix-sized temporaries."""
+        forbidden, bad_diag, asymmetric = dense_int8_structure_counts(self.D8)
+        if forbidden:
+            raise ValueError(
+                f"int8 LD must not contain -128; found {int(forbidden)} entry/entries")
+        if bad_diag:
+            raise ValueError(
+                f"int8 LD has {int(bad_diag)} diagonal entry/entries != 127; "
+                "the diagonal must dequantise to exactly 1")
+        if asymmetric:
+            raise ValueError(
+                f"int8 LD is not symmetric; found {int(asymmetric)} "
+                "asymmetric upper/lower pair(s)")
 
     @classmethod
     def from_dense(cls, D) -> "DenseLDInt8":
         D = np.asarray(D, dtype=np.float64)
+        if D.ndim != 2 or D.shape[0] != D.shape[1]:
+            raise ValueError(f"D must be square; got {D.shape}")
+        if not _all_finite(D):
+            raise ValueError("D must contain only finite correlations")
         return cls(_clip_int8(np.clip(D, -1.0, 1.0) * _Q8))
 
     @property
@@ -243,7 +345,14 @@ class DenseLDInt8(LDBackend):
 
     def quad(self, w) -> float:
         w = self._check(w)
-        return float(dense_quad_int8(self.D8, w) / _Q8)
+        support = _sparse_support(w)
+        if support is not None:
+            if support.size == 0:
+                return 0.0
+            return float(dense_quad_int8_sparse(self.D8, w, support) / _Q8)
+        out = np.empty(self.m, dtype=np.float64)
+        dense_matvec_int8(self.D8, w, out)
+        return float(np.dot(w, out) / _Q8)
 
     def ld_scores(self) -> np.ndarray:
         return _int8_row_sq_sums(self.D8)
@@ -252,7 +361,9 @@ class DenseLDInt8(LDBackend):
         """``D w`` for the dequantised block."""
         w = self._check(w)
         out = np.empty(self.m, dtype=np.float64)
-        return dense_matvec_int8(self.D8, w, out) / _Q8
+        dense_matvec_int8(self.D8, w, out)
+        out /= _Q8
+        return out
 
     def packed(self) -> "PackedDenseLDInt8":
         """This block as a :class:`PackedDenseLDInt8` (half the bytes, same quad)."""
@@ -276,12 +387,17 @@ class PackedDenseLDInt8(LDBackend):
     moves published R^2 values in their last digit or two.
 
     Halves the on-disk and in-memory size of an LD reference at no accuracy
-    cost, and the kernel is parallel over rows where the square
-    ``dense_quad_int8`` is serial (~6x faster at m = 2000).
+    cost. Its dense-weight kernel is parallel over rows and reads only one
+    triangle; the square backend's parallel matrix-vector path reads both.
     """
 
     def __init__(self, p8, m):
-        p8 = np.ascontiguousarray(np.asarray(p8, dtype=np.int8))
+        p8 = np.asarray(p8)
+        if p8.dtype != np.int8:
+            raise ValueError(f"packed LD must have dtype int8; got {p8.dtype}")
+        p8 = np.ascontiguousarray(p8)
+        if isinstance(m, (bool, np.bool_)) or not isinstance(m, (int, np.integer)):
+            raise ValueError(f"packed LD size m must be an integer; got {m!r}")
         m = int(m)
         if p8.ndim != 1:
             raise ValueError(f"packed LD must be 1-D; got shape {p8.shape}")
@@ -291,42 +407,52 @@ class PackedDenseLDInt8(LDBackend):
         if p8.size != expected:
             raise ValueError(
                 f"packed LD for m={m} needs {expected} entries; got {p8.size}")
-        if np.any(p8 == -128):
-            raise ValueError("int8 LD must not contain -128")
-        # np.triu_indices() stores each row's diagonal first. A corrupt packed
-        # diagonal cannot be repaired or inferred from the missing triangle and
-        # changes even a one-variant self term, so reject it at the backend
-        # boundary rather than relying on a particular file reader.
+        self.p8 = p8
+        self.m = m
+        self._validate()
+
+    def _validate(self):
+        """Validate the packed D8 invariant with O(m) auxiliary memory."""
+        forbidden = int(int8_forbidden_count(self.p8))
+        if forbidden:
+            raise ValueError(
+                f"int8 LD must not contain -128; found {forbidden} entry/entries")
+        # Every packed row starts with its diagonal. A corrupt diagonal cannot be
+        # repaired or inferred from the missing triangle.
+        m = self.m
         diag_idx = np.arange(m, dtype=np.intp)
         diag_idx = diag_idx * m - diag_idx * (diag_idx - 1) // 2
-        bad = np.flatnonzero(p8[diag_idx] != 127)
+        bad = np.flatnonzero(self.p8[diag_idx] != 127)
         if bad.size:
             i = int(bad[0])
             raise ValueError(
                 f"packed LD has {bad.size} diagonal entry/entries != 127 "
-                f"(e.g. index {i} = {int(p8[diag_idx[i]])}); the int8 LD "
+                f"(e.g. index {i} = {int(self.p8[diag_idx[i]])}); the int8 LD "
                 "diagonal must dequantise to exactly 1")
-        self.p8 = p8
-        self.m = m
 
     @classmethod
     def from_dense_int8(cls, D8) -> "PackedDenseLDInt8":
-        """Pack a square int8 block. The caller's symmetry is taken on trust --
-        only the upper triangle survives, so validate before packing."""
-        D8 = np.asarray(D8, dtype=np.int8)
-        if D8.ndim != 2 or D8.shape[0] != D8.shape[1]:
-            raise ValueError(f"D8 must be square; got {D8.shape}")
+        """Validate and pack a square int8 block without triangle-index arrays."""
+        D8 = DenseLDInt8(D8).D8
         m = D8.shape[0]
-        idx = np.triu_indices(m)
-        return cls(np.ascontiguousarray(D8[idx]), m)
+        p8 = np.empty(m * (m + 1) // 2, dtype=np.int8)
+        pack_upper_int8(D8, p8)
+        # The input invariant was checked and packing only copies its validated
+        # upper triangle. Avoid rescanning O(m^2) bytes in the public constructor.
+        return cls._from_validated(p8, m)
+
+    @classmethod
+    def _from_validated(cls, p8, m):
+        """Internal constructor for a freshly packed, already validated payload."""
+        obj = cls.__new__(cls)
+        obj.p8 = p8
+        obj.m = m
+        return obj
 
     def to_dense_int8(self) -> np.ndarray:
-        """Rebuild the full square int8 block (mirrors the triangle)."""
-        D8 = np.zeros((self.m, self.m), dtype=np.int8)
-        idx = np.triu_indices(self.m)
-        D8[idx] = self.p8
-        D8.T[idx] = self.p8
-        return D8
+        """Rebuild the full square int8 block with bounded auxiliary memory."""
+        out = np.empty((self.m, self.m), dtype=np.int8)
+        return unpack_upper_int8(self.p8, self.m, out)
 
     @property
     def nbytes(self) -> int:
@@ -334,16 +460,25 @@ class PackedDenseLDInt8(LDBackend):
 
     def quad(self, w) -> float:
         w = self._check(w)
+        support = _sparse_support(w)
+        if support is not None:
+            if support.size == 0:
+                return 0.0
+            return float(
+                packed_quad_int8_sparse(self.p8, w, self.m, support) / _Q8)
         return float(packed_quad_int8(self.p8, w, self.m) / _Q8)
 
     def ld_scores(self) -> np.ndarray:
-        return _int8_row_sq_sums(self.to_dense_int8())
+        sums = packed_row_sq_sums_int8(self.p8, self.m)
+        return np.asarray(sums, dtype=np.float64) / (_Q8 * _Q8)
 
     def matvec(self, w) -> np.ndarray:
         """``D w`` for the dequantised block."""
         w = self._check(w)
         out = np.empty(self.m, dtype=np.float64)
-        return packed_matvec_int8(self.p8, w, self.m, out) / _Q8
+        packed_matvec_int8(self.p8, w, self.m, out)
+        out /= _Q8
+        return out
 
 
 def min_eig_upper_bound(backend, *, iters: int = 48, seed: int = 0) -> float:

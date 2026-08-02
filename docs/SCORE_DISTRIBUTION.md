@@ -110,8 +110,10 @@ than marginal estimates, and nothing in `ppb` applies it.
   rescale of `w`, nothing here cancels.
 - **Frequencies are not harmonized.** `allele_frequency` is supplied in
   reference order for the reference's own effect allele, as `genotype_sd` is in
-  `ppb.evaluate`. Harmonization negates a weight, whereas a frequency would have
-  to be replaced by its complement; conflating the two silently mis-scales (P1).
+  `ppb.evaluate`. For a submitted opposite effect allele, PPB uses
+  `g_other = 2 - g_reference`: the sign change enters (P2), while the affine
+  offset enters (P1). Reorienting the frequency itself would conflate these two
+  operations.
 
 ## Validation
 

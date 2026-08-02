@@ -277,10 +277,13 @@ The block quadratic form is then, per block `b`:
 
     w^T D w = sum_b w_b^T D_b w_b
 
-This is O(sum k_b * r_b) time and int8 (~1 byte/entry) memory — the efficiency
-win. It is also what makes the block diagnostics of `REAL_DATA.md` free: the
-per-block `u_b` and `v_b` of Table 4 in [`NOTATION.md`](NOTATION.md) are
-computed on the way to the two totals, so (G2) and (G3) need no second pass.
+For a dense D8 score this is `O(sum_b m_b^2)` time. When at most one eighth of a
+block's weights are nonzero, ppb dispatches to a support-indexed
+`O(sum_b k_b^2)` kernel, where `k_b` is the number of nonzero weights. A float
+low-rank factor costs `O(sum_b m_b r_b)`. D8 storage is int8 (one byte per
+square entry, half that for a packed triangle). The same sweep produces the
+per-block `u_b` and `v_b` of Table 4 in [`NOTATION.md`](NOTATION.md), so (G2)
+and (G3) need no second LD pass.
 
 **PSD is representation-specific.** A low-rank `R = U U^T` is positive
 semi-definite by construction (`w^T D w = ||U^T w||^2 >= 0`). D8 does not:
@@ -317,9 +320,12 @@ no-op. It would also bias ppb's estimand in a known direction:
 `w^T D_a w = (1-a) w^T D w + a ||w||^2`, which for LD-tagged weights deflates the
 denominator and *inflates* R².
 
-**Kernels: numba.** The block sweeps for `w^T D w` are implemented as original
-numba `@njit(parallel=True)` kernels in `src/ppb/_kernels.py` (the same scalar-loop
-int8 sweep pattern ldpred3 uses, written independently — no code copied).
+**Kernels.** D8 packing, validation, dense sweeps, packed sweeps, and
+support-indexed sparse sweeps use original numba kernels in
+`src/ppb/_kernels.py`. Dense float and low-rank factors dispatch to NumPy BLAS;
+low-rank factors are stored column-contiguously. Packed conversion and LD-score
+calculation use arithmetic row offsets, not `np.triu_indices`, so their work
+memory is `O(m)` rather than two `O(m^2)` integer-index arrays.
 
 **Implemented in `src/ppb/ld_backend.py`:** `DenseLDInt8` and
 `PackedDenseLDInt8` (D8, with a diagonal that dequantises to exactly 1).
@@ -353,11 +359,12 @@ mean 3,351, max 17,304), per chr22 and scaling with `sum_b m_b^2`:
 Memory and disk figures are measured over all 22 chromosomes; *the compressed
 total is extrapolated from chr22 (25.2 -> 8.1 MB, 3.1x on top of packing).
 
-Packing is lossless — only the redundant lower triangle is dropped — and the
-packed kernel is parallel over rows where the square one is serial (~6x faster
-`quad` at m = 2000). End to end, a full 22-chromosome sweep with a real PGS
-(922,538 variants) ran 48.3 s -> 38.6 s; the gain is diluted because
-`harmonize_to` dominates that loop, not the quadratic form.
+Packing is lossless — only the redundant lower triangle is dropped. Both square
+and packed dense-weight paths are now parallel; packed storage remains smaller,
+while sparse scores use support-indexed kernels for either layout. The earlier
+48.3 s -> 38.6 s genome sweep established that harmonization, not the quadratic
+form, dominated. The production sweep now partitions input tables by chromosome
+once rather than offering every genome-wide row to all 22 references.
 
 `w^T D w` is *not* bit-identical across the two layouts, because the packed
 kernel sums each off-diagonal pair once and doubles it. Measured: at most **11.3

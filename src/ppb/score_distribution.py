@@ -43,7 +43,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from .harmonize import VariantTable, harmonize_to
+from .harmonize import VariantTable, _harmonize_to_details
 from .ld_backend import BlockDiagonalLD, LDBackend
 
 _erf = np.vectorize(math.erf, otypes=[np.float64])
@@ -101,9 +101,9 @@ def score_distribution(ld: LDBackend, ld_variants: VariantTable,
     ``allele_frequency`` is the frequency of each reference variant's *effect*
     allele (``ld_variants``' ``a1``), in reference order. It belongs to the
     reference rather than to the submission, exactly as ``genotype_sd`` does in
-    :func:`ppb.evaluate`, so it is never harmonized -- harmonization flips the
-    sign of a weight, whereas a frequency would have to be replaced by its
-    complement, and conflating the two silently mis-scales the mean.
+    :func:`ppb.evaluate`, so it is never harmonized. For a swapped submission
+    allele, harmonization supplies the covariance sign and the raw-score mean
+    uses the complementary dosage ``2(1-f)`` explicitly.
 
     ``inbreeding`` is Wright's ``F``, giving ``Var(g) = 2f(1-f)(1+F)``. It
     corrects the per-variant variance for a structured or admixed population but
@@ -126,14 +126,19 @@ def score_distribution(ld: LDBackend, ld_variants: VariantTable,
     if not math.isfinite(inbreeding) or inbreeding < 0.0 or inbreeding > 1.0:
         raise ValueError("inbreeding must be a finite value in [0, 1]")
 
-    w, report = harmonize_to(ld_variants, weights_variants, weights,
-                             remove_ambiguous=remove_ambiguous)
+    w, report, _, orientation, _ = _harmonize_to_details(
+        ld_variants, weights_variants, weights,
+        remove_ambiguous=remove_ambiguous)
     w = np.asarray(w, dtype=np.float64)
     if not np.isfinite(w).all():
         raise ValueError("harmonized weights contain non-finite values")
 
     sd = np.sqrt(2.0 * f * (1.0 - f) * (1.0 + inbreeding))
-    mean = 2.0 * float(w @ f)
+    # A swapped raw dosage is 2 - g_ref, not -g_ref. Using f - 1 directly for
+    # its already-negated aligned weight both restores that affine intercept
+    # and avoids subtracting two large, nearly equal genome-wide sums.
+    dosage_frequency = f - (orientation == -1)
+    mean = 2.0 * float(w @ dosage_frequency)
     w_std = w * sd
 
     n_blocks = max_share = None

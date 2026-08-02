@@ -13,6 +13,7 @@ Variants are matched by ``(chrom, pos)``; alleles resolve the orientation.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from types import MappingProxyType
 
 import numpy as np
 
@@ -49,15 +50,44 @@ def _complement(allele: str):
         return None
 
 
+def _coerce_variant_field(name: str, value) -> np.ndarray:
+    """Own an immutable, normalized copy of one variant-table field."""
+    if name in {"a1", "a2"}:
+        array = np.char.upper(np.asarray(value, dtype=str))
+    else:
+        array = np.array(value, copy=True)
+    array.setflags(write=False)
+    return array
+
+
+def _validate_variant_fields(chrom, pos, a1, a2) -> None:
+    fields = (chrom, pos, a1, a2)
+    if not all(a.ndim == 1 for a in fields):
+        raise ValueError("variant fields must be 1-D")
+    n = chrom.shape[0]
+    if not (pos.shape[0] == a1.shape[0] == a2.shape[0] == n):
+        raise ValueError("chrom, pos, a1, a2 must have equal length")
+    try:
+        numeric_pos = np.asarray(pos, dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("variant positions must be finite integers") from exc
+    if (not np.isfinite(numeric_pos).all()
+            or not np.equal(numeric_pos, np.floor(numeric_pos)).all()):
+        raise ValueError("variant positions must be finite integers")
+    for label in chrom:
+        if isinstance(label, (float, np.floating)) and not np.isfinite(label):
+            raise ValueError("chromosome labels must be finite")
+
+
 @dataclass
 class VariantTable:
     """A set of variants: chromosome, position, effect allele ``a1``, other ``a2``.
 
     Alleles are upper-cased on construction. All four arrays must be equal length.
 
-    Normalized chromosomes, the allele lists, and the position index are derived
-    once and cached; assigning to a field drops them, so the table stays correct
-    if it is rebuilt in place.
+    The table owns immutable copies of its arrays. Normalized chromosomes,
+    allele tuples, and the position index are derived once and cached; assigning
+    a complete replacement to a field validates it and drops those caches.
     """
 
     _CACHES = ("_norm_chrom_cache", "_allele_list_cache", "_position_index_cache")
@@ -69,30 +99,28 @@ class VariantTable:
 
     def __setattr__(self, name, value):
         if name in {"chrom", "pos", "a1", "a2"}:
+            value = _coerce_variant_field(name, value)
+            prospective = {
+                key: value if key == name else self.__dict__.get(key)
+                for key in ("chrom", "pos", "a1", "a2")
+            }
+            if all(field is not None for field in prospective.values()):
+                _validate_variant_fields(**prospective)
             for key in self._CACHES:
                 self.__dict__.pop(key, None)
         object.__setattr__(self, name, value)
 
     def __post_init__(self):
-        self.chrom = np.asarray(self.chrom)
-        self.pos = np.asarray(self.pos)
-        self.a1 = np.char.upper(np.asarray(self.a1, dtype=str))
-        self.a2 = np.char.upper(np.asarray(self.a2, dtype=str))
-        if not all(a.ndim == 1 for a in (self.chrom, self.pos, self.a1, self.a2)):
-            raise ValueError("variant fields must be 1-D")
-        n = self.chrom.shape[0]
-        if not (self.pos.shape[0] == self.a1.shape[0] == self.a2.shape[0] == n):
-            raise ValueError("chrom, pos, a1, a2 must have equal length")
-        try:
-            numeric_pos = np.asarray(self.pos, dtype=np.float64)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("variant positions must be finite integers") from exc
-        if (not np.isfinite(numeric_pos).all()
-                or not np.equal(numeric_pos, np.floor(numeric_pos)).all()):
-            raise ValueError("variant positions must be finite integers")
-        for chrom in self.chrom:
-            if isinstance(chrom, (float, np.floating)) and not np.isfinite(chrom):
-                raise ValueError("chromosome labels must be finite")
+        _validate_variant_fields(self.chrom, self.pos, self.a1, self.a2)
+
+    def __reduce__(self):
+        """Serialize source fields and reconstruct through validation.
+
+        Derived caches include a read-only mapping proxy, which is deliberately
+        not picklable. Reconstruction through the public constructor also
+        restores owned, immutable arrays.
+        """
+        return type(self), (self.chrom, self.pos, self.a1, self.a2)
 
     @property
     def n(self) -> int:
@@ -104,23 +132,24 @@ class VariantTable:
         cached = self.__dict__.get("_norm_chrom_cache")
         if cached is None:
             cached = _norm_chrom_array(self.chrom)
+            cached.setflags(write=False)
             self.__dict__["_norm_chrom_cache"] = cached
         return cached
 
-    def allele_lists(self) -> tuple[list, list]:
-        """``(a1, a2)`` as Python lists, computed once and cached.
+    def allele_lists(self) -> tuple[tuple, tuple]:
+        """``(a1, a2)`` as immutable Python tuples, computed once and cached.
 
         The orientation loop indexes single alleles; going through numpy scalars
         for each one costs more than the comparison it feeds.
         """
         cached = self.__dict__.get("_allele_list_cache")
         if cached is None:
-            cached = (self.a1.tolist(), self.a2.tolist())
+            cached = (tuple(self.a1.tolist()), tuple(self.a2.tolist()))
             self.__dict__["_allele_list_cache"] = cached
         return cached
 
-    def position_index(self) -> dict:
-        """``(norm_chrom, pos) -> [row indices]``, computed once and cached.
+    def position_index(self):
+        """Immutable ``(norm_chrom, pos) -> tuple[row indices]`` position map.
 
         A reference table is harmonized against repeatedly -- the genome-wide
         sweep in ``scripts/regenerate_results.py`` matches weights and every
@@ -133,6 +162,9 @@ class VariantTable:
             for j, key in enumerate(zip(self.norm_chrom.tolist(),
                                         self.pos.astype(np.int64).tolist())):
                 cached.setdefault(key, []).append(j)
+            for key, indices in cached.items():
+                cached[key] = tuple(indices)
+            cached = MappingProxyType(cached)
             self.__dict__["_position_index_cache"] = cached
         return cached
 
@@ -188,20 +220,10 @@ def _orient(t1, t2, r1, r2):
     return None
 
 
-def harmonize_to(reference: VariantTable, target: VariantTable, value,
-                 *, remove_ambiguous: bool = True, return_mask: bool = False):
-    """Align ``target``'s ``value`` onto ``reference`` order.
-
-    Returns ``(aligned, report)`` where ``aligned`` is a length ``reference.n``
-    array (0 where ``reference`` had no matching target variant) with signs
-    flipped for allele swaps / strand flips, and ``report`` is a
-    :class:`HarmonizeReport`. With ``return_mask=True``, a third boolean array
-    marks the reference variants that genuinely matched. This distinguishes a
-    matched value of zero from a missing variant and lets callers form a joint
-    intersection across inputs. Strand-ambiguous palindromic SNPs are dropped
-    when ``remove_ambiguous`` (the default), since strand cannot be resolved
-    from alleles alone.
-    """
+def _harmonize_to_details(reference: VariantTable, target: VariantTable, value,
+                          *, remove_ambiguous: bool,
+                          return_target_index: bool = False):
+    """Internal harmonizer returning mask, orientation, and optional row map."""
     value = np.asarray(value, dtype=np.float64)
     if value.shape != (target.n,):
         raise ValueError(f"value has shape {value.shape}, expected ({target.n},)")
@@ -212,6 +234,11 @@ def harmonize_to(reference: VariantTable, target: VariantTable, value,
 
     aligned = np.zeros(reference.n, dtype=np.float64)
     used = np.zeros(reference.n, dtype=bool)
+    orientation = np.zeros(reference.n, dtype=np.int8)
+    target_index = (
+        np.full(reference.n, -1, dtype=np.intp)
+        if return_target_index else None
+    )
     n_matched = n_sign = n_strand = n_ambig = n_mismatch = n_unmatched = 0
 
     target_keys = zip(target.norm_chrom.tolist(),
@@ -228,30 +255,62 @@ def harmonize_to(reference: VariantTable, target: VariantTable, value,
         if remove_ambiguous and frozenset((t1, t2)) in _AMBIGUOUS:
             n_ambig += 1
             continue
-        matched = False
+        match = None
         for j in candidates:
-            if used[j]:
-                continue
             res = _orient(t1, t2, ref_a1[j], ref_a2[j])
             if res is None:
                 continue
-            sign, strand = res
-            aligned[j] = sign * value[i]
-            used[j] = True
-            matched = True
-            n_matched += 1
-            if sign == -1:
-                n_sign += 1
-            if strand:
-                n_strand += 1
-            break
-        if not matched:
+            if match is not None:
+                raise ValueError(
+                    "reference contains multiple allele-compatible variants at "
+                    f"{key[0]}:{key[1]} (rows {match[0]} and {j})")
+            match = (j, *res)
+        if match is None:
             n_mismatch += 1          # position(s) present, but no allele orientation fit
+            continue
+        j, sign, strand = match
+        if used[j]:
+            raise ValueError(
+                "target contains duplicate variants mapping to reference "
+                f"row {j} ({key[0]}:{key[1]})")
+        aligned[j] = sign * value[i]
+        used[j] = True
+        orientation[j] = sign
+        if target_index is not None:
+            target_index[j] = i
+        n_matched += 1
+        if sign == -1:
+            n_sign += 1
+        if strand:
+            n_strand += 1
 
     report = HarmonizeReport(
         n_reference=reference.n, n_target=target.n, n_matched=n_matched,
         n_sign_flipped=n_sign, n_strand_flipped=n_strand,
         n_ambiguous_removed=n_ambig, n_mismatch=n_mismatch, n_unmatched=n_unmatched)
+    return aligned, report, used, orientation, target_index
+
+
+def harmonize_to(reference: VariantTable, target: VariantTable, value,
+                 *, remove_ambiguous: bool = True, return_mask: bool = False):
+    """Align ``target``'s ``value`` onto ``reference`` order.
+
+    Returns ``(aligned, report)`` where ``aligned`` is a length ``reference.n``
+    array (0 where ``reference`` had no matching target variant) with signs
+    flipped for allele swaps / strand flips, and ``report`` is a
+    :class:`HarmonizeReport`. With ``return_mask=True``, a third boolean array
+    marks the reference variants that genuinely matched. This distinguishes a
+    matched value of zero from a missing variant and lets callers form a joint
+    intersection across inputs. Strand-ambiguous palindromic SNPs are dropped
+    when ``remove_ambiguous`` (the default), since strand cannot be resolved
+    from alleles alone.
+
+    Two target rows that resolve to the same reference variant are rejected:
+    silently taking the first would make the answer depend on input row order.
+    Distinct multiallelic records at one position remain valid.
+    """
+    aligned, report, used, _, _ = _harmonize_to_details(
+        reference, target, value, remove_ambiguous=remove_ambiguous)
     if return_mask:
         return aligned, report, used
     return aligned, report

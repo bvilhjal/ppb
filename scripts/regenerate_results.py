@@ -16,9 +16,11 @@ It replaces three previously separate paths:
   operator required by the basis-aware correction, so regenerated records fail
   closed with ``basis_unavailable`` rather than inventing a variant-count basis.
 
-Both targets are evaluated in one sweep over the chromosomes, but each target
-gets its own joint weight/sumstat support and score variance. Missing target
-statistics therefore cannot remain in that target's denominator.
+Both targets for one trait are evaluated in one sweep over the chromosomes, but
+each target gets its own joint weight/sumstat support and score variance.
+Weights and targets are partitioned once up front, so each input row is offered
+to harmonization once rather than once per chromosome. Missing target statistics
+therefore cannot remain in that target's denominator.
 
 Run (needs the ~24G LD reference and the target sumstats under ``data/``):
 
@@ -151,9 +153,12 @@ def load_target(path, n_eff=None, trait_type=None):
         reader = csv.DictReader(fh, delimiter="\t")
         with_n = "n" in (reader.fieldnames or ())
         for r in reader:
-            chrom.append(r["chrom"]); pos.append(int(r["pos"]))
-            a1.append(r["a1"]); a2.append(r["a2"])
-            beta.append(float(r["beta"])); se.append(float(r["se"]))
+            chrom.append(r["chrom"])
+            pos.append(int(r["pos"]))
+            a1.append(r["a1"])
+            a2.append(r["a2"])
+            beta.append(float(r["beta"]))
+            se.append(float(r["se"]))
             if with_n:
                 n.append(float(r["n"]))
     variants = VariantTable(np.array(chrom), np.array(pos, dtype=np.int64),
@@ -182,6 +187,48 @@ def load_target(path, n_eff=None, trait_type=None):
     return variants, standardized_marginal(beta, se, n_eff), summary
 
 
+def _chromosome_rows(variants):
+    """Canonical chromosome -> selector, using slices for grouped files."""
+    chrom = variants.norm_chrom
+    if variants.n == 0:
+        return {}
+    stops = np.flatnonzero(chrom[1:] != chrom[:-1]) + 1
+    starts = np.concatenate(([0], stops))
+    stops = np.concatenate((stops, [variants.n]))
+    out = {}
+    repeated = set()
+    for start, stop in zip(starts.tolist(), stops.tolist()):
+        key = str(chrom[start])
+        if key in out:
+            repeated.add(key)
+        else:
+            out[key] = slice(start, stop)
+    # Interleaving is unusual but legal. Pay for integer indices only then.
+    for key in repeated:
+        out[key] = np.flatnonzero(chrom == key)
+    return out
+
+
+def _chromosome_table(variants, values, rows, chrom):
+    """Materialize only one chromosome's transient harmonization table."""
+    selector = rows.get(chrom, slice(0, 0))
+    return (
+        VariantTable(
+            variants.chrom[selector], variants.pos[selector],
+            variants.a1[selector], variants.a2[selector]),
+        values[selector],
+    )
+
+
+def _append_block_products(ld, chrom, aligned, chrom_tag, u_b, v_b):
+    """Append one chromosome's block products without leaking a block view."""
+    for backend, idx in ld.blocks:
+        chrom_tag.append(chrom)
+        for name, (w_joint, z_al) in aligned.items():
+            u_b[name].append(float(w_joint[idx] @ z_al[idx]))
+            v_b[name].append(backend.quad(w_joint[idx]))
+
+
 def sweep(pgs, targets):
     """One pass over chromosomes 1-22 for a score and its targets.
 
@@ -191,6 +238,11 @@ def sweep(pgs, targets):
     harmonization match counts.
     """
     w_var, w = read_weights(DATA / "pgs_weights" / f"{pgs}_hmPOS_GRCh37.txt")
+    w_rows = _chromosome_rows(w_var)
+    z_rows = {
+        name: _chromosome_rows(z_var)
+        for name, (z_var, _, _) in targets.items()
+    }
     chrom_tag = []
     u_b = {name: [] for name in targets}
     v_b = {name: [] for name in targets}
@@ -200,9 +252,11 @@ def sweep(pgs, targets):
 
     for c in CHROMS:
         t0 = time.time()
+        # One LD read serves the score and every selected target for this trait.
         ref = read_ldref(DATA / "ldref_hm3_plus" / "npz" / f"ldref_chr{c}.npz")
+        w_chr_var, w_chr = _chromosome_table(w_var, w, w_rows, c)
         w_al, rep_w, w_mask = harmonize_to(
-            ref["variants"], w_var, w, return_mask=True)
+            ref["variants"], w_chr_var, w_chr, return_mask=True)
         # Put the weights on the standardized-genotype scale the LD is defined
         # on. Note this is the HWE scale, not empirical genotype SDs -- the
         # documented deviation in docs/CROSS_ANCESTRY.md, acceptable for this
@@ -228,22 +282,22 @@ def sweep(pgs, targets):
 
         aligned = {}
         for name, (z_var, z, _) in targets.items():
+            z_chr_var, z_chr = _chromosome_table(
+                z_var, z, z_rows[name], c)
             z_al, rep_z, z_mask = harmonize_to(
-                ref["variants"], z_var, z, return_mask=True)
+                ref["variants"], z_chr_var, z_chr, return_mask=True)
             w_joint = ws.copy()
             w_joint[~(w_mask & z_mask)] = 0.0
             aligned[name] = (w_joint, z_al)
             z_matched[name] += rep_z.n_matched
             n_variants_scored[name] += int(np.count_nonzero(w_joint))
 
-        for backend, idx in ref["ld"].blocks:
-            chrom_tag.append(c)
-            for name, (w_joint, z_al) in aligned.items():
-                u_b[name].append(float(w_joint[idx] @ z_al[idx]))
-                v_b[name].append(backend.quad(w_joint[idx]))
-        print(f"    chr{c:<2} {len(ref['ld'].blocks):>4} blocks  "
+        ld = ref["ld"]
+        _append_block_products(ld, c, aligned, chrom_tag, u_b, v_b)
+        n_blocks = len(ld.blocks)
+        del ld, ref
+        print(f"    chr{c:<2} {n_blocks:>4} blocks  "
               f"{time.time() - t0:6.1f}s", flush=True)
-        del ref
 
     per_block = dict(
         chrom=np.array(chrom_tag),
@@ -437,6 +491,10 @@ def main(argv=None):
     date = args.date or time.strftime("%Y-%m-%d", time.gmtime())
     commit = git_commit()
     records = []
+    # Deliberately trait-outer. A chromosome-outer sweep over every trait would
+    # avoid rereading LD, but would retain all 9 score tables and up to 15
+    # million-row target tables (plus aligned arrays) at once. The bounded
+    # one-score/one-or-two-target batch is the safer memory contract.
     for trait in traits:
         t0 = time.time()
         records.extend(build_records(trait, TRAITS[trait], commit, date))

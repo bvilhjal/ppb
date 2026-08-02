@@ -45,7 +45,7 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
              sumstats_variants: VariantTable, z,
              *, var_y: float = 1.0, weight_scale: str = "standardized",
              genotype_sd=None, remove_ambiguous: bool = True,
-             mse_interpretable: bool = True) -> EvaluationResult:
+             mse_interpretable: bool | None = None) -> EvaluationResult:
     """Harmonize weights and summary statistics to ``ld_variants``, then evaluate.
 
     ``ld`` must be an LD backend defined over ``ld_variants`` (same order).
@@ -54,6 +54,10 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
     weights, pass ``weight_scale='dosage'`` and the target-cohort
     ``genotype_sd`` in reference order; each weight is then multiplied by its
     genotype SD before evaluation.
+
+    ``mse_interpretable`` defaults to true for standardized weights and false
+    for dosage weights. Set it explicitly only when the submitted weights and
+    target phenotype are known to share (or not share) an absolute scale.
 
     Strand resolution (and therefore the palindrome drop) applies only to a
     table that came from somewhere else. When ``sumstats_variants`` *is* the
@@ -99,6 +103,8 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
         w_aligned *= genotype_sd
     elif weight_scale != "standardized":
         raise ValueError("weight_scale must be 'standardized' or 'dosage'")
+    if mse_interpretable is None:
+        mse_interpretable = weight_scale == "standardized"
 
     # Missing z is not zero association. Evaluate on the joint matched set so
     # exactly the same variants enter w^T z and w^T D w.
