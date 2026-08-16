@@ -13,6 +13,7 @@ from ppb import OverlapBasis
 from ppb.ld_backend import BlockDiagonalLD, DenseLD
 
 from experiments.overlap_detection import (
+    _one,
     block_products,
     correct_overlap_numerator,
     estimate_overlap_basis,
@@ -239,6 +240,45 @@ def test_diffuse_architecture_is_refused_not_corrected(overlap_simulation):
     out = overlap_simulation
     assert set(out["diffuse_status"]) <= {"weak_identification", "nonidentifiable"}
     assert out["diffuse_vif"] > 2.0
+
+
+def test_gate_transitions_along_the_architecture_continuum():
+    """The two pinned corners are endpoints of a continuum, not isolated
+    constructions: sweeping the causal fraction from sparse (1%) to diffuse
+    (20%) at full overlap must move the diagnostics toward the refusal region
+    without the diffuse end ever issuing a correction. Measured over seeds
+    1000-1002 (3 reps, 2026-08-16): VIF 1.12 -> 1.70, condition number
+    1.95 -> 4.56; statuses correctable throughout the sparse third,
+    not_detected (coupling below detection_z) through the middle, and refusal
+    at the diffuse endpoint -- a graded transition, not a cliff."""
+    common = dict(n=1200, per_size=15, rho=0.6, h2=0.3, ridge=0.5,
+                  thresholded=False, hutchinson_draws=16)
+    levels = (0.01, 0.03, 0.06, 0.10, 0.20)
+    vifs, conds, statuses = [], [], []
+    for causal in levels:
+        rows = [_one(np.random.default_rng(1000 + 7 * s), 1.0, causal, **common)
+                for s in range(3)]
+        vifs.append(float(np.mean([r["vif"] for r in rows])))
+        conds.append(float(np.mean(
+            [r["condition_number"] for r in rows
+             if r["condition_number"] is not None])))
+        statuses.append([r["status"] for r in rows])
+
+    # The diagnostics move toward the refusal region with diffuseness.
+    assert vifs[-1] > 1.2 * vifs[0]
+    assert conds[-1] > conds[0]
+    assert np.mean(vifs[:2]) < np.mean(vifs[-2:])
+    # The sparse end is identified; the diffuse endpoint never corrects. (The
+    # 10% level is genuinely transitional -- seeds there can still correct,
+    # which is the graded transition, not a cliff.)
+    assert set(statuses[0]) == {"correctable"}
+    assert set(statuses[-1]) <= {"weak_identification", "nonidentifiable",
+                                 "not_detected"}
+    # No level leaves the documented vocabulary.
+    allowed = {"correctable", "not_detected", "weak_identification",
+               "nonidentifiable", "unstable", "heterogeneous"}
+    for level_statuses in statuses:
+        assert set(level_statuses) <= allowed
 
 
 def test_sparse_architecture_identifies_and_corrects(overlap_simulation):

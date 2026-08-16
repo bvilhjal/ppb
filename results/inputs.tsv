@@ -1,0 +1,54 @@
+# External inputs consumed by the real-data path (docs/REAL_DATA.md), one
+# row per artifact, named exactly as the scripts reference it. Checksums and
+# accessions are filled only where the repo records them: the Pan-UKB files
+# carry published MD5s (scripts/panukb_checksums.tsv); everything else says
+# 'unrecorded', and sources the repo does not record are UNKNOWN rather than
+# guessed. Column semantics: results/schema.md, 'Input manifest'.
+artifact	role	source_url_or_accession	checksum_md5	date_recorded
+GIANT_HEIGHT_2014.txt.gz	consortium GWAS sumstats: height (GIANT 2014, Wood et al.)	UNKNOWN	unrecorded	2026-08-16
+GIANT_BMI_2015.txt.gz	consortium GWAS sumstats: BMI (GIANT 2015, Locke et al.)	UNKNOWN	unrecorded	2026-08-16
+GLGC_LDL_2013.txt.gz	consortium GWAS sumstats: LDL (GLGC 2013, Teslovich et al.)	UNKNOWN	unrecorded	2026-08-16
+CARDIO_CAD_2015_build37.tsv.gz	consortium GWAS sumstats: CAD (CARDIoGRAMplusC4D 2015, Nikpay et al.)	GCST003116	unrecorded	2026-08-16
+DIAGRAM_T2D_2017.txt	consortium GWAS sumstats: T2D (DIAGRAM 2017, Scott et al.)	UNKNOWN	unrecorded	2026-08-16
+BCAC_2017_build37.tsv.gz	consortium GWAS sumstats: BrCa (BCAC 2017, Michailidou et al.)	GCST004988	unrecorded	2026-08-16
+PGS002146_hmPOS_GRCh37.txt	PGS Catalog weights: height score (PGS002146, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002146/	unrecorded	2026-08-16
+PGS002161_hmPOS_GRCh37.txt	PGS Catalog weights: BMI score (PGS002161, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002161/	unrecorded	2026-08-16
+PGS002150_hmPOS_GRCh37.txt	PGS Catalog weights: LDL score (PGS002150, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002150/	unrecorded	2026-08-16
+PGS002048_hmPOS_GRCh37.txt	PGS Catalog weights: CAD score (PGS002048, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002048/	unrecorded	2026-08-16
+PGS002026_hmPOS_GRCh37.txt	PGS Catalog weights: T2D score (PGS002026, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002026/	unrecorded	2026-08-16
+PGS002015_hmPOS_GRCh37.txt	PGS Catalog weights: BrCa score (PGS002015, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002015/	unrecorded	2026-08-16
+PGS002228_hmPOS_GRCh37.txt	PGS Catalog weights: SBP score (PGS002228, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002228/	unrecorded	2026-08-16
+PGS002061_hmPOS_GRCh37.txt	PGS Catalog weights: asthma score (PGS002061, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002061/	unrecorded	2026-08-16
+PGS002036_hmPOS_GRCh37.txt	PGS Catalog weights: MDD score (PGS002036, LDpred2/UKBB)	https://www.pgscatalog.org/score/PGS002036/	unrecorded	2026-08-16
+map_hm3_plus.rds	bigsnpr HM3+ variant map (chr/pos/rsid/block_id; also the HM3+ refset for the prep filters)	doi:10.6084/m9.figshare.37802721	unrecorded	2026-08-16
+LD_with_blocks_chr1.rds	bigsnpr HM3+ EUR LD correlations, chr1 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr2.rds	bigsnpr HM3+ EUR LD correlations, chr2 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr3.rds	bigsnpr HM3+ EUR LD correlations, chr3 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr4.rds	bigsnpr HM3+ EUR LD correlations, chr4 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr5.rds	bigsnpr HM3+ EUR LD correlations, chr5 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr6.rds	bigsnpr HM3+ EUR LD correlations, chr6 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr7.rds	bigsnpr HM3+ EUR LD correlations, chr7 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr8.rds	bigsnpr HM3+ EUR LD correlations, chr8 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr9.rds	bigsnpr HM3+ EUR LD correlations, chr9 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr10.rds	bigsnpr HM3+ EUR LD correlations, chr10 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr11.rds	bigsnpr HM3+ EUR LD correlations, chr11 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr12.rds	bigsnpr HM3+ EUR LD correlations, chr12 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr13.rds	bigsnpr HM3+ EUR LD correlations, chr13 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr14.rds	bigsnpr HM3+ EUR LD correlations, chr14 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr15.rds	bigsnpr HM3+ EUR LD correlations, chr15 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr16.rds	bigsnpr HM3+ EUR LD correlations, chr16 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr17.rds	bigsnpr HM3+ EUR LD correlations, chr17 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr18.rds	bigsnpr HM3+ EUR LD correlations, chr18 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr19.rds	bigsnpr HM3+ EUR LD correlations, chr19 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr20.rds	bigsnpr HM3+ EUR LD correlations, chr20 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr21.rds	bigsnpr HM3+ EUR LD correlations, chr21 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+LD_with_blocks_chr22.rds	bigsnpr HM3+ EUR LD correlations, chr22 (UK Biobank; converted to ppb int8 blocks)	doi:10.6084/m9.figshare.21305061	unrecorded	2026-08-16
+biomarkers-30780-both_sexes-irnt.tsv.bgz	Pan-UKB EUR sumstats: LDL	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/biomarkers-30780-both_sexes-irnt.tsv.bgz	c25276f209b3841c5ab73e711c66d20f	2026-08-16
+continuous-21001-both_sexes-irnt.tsv.bgz	Pan-UKB EUR sumstats: BMI	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/continuous-21001-both_sexes-irnt.tsv.bgz	ca9ceaa99c79d510fb0e26a780787416	2026-08-16
+continuous-4080-both_sexes-irnt.tsv.bgz	Pan-UKB EUR sumstats: SBP	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/continuous-4080-both_sexes-irnt.tsv.bgz	5ea34de716da95971da0a797b47ce721	2026-08-16
+continuous-50-both_sexes-irnt.tsv.bgz	Pan-UKB EUR sumstats: height	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/continuous-50-both_sexes-irnt.tsv.bgz	d883d1ec0840c3fec63457648ef0cb2f	2026-08-16
+icd10-C50-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: BrCa	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-C50-both_sexes.tsv.bgz	8c62e9350043c2215998f285fe2628a9	2026-08-16
+icd10-E11-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: T2D	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-E11-both_sexes.tsv.bgz	cd2d059ee20ec1358cee087f84ebd4df	2026-08-16
+icd10-F32-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: MDD	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-F32-both_sexes.tsv.bgz	869c7f5c85bff350acc2524b64f9257b	2026-08-16
+icd10-I25-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: IHD (CAD target)	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-I25-both_sexes.tsv.bgz	6d2c168640a02b336ecf19358021b3ad	2026-08-16
+icd10-J45-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: asthma	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-J45-both_sexes.tsv.bgz	93ef78eae918ef0d26ddb4f44f2f6c4b	2026-08-16

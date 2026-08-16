@@ -213,7 +213,9 @@ cross-ancestry portability measurement (`cross_ancestry.py`), the within-ancestr
 LD-reference behaviour (`figure_s1.py`), cross-method concordance
 (`benchmark_methods.py`), PC adjustment (`pc_adjustment.py`), per-variant N
 (`per_variant_n.py`), PUMAS-style repeated-learning agreement
-(`pumas_agreement.py`), and basis-aware training-target sample-overlap analysis
+(`pumas_agreement.py`, Gaussian and diploid generators), the
+dosage→standardized gauge path against individual-level truth
+(`gauge_validation.py`), and basis-aware training-target sample-overlap analysis
 (`overlap_detection.py`, see
 [`docs/OVERLAP.md`](docs/OVERLAP.md)), and the negative
 result on LD-based transferability reweighting (`transferability.py`, see

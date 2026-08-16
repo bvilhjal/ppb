@@ -192,6 +192,7 @@ it to account.
 | (C1) | LD score `l_j = Σ_k D_jk²` | `LDBackend.ld_scores` | `tests/test_ldscore.py` |
 | (C2) | LD-score regression | `experiments/z_calibration.py` (`ldscore_regression`) | `tests/test_ldscore.py` |
 | (C3) | implied `z` scale from the intercept | `experiments/z_calibration.py` (`ldscore_regression`) | `tests/test_ldscore.py` |
+| (C4) | stratification raises the intercept and withholds the (C3) scale | `experiments/z_calibration.py` (`stratification_arm`) | `tests/test_ldscore.py` |
 | (G1) | genome-wide accumulation of (M1) | `scripts/regenerate_results.py` | `tests/test_regenerate_results.py` |
 | (G2) | delete-one-group block jackknife | `ppb.diagnostics.r2_block_jackknife` | `tests/test_diagnostics.py` |
 | (G3) | block-sign-flip null | `ppb.diagnostics.sign_flip_null` | `tests/test_diagnostics.py` |
@@ -201,6 +202,7 @@ it to account.
 | (E1) | PUMAS moment covariance `V = var_y D + z zᵀ` | `experiments/pumas_agreement.py` | `tests/test_pumas.py` |
 | (E2) | per-variant LD concordance `s_j = cos(D_A row_j, D_B row_j)` | `experiments/transferability.py` (`ld_concordance`) | `tests/test_transferability.py` |
 | (E3) | target-informed optimum `argmax_w (wᵀz_B)²/(wᵀD_Bw) ∝ D_B⁻¹z_B` | — (algebra; its consequence is demonstrated) | `tests/test_transferability.py` |
+| (E4) | the dosage→standardized gauge conversion (V3/(X2)) recovers individual-level truth | `experiments/gauge_validation.py` | `tests/test_gauge.py` |
 
 Four rows carry no implementation, and they are not the same kind of gap. (M1)
 is a definition and (E3) is algebra, so there is nothing to implement. (M6)'s

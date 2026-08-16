@@ -142,6 +142,10 @@ per-SNP-standard-error implementation. The default finite-validation bias
 correction is exact within this plug-in working model only for independent fixed
 weights. For refitted weights the default is the raw pseudo-validation statistic;
 the conditional correction is available only as an explicit approximation.
+`run_diploid` repeats the agreement check with block-LD 0/1/2 dosages
+(`ppb.simulate.simulate_diploid_genotypes`) instead of Gaussian genotypes, so
+the pseudo-splitting machinery is also checked outside the model (E1) is exact
+for (`tests/test_pumas.py::test_pumas_diploid_leg_agreement`).
 
 Run:
 
@@ -418,6 +422,37 @@ fabricated deflation — and recovers an applied genomic-control `λ` to within 
 across 1.3, 1.6 and 2.0. Consistency across variant counts shows the intercept
 needs ~10⁵ variants, which is why the fit refuses a verdict without a jackknife.
 
+The deflation sweep assumes exactly the uniform `chisq/λ` mechanism (C3)
+corrects, so `stratification_arm` simulates the competing mechanism: a pooled
+two-population cohort with an ancestry effect and no PC adjustment
+**(C4)**. The intercept rises by two orders of magnitude (measured ~250 against
+a paired unconfounded null of 1.5–7.6, which is itself inflated — polygenic
+signal on structured genotypes correlates with ancestry), the diagnostic flags
+**inflation**, and the (C3) scale is withheld: a stratified target must be
+PC-adjusted, not rescaled (`tests/test_ldscore.py::test_stratification_raises_the_intercept_and_withholds_the_scale`).
+
 Run: `python experiments/z_calibration.py`. Numbers are recorded in
 [`../docs/CALIBRATION.md`](../docs/CALIBRATION.md) and pinned by
 `tests/test_ldscore.py`.
+
+## `gauge_validation.py` — the dosage→standardized gauge path against truth
+
+Every real cross-ancestry evaluation converts per-allele (dosage) weights to
+the standardized scale with target-cohort genotype SDs — step V3 / (X2) — but
+the other demonstrations simulate everything within-cohort standardized, so
+the conversion was never checked against individual-level truth. **(E4)**: two
+Balding-Nichols ancestries, a p+T score trained in A and shipped as dosage
+weights `b_j = w_A,j / sd_A,j`, evaluated in B through `ppb.evaluate` on a
+shuffled submission with `z_B`, an independent B LD panel and per-variant B
+SDs; truth is `corr(X_Bstd (b·sd_B), y_B)²` on the individuals.
+
+With empirical B SDs the evaluation recovers truth (mean −0.8%, worst seed
+3.7% — independent-panel noise, not gauge error); the HWE SD costs +0.03%
+paired in a homogeneous B; the discovery (A) SD is biased +15% to +34% every
+seed. On an admixed B (two subpopulations 0.1 apart) single draws scatter to
+|14|% because the panel denominator dominates — quote a block jackknife — and
+the paired HWE-vs-empirical residual is +0.9% (SE 0.7%): real, second-order at
+that structure, unbounded only in the worst case. Pinned by
+`tests/test_gauge.py` (4 tests, 5 seeds each).
+
+Run: `python experiments/gauge_validation.py --seed 0 [--sub-fst 0.1]`.

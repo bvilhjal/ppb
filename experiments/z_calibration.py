@@ -102,6 +102,7 @@ class LDScoreFit:
     z_scale: float | None = None
     r2_scale: float | None = None
     deflation_detected: bool = False
+    inflation_detected: bool = False
     note: str = ""
 
     def to_dict(self) -> dict:
@@ -194,21 +195,34 @@ def ldscore_regression(chisq, ld_scores, n, *, n_variants=None, blocks=None,
 
     z_scale = r2_scale = None
     note = ""
-    if intercept > 0.0:
-        z_scale = 1.0 / math.sqrt(intercept)
-        r2_scale = 1.0 / intercept
-    else:
+    inflated = False
+    if intercept <= 0.0:
         note = (f"intercept {intercept:.4g} is not positive; the fit is degenerate "
                 "and implies no scale")
+    elif intercept_se is not None and intercept - 2.0 * intercept_se > 1.0:
+        # An intercept significantly ABOVE 1 is the signature of stratification
+        # or cryptic relatedness -- a mechanism (C3) does not correct: applying
+        # 1/sqrt(intercept) here would deflate an already-confounded statistic.
+        # Withhold the scale and say why; the remedy is covariate/PC adjustment
+        # upstream, not a rescaling.
+        inflated = True
+        note = (f"intercept {intercept:.4g} +/- {intercept_se:.3g} is more than two "
+                "standard errors above 1: consistent with stratification or "
+                "cryptic relatedness, which a uniform z rescaling does not "
+                "correct -- no scale is offered; adjust covariates/PCs instead")
+    else:
+        z_scale = 1.0 / math.sqrt(intercept)
+        r2_scale = 1.0 / intercept
 
     # The intercept is an extrapolation to l = 0, so its precision depends on how
     # far that is from the data. Report the distance in units of the spread.
     leverage = float(ell.mean() / ell.std()) if ell.std() > 0.0 else float("inf")
 
     # Deflation is a claim about a number that is noisy at small m: at 2,000
-    # variants the intercept's standard error exceeds 1, so "intercept < 1" alone
-    # is not evidence of anything. Require the interval to clear 1, and refuse to
-    # claim detection at all when no jackknife was possible.
+    # variants the intercept's standard error is of order one (measured 0.8-1.6
+    # across seeds and generators), so "intercept < 1" alone is not evidence of
+    # anything. Require the interval to clear 1, and refuse to claim detection
+    # at all when no jackknife was possible.
     deflated = False
     if intercept <= 0.0:
         pass
@@ -232,7 +246,8 @@ def ldscore_regression(chisq, ld_scores, n, *, n_variants=None, blocks=None,
         n_variants=int(chisq.size), mean_chisq=float(chisq.mean()),
         intercept_se=intercept_se, h2_se=h2_se, n_blocks=n_blocks,
         leverage=leverage,
-        z_scale=z_scale, r2_scale=r2_scale, deflation_detected=deflated, note=note,
+        z_scale=z_scale, r2_scale=r2_scale, deflation_detected=deflated,
+        inflation_detected=inflated, note=note,
     )
 
 
@@ -295,6 +310,74 @@ def genomic_control_sweep(rng, *, n=6_000, repeats=30, h2=0.4, causal=0.1):
     return m, ell, chisq.mean(), rows
 
 
+def stratification_arm(rng, *, n=6_000, repeats=30, h2=0.2, causal=0.1,
+                       diff=0.2, confound=1.0):
+    """Pooled two-population cohort with ancestry confounding, no PC adjustment.
+
+    This is the competing mechanism the deflation sweep cannot simulate: the
+    phenotype carries an ancestry effect, the cohort is not adjusted for it,
+    and the marginal chi2 pick the confounding up. The diagnostic must raise
+    the intercept above 1 and refuse to offer a (C3) scale -- deflating a
+    stratified target would understate an already-confounded statistic.
+
+    The two subpopulations differ by a per-variant frequency shift ``diff``
+    clipped to [0.05, 0.95]: Balding-Nichols draws reach the 1e-3 MAF floor,
+    and a near-monomorphic variant standardized in a 6,000-person cohort turns
+    the chi2 tail into noise that swamps the intercept entirely.
+
+    The paired null (same cohort, ancestry effect switched off) is itself
+    inflated (measured 1.5-7.6): a polygenic signal on structured genotypes
+    correlates with the ancestry axis through the frequency shifts, and the
+    block-diagonal LD scores define the mixture LD that would explain it away.
+    The arm's claim is therefore the *paired* contrast -- the ancestry effect
+    moves the intercept by another two orders of magnitude (measured ~250 at
+    ``confound=1.0``) -- not a clean null.
+
+    Returns ``(fit, fit_null)`` where ``intercept_null`` is the same
+    cohort with the ancestry effect switched off (the y-noise draw is shared,
+    so the comparison is paired).
+    """
+    specs = SPECS * repeats
+    half = n // 2
+    parts = []
+    for k, rho in specs:
+        f_anc = rng.uniform(0.15, 0.85, size=k)
+        f1 = np.clip(f_anc - diff / 2.0, 0.05, 0.95)
+        f2 = np.clip(f_anc + diff / 2.0, 0.05, 0.95)
+        g1 = _diploid_dosages(half, [k], f1, rho, rng).astype(np.float32)
+        g2 = _diploid_dosages(n - half, [k], f2, rho, rng).astype(np.float32)
+        parts.append(np.vstack([g1, g2]))
+    g = np.hstack(parts)
+    g = (g - g.mean(axis=0)) / g.std(axis=0)
+    labels = np.concatenate([np.zeros(half), np.ones(n - half)])
+    ancestry = (labels - labels.mean()) / labels.std()
+
+    blocks, block_of, start = [], np.empty(g.shape[1], dtype=int), 0
+    for b, (k, _) in enumerate(specs):
+        idx = np.arange(start, start + k)
+        blocks.append((DenseLD(np.corrcoef(g[:, idx].T.astype(np.float64))), idx))
+        block_of[idx] = b
+        start += k
+    ell = BlockDiagonalLD(blocks).ld_scores()
+    m = g.shape[1]
+
+    beta = rng.normal(size=m).astype(np.float32) * (rng.random(m) < causal)
+    bv = g @ beta
+    noise = rng.normal(size=n).astype(np.float32)
+    signal = (bv / bv.std() * np.float32(np.sqrt(h2))
+              + noise * np.float32(np.sqrt(1.0 - h2)))
+    signal = (signal - signal.mean()) / signal.std()
+    y_conf = signal + np.float32(confound) * ancestry
+    y_conf = (y_conf - y_conf.mean()) / y_conf.std()
+
+    def _chisq(y):
+        return ((g.T @ y).astype(np.float64) / np.sqrt(n)) ** 2
+
+    fit = ldscore_regression(_chisq(y_conf), ell, n, blocks=block_of)
+    fit_null = ldscore_regression(_chisq(signal), ell, n, blocks=block_of)
+    return fit, fit_null
+
+
 def giant_prediction():
     """The intercept that would account for the observed real-data shortfall.
 
@@ -337,6 +420,14 @@ def main():
         print(f"{shortfall:>14.2f}{intercept:>20.3f}{z_scale:>18.3f}")
     print("   A real fit landing in that band would confirm genomic control as")
     print("   the cause; an intercept near 1 would refute it.")
+
+    print("\n4. Stratification arm (pooled two-population cohort, no PC adjustment)")
+    fit, fit_null = stratification_arm(rng)
+    print(f"   confounded: intercept {fit.intercept:.1f} +/- {fit.intercept_se:.1f}"
+          f"  inflated={fit.inflation_detected}  z_scale={fit.z_scale}")
+    print(f"   paired null (no ancestry effect): intercept {fit_null.intercept:.1f}")
+    print("   The diagnostic flags inflation and withholds the (C3) scale: a")
+    print("   stratified target must be PC-adjusted, not rescaled.")
 
 
 if __name__ == "__main__":

@@ -49,7 +49,10 @@ declared gauge). Prior art for the cross-ancestry *application* specifically has
 not been exhaustively surveyed — cross-population construction methods tune on
 target-ancestry data, sometimes with criteria of this family — so treat
 "new to this project" as a claim still to be checked against the literature
-before publication.
+before publication; a systematic sweep to 2026-08-16 is recorded in
+[`NOVELTY.md`](NOVELTY.md), whose verdict is that the *measurement* framing
+survives but PTL-PRS (Cho & Lee 2025) and MIXPRS (Xu et al. 2026) must be cited
+as nearest prior art and differentiated.
 
 ## The estimator
 

@@ -1,0 +1,141 @@
+{
+ "date": "2026-08-16",
+ "api": "https://www.pgscatalog.org/rest/performance/search",
+ "registry": "/Users/au507860/REPOS/ppb/results/baseline-2026-07.json",
+ "rows": [
+  {
+   "trait": "height",
+   "pgs": "PGS002146",
+   "target": "GIANT 2014 (Wood et al.)",
+   "trait_type": "quantitative",
+   "r2_ppb": 0.2519304719455542,
+   "r2_published": 0.37613688999999995,
+   "partial_r_published": 0.6133,
+   "n_published": 19953,
+   "support": 0.9178505384060061,
+   "ratio": 1.4930186376235128
+  },
+  {
+   "trait": "BMI",
+   "pgs": "PGS002161",
+   "target": "GIANT 2015 (Locke et al.)",
+   "trait_type": "quantitative",
+   "r2_ppb": 0.06463485759931628,
+   "r2_published": 0.13424896,
+   "partial_r_published": 0.3664,
+   "n_published": 19937,
+   "support": 0.9208522638890853,
+   "ratio": 2.0770365246603424
+  },
+  {
+   "trait": "LDL",
+   "pgs": "PGS002150",
+   "target": "GLGC 2013 (Teslovich et al.)",
+   "trait_type": "quantitative",
+   "r2_ppb": 0.10955987597630824,
+   "r2_published": 0.11195716,
+   "partial_r_published": 0.3346,
+   "n_published": 18968,
+   "support": 0.8857244442469174,
+   "ratio": 1.0218810399549025
+  },
+  {
+   "trait": "CAD",
+   "pgs": "PGS002048",
+   "target": "CARDIoGRAMplusC4D 2015 (Nikpay et al.)",
+   "trait_type": "binary",
+   "r2_ppb": 0.025249323408456453,
+   "r2_published": 0.011620840000000002,
+   "partial_r_published": 0.1078,
+   "n_published": 19308,
+   "support": 0.9989096262550451,
+   "ratio": 0.46024361968083366
+  },
+  {
+   "trait": "T2D",
+   "pgs": "PGS002026",
+   "target": "DIAGRAM 2017 (Scott et al.)",
+   "trait_type": "binary",
+   "r2_ppb": 0.04435278544722208,
+   "r2_published": 0.017004159999999997,
+   "partial_r_published": 0.1304,
+   "n_published": 19931,
+   "support": 0.9994812123021294,
+   "ratio": 0.3833842638865201
+  },
+  {
+   "trait": "BrCa",
+   "pgs": "PGS002015",
+   "target": "BCAC 2017 (Michailidou et al.)",
+   "trait_type": "binary",
+   "r2_ppb": 0.04218148099942641,
+   "r2_published": 0.01281424,
+   "partial_r_published": 0.1132,
+   "n_published": 10197,
+   "support": 0.999993860108717,
+   "ratio": 0.30378829041527133
+  }
+ ],
+ "portability": {
+  "height": {
+   "UK (+ Ireland)": 0.37613688999999995,
+   "Poland (NE Europe)": 0.35070083999999996,
+   "Italy (South Europe)": 0.33085504000000004,
+   "Iran (Middle East)": 0.24482704000000002,
+   "India (South Asia)": 0.22581504000000002,
+   "China (East Asia)": 0.18464209000000004,
+   "Carribean": 0.10284848999999999,
+   "Nigeria (West Africa)": 0.06522916000000001
+  },
+  "BMI": {
+   "UK (+ Ireland)": 0.13424896,
+   "Poland (NE Europe)": 0.13675204000000002,
+   "Italy (South Europe)": 0.12924025,
+   "Iran (Middle East)": 0.08596624000000001,
+   "India (South Asia)": 0.094864,
+   "China (East Asia)": 0.07257635999999998,
+   "Carribean": 0.04426816,
+   "Nigeria (West Africa)": 0.024743289999999998
+  },
+  "LDL": {
+   "UK (+ Ireland)": 0.11195716,
+   "Poland (NE Europe)": 0.12075624999999998,
+   "Italy (South Europe)": 0.09492561,
+   "Iran (Middle East)": 0.08850625,
+   "India (South Asia)": 0.048004809999999995,
+   "China (East Asia)": 0.06528025,
+   "Carribean": 0.08643599999999999,
+   "Nigeria (West Africa)": 0.050670009999999994
+  },
+  "CAD": {
+   "UK (+ Ireland)": 0.011620840000000002,
+   "Poland (NE Europe)": 0.020592249999999996,
+   "Italy (South Europe)": 0.01125721,
+   "Iran (Middle East)": 0.00528529,
+   "India (South Asia)": 0.015525160000000001,
+   "China (East Asia)": 0.0027248400000000005,
+   "Carribean": 0.00128164,
+   "Nigeria (West Africa)": 0.0001
+  },
+  "T2D": {
+   "UK (+ Ireland)": 0.017004159999999997,
+   "Poland (NE Europe)": 0.00743044,
+   "Italy (South Europe)": 0.01285956,
+   "Iran (Middle East)": 0.03111696,
+   "India (South Asia)": 0.024964,
+   "China (East Asia)": 0.006177960000000001,
+   "Carribean": 0.01002001,
+   "Nigeria (West Africa)": 0.0064963600000000005
+  },
+  "BrCa": {
+   "UK (+ Ireland)": 0.01281424,
+   "Poland (NE Europe)": 0.006512489999999999,
+   "Italy (South Europe)": 0.01190281,
+   "Iran (Middle East)": 0.009525760000000001,
+   "India (South Asia)": 0.006368039999999999,
+   "China (East Asia)": 0.013133159999999998,
+   "Carribean": 0.00232324,
+   "Nigeria (West Africa)": 0.0070896399999999995
+  }
+ }
+}

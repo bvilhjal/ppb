@@ -7,6 +7,21 @@ only the full-sample summary statistics, rebuilds each data-trained score from
 every pseudo-training split, and evaluates the paired pseudo-validation split.
 The causal score is an explicitly independent oracle.
 
+Two genotype generators carry the two legs.  ``run`` draws standardized
+Gaussian variants, for which the moment covariance in Equation 1 is exact.
+``run_diploid`` instead draws 0/1/2 dosages at per-variant MAF with the same
+block AR(1) LD -- the simulator every other validation in this repo uses --
+which closes the Gaussian-only caveat of the 2026-08-16 review (F4a): for
+bounded dosages Equation 1 is a fourth-moment approximation rather than an
+identity, and the diploid leg measures the agreement that approximation
+actually delivers.  Measured at the tested configuration (m=300, n_full=3000,
+40 reps, five seeds) the cost is small but one-directional: the exact-summary
+identity is unaffected and the independent causal oracle stays unbiased, while
+scores *fitted* on the pseudo-training splits come in roughly 0.01-0.04 R^2
+below the individual-level reference -- the Gaussian ``V`` slightly
+under-disperses the pseudo-splits for skewed dosages.  That gap is a property
+of the approximation, disclosed rather than tuned away.
+
 Run:
     python experiments/pumas_agreement.py
 """
@@ -24,6 +39,7 @@ from ppb.simulate import (
     pgs_pthreshold,
     population_ld,
     sample_genotypes,
+    simulate_diploid_genotypes,
     simulate_phenotype,
 )
 
@@ -319,11 +335,14 @@ def pumas_r2(
 METHODS = ("causal", "marginal", "pT")
 
 
-def run(m=300, block_size=30, rho=0.6, n_full=3000, h2=0.5,
-        n_reps=40, frac_val=0.25, seed=0):
-    rng = np.random.default_rng(seed)
-    Sigma = population_ld(m, block_size, rho)
-    X = sample_genotypes(Sigma, n_full, rng)
+def _agreement_rows(X, rng, *, h2, n_reps, frac_val, seed):
+    """Individual vs PPB vs PUMAS-style agreement on one genotype matrix.
+
+    The generator only enters through ``X``; the reference path (held-out
+    individuals), the exact-summary path and the PUMAS-style path are identical
+    for every generator, which is what makes the two legs comparable.
+    """
+    n_full, m = X.shape
     n_train = int(round(n_full * (1.0 - frac_val)))
 
     rows = []
@@ -384,17 +403,53 @@ def run(m=300, block_size=30, rho=0.6, n_full=3000, h2=0.5,
     return rows
 
 
+def run(m=300, block_size=30, rho=0.6, n_full=3000, h2=0.5,
+        n_reps=40, frac_val=0.25, seed=0):
+    """Gaussian leg: the generator for which Equation 1 is exact."""
+    rng = np.random.default_rng(seed)
+    Sigma = population_ld(m, block_size, rho)
+    X = sample_genotypes(Sigma, n_full, rng)
+    return _agreement_rows(
+        X, rng, h2=h2, n_reps=n_reps, frac_val=frac_val, seed=seed)
+
+
+def run_diploid(m=300, block_size=30, rho=0.6, n_full=3000, h2=0.5,
+                n_reps=40, frac_val=0.25, seed=0, maf_range=(0.05, 0.5)):
+    """Diploid leg: 0/1/2 dosages at per-variant MAF, same block AR(1) LD.
+
+    The repo's default simulator, on which the Gaussian moment covariance
+    (Equation 1) is an approximation: dosages are bounded and skewed, so the
+    per-sample cross-product's fourth moments differ from Gaussian ones.  Any
+    gap between PUMAS(CV) and the individual reference here is that
+    approximation's measured cost, not an artifact of the pseudo-split.
+    """
+    if m % block_size:
+        raise ValueError(
+            f"m={m} must be divisible by block_size={block_size} so the "
+            "diploid and Gaussian legs tile variants identically")
+    rng = np.random.default_rng(seed)
+    maf = rng.uniform(maf_range[0], maf_range[1], size=m)
+    X = simulate_diploid_genotypes(
+        n_full, [block_size] * (m // block_size), maf, rho, rng)
+    return _agreement_rows(
+        X, rng, h2=h2, n_reps=n_reps, frac_val=frac_val, seed=seed)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n-reps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
-    rows = run(n_reps=args.n_reps, seed=args.seed)
-    print(f"{'arch':<11}{'method':<10}{'individual':>12}{'PPB(exact)':>12}"
-          f"{'PUMAS(CV)':>12}")
-    print("-" * 57)
-    for arch, name, gold, ppb, pum in rows:
-        print(f"{arch:<11}{name:<10}{gold:>12.4f}{ppb:>12.4f}{pum:>12.4f}")
+    for title, fn in (("Gaussian generator (Equation 1 exact)", run),
+                      ("Diploid dosages (Equation 1 approximate)", run_diploid)):
+        rows = fn(n_reps=args.n_reps, seed=args.seed)
+        print(f"=== {title} ===")
+        print(f"{'arch':<11}{'method':<10}{'individual':>12}{'PPB(exact)':>12}"
+              f"{'PUMAS(CV)':>12}")
+        print("-" * 57)
+        for arch, name, gold, ppb, pum in rows:
+            print(f"{arch:<11}{name:<10}{gold:>12.4f}{ppb:>12.4f}{pum:>12.4f}")
+        print()
 
 
 if __name__ == "__main__":

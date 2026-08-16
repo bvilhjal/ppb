@@ -9,7 +9,7 @@ import html
 import json
 import math
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -17,6 +17,18 @@ ROOT = Path(__file__).resolve().parent.parent
 # Records arrive by pull request, so every interpolated field is untrusted:
 # escape it, and only build a catalog link for an id we recognise.
 _PGS_ID = re.compile(r"^PGS\d{6}$")
+
+TRAIT_SCALES = {
+    "quantitative": "quantitative correlation R2",
+    "binary": "standardized logistic-summary approximation (not liability R2)",
+}
+OVERLAP_DECLARATIONS = {"none (declared)", "in-sample"}
+OVERLAP_METHOD = "scaled_signal_eiv_v1"
+ENVIRONMENT_REQUIRED_FROM = date(2026, 8, 16)
+
+# Packs generated before scripts/regenerate_results.py recorded the
+# environment (including baseline-2026-07.json) legitimately lack it -- the
+# same grandfathering the block diagnostics use in results/schema.md.
 
 
 def _reject_nonfinite_constant(value):
@@ -34,12 +46,23 @@ def _reject_nonfinite_numbers(value):
             _reject_nonfinite_numbers(item)
 
 
+def result_packs(result_dir):
+    """``results/*.json`` files that are result packs.
+
+    Dated anchor snapshots written by ``scripts/anchor_validation.py``
+    (``anchor-*.json``, schema.md) are performance provenance objects, not
+    record arrays; parsing them as packs would reject the directory outright.
+    """
+    return [path for path in sorted(Path(result_dir).glob("*.json"))
+            if not path.name.startswith("anchor-")]
+
+
 def load_records(root=ROOT):
-    """Load strict JSON result packs and reject unsafe top-level shapes."""
+    """Load strict JSON result packs and reject unsafe shapes and fields."""
     records = []
     root = Path(root)
     result_dir = root / "results" if (root / "results").is_dir() else root
-    for path in sorted(result_dir.glob("*.json")):
+    for path in result_packs(result_dir):
         try:
             data = json.loads(
                 path.read_text(encoding="utf-8"),
@@ -58,9 +81,155 @@ def load_records(root=ROOT):
         for i, rec in enumerate(data):
             if not isinstance(rec, dict):
                 raise ValueError(f"{path.name}: record {i} must be a JSON object")
+            # Field-level rules before rendering: a pack that violates them
+            # would otherwise crash the Pages deploy with a bare KeyError or
+            # ZeroDivisionError instead of a named rejection (schema.md is
+            # otherwise enforced only by the test suite).
+            try:
+                validate_record(rec)
+            except ValueError as exc:
+                raise ValueError(f"{path.name}[{i}]: {exc}") from exc
             rec["_pack"] = path.name
             records.append(rec)
     return records
+
+
+def _required(rec, dotted):
+    value = rec
+    for key in dotted.split("."):
+        if not isinstance(value, dict) or key not in value:
+            raise ValueError(f"missing '{dotted}'")
+        value = value[key]
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"'{dotted}' must be a non-empty string")
+    return value
+
+
+def _lookup(rec, dotted):
+    value = rec
+    for key in dotted.split("."):
+        if not isinstance(value, dict) or key not in value:
+            raise ValueError(f"missing '{dotted}'")
+        value = value[key]
+    return value
+
+
+def _positive_int(rec, dotted):
+    value = _lookup(rec, dotted)
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"'{dotted}' must be a positive integer")
+    return value
+
+
+def _finite_number(rec, dotted):
+    value = _lookup(rec, dotted)
+    if not isinstance(value, (int, float)) or isinstance(value, bool) \
+            or not math.isfinite(value):
+        raise ValueError(f"'{dotted}' must be a finite real number")
+    return value
+
+
+def validate_record(rec, where="record"):
+    """Enforce the field-level rules of ``results/schema.md``.
+
+    Covers every field the site renders plus the binding field rules (labels,
+    positivity, fraction ranges, scale agreement, overlap contract, date and
+    commit provenance, and the pack-generation-date requirement for
+    ``environment``). Internal consistency of the optional block diagnostics
+    stays with the test suite; here a violation must surface as a clean
+    ``ValueError`` naming the record and field.
+    """
+    for dotted in (
+        "trait", "ld_ref", "score.id", "score.name", "score.training",
+        "target.gwas", "target.cohort", "target.ancestry",
+        "target.n_eff_basis", "metrics.scale",
+    ):
+        _required(rec, dotted)
+    for dotted in ("score", "target", "metrics", "overlap"):
+        if not isinstance(rec.get(dotted), dict):
+            raise ValueError(f"missing '{dotted}'")
+
+    _positive_int(rec, "score.n_variants")
+    _positive_int(rec, "target.n_eff")
+    _positive_int(rec, "metrics.n_variants_scored")
+    if rec["metrics"]["n_variants_scored"] > rec["score"]["n_variants"]:
+        raise ValueError("'metrics.n_variants_scored' exceeds 'score.n_variants'")
+
+    if _finite_number(rec, "metrics.den") <= 0:
+        raise ValueError("'metrics.den' must be positive")
+    for dotted in ("metrics.num", "metrics.r2", "metrics.w_match",
+                   "metrics.z_match"):
+        _finite_number(rec, dotted)
+    for key in ("r2", "w_match", "z_match"):
+        if not 0.0 <= rec["metrics"][key] <= 1.0:
+            raise ValueError(f"'metrics.{key}' must lie in [0, 1]")
+
+    trait_type = rec["target"].get("trait_type")
+    if trait_type not in TRAIT_SCALES:
+        raise ValueError(
+            f"'target.trait_type' must be one of {sorted(TRAIT_SCALES)}")
+    if rec["metrics"]["scale"] != TRAIT_SCALES[trait_type]:
+        raise ValueError("'metrics.scale' does not match 'target.trait_type'")
+
+    if rec["target"].get("overlap") not in OVERLAP_DECLARATIONS:
+        raise ValueError(f"'target.overlap' must be one of "
+                         f"{sorted(OVERLAP_DECLARATIONS)}")
+    if "n_eff_range" in rec["target"]:
+        n_range = rec["target"]["n_eff_range"]
+        if not (isinstance(n_range, list) and len(n_range) == 2
+                and all(isinstance(x, int) and not isinstance(x, bool) and x > 0
+                        for x in n_range)):
+            raise ValueError("'target.n_eff_range' must be two positive integers")
+        lo, hi = n_range
+        if not lo <= rec["target"]["n_eff"] <= hi:
+            raise ValueError("'target.n_eff' must lie within 'target.n_eff_range'")
+
+    ov = rec["overlap"]
+    if ov.get("role") not in ROLE_STYLE:
+        raise ValueError(f"'overlap.role' must be one of {sorted(ROLE_STYLE)}")
+    if ov.get("status") not in STATUS_LABEL:
+        raise ValueError(f"'overlap.status' must be one of {sorted(STATUS_LABEL)}")
+    if ov.get("method") != OVERLAP_METHOD:
+        raise ValueError(f"'overlap.method' must be {OVERLAP_METHOD!r}")
+    declared = rec["target"]["overlap"] == "none (declared)"
+    if declared != (ov["status"] == "not_applicable") \
+            or declared != (ov["role"] == "reference"):
+        raise ValueError(
+            "a declared non-overlap must be a not_applicable reference, and "
+            "an in-sample evaluation must remain an upper bound")
+    if ov["status"] != "not_applicable":
+        note = ov.get("note")
+        if not isinstance(note, str) or not note.strip():
+            raise ValueError(
+                "a refused correction must explain itself in 'overlap.note'")
+    if ov.get("corrected_r2") is not None:
+        raise ValueError("the registry does not accept a corrected R2")
+
+    stamp = rec.get("date")
+    if not isinstance(stamp, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", stamp):
+        raise ValueError("'date' must be ISO YYYY-MM-DD")
+    if date.fromisoformat(stamp) > datetime.now(timezone.utc).date():
+        raise ValueError("'date' is in the future")
+    commit = rec.get("ppb_commit")
+    if not isinstance(commit, str) \
+            or not re.fullmatch(r"[0-9a-f]{7,40}", commit):
+        raise ValueError(
+            "'ppb_commit' must be a 7-40 character lowercase Git object id")
+
+    environment = rec.get("environment")
+    if environment is None:
+        if date.fromisoformat(stamp) >= ENVIRONMENT_REQUIRED_FROM:
+            raise ValueError(
+                "packs dated " + ENVIRONMENT_REQUIRED_FROM.isoformat() +
+                " or later must record 'environment.python/numpy/numba/ppb'")
+    else:
+        if not isinstance(environment, dict):
+            raise ValueError("'environment' must be an object")
+        for key in ("python", "numpy", "numba", "ppb"):
+            version = environment.get(key)
+            if not isinstance(version, str) or not version.strip():
+                raise ValueError(
+                    f"'environment.{key}' must be a non-empty string")
 
 
 def esc(s):
