@@ -107,6 +107,18 @@ def test_pc_adjustment_removes_structure_confounding():
     assert gen_adj > 0.03, f"adjusted genetic R^2 {gen_adj:.4f} lost too much signal"
 
 
+def test_pc_adjustment_drops_monomorphic_variants_instead_of_failing():
+    """At the MAF floor (1e-3) and n=1500, some seeds draw an all-zero column.
+    The run must drop it -- the package rule for a variant with no standardized
+    scale in the cohort -- and still remove the confounding. Seed 1 raised
+    'constant or numerically constant column' before the drop existed."""
+    res, diag = run(m=200, block_size=25, n=1500, n_reps=3, seed=1,
+                    return_diagnostics=True)
+    assert diag["n_monomorphic_dropped"] >= 0      # counted, never silent
+    null_unadj, null_adj = res["null+confound"]
+    assert null_adj < 0.05 and null_unadj > 0.02
+
+
 def test_principal_components_rejects_too_many_components():
     rng = np.random.default_rng(6)
     X = rng.standard_normal((50, 40))

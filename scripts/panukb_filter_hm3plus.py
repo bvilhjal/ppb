@@ -5,7 +5,7 @@ Keeps rows whose (chr, pos) is in the HM3+ LD reference and that pass QC
 chrom, pos, a1 (alt = effect allele), a2 (ref), beta, se, af
 (af_EUR for continuous traits; af_controls_EUR for binary ones).
 
-Usage: python filter_to_hm3plus.py [trait ...]  (default: all not yet done)
+Usage: python panukb_filter_hm3plus.py [trait ...]  (default: all not yet done)
 """
 import gzip
 import os

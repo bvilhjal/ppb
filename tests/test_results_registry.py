@@ -15,10 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from scripts.build_leaderboard import build, load_records
+from scripts.build_leaderboard import build, load_records, result_packs
 
 ROOT = Path(__file__).resolve().parent.parent
-PACKS = sorted((ROOT / "results").glob("*.json"))
+# results/ also carries dated anchor snapshots (schema.md); they are
+# provenance objects, not packs, and must not be validated as such.
+PACKS = result_packs(ROOT / "results")
 
 ROLES = {"reference", "suspect", "suspect-unpaired"}
 OVERLAP_DECLARATIONS = {"none (declared)", "in-sample"}
@@ -38,6 +40,9 @@ LEGACY_METHOD = "fixed_signal_variant_count_v0"
 PER_VARIANT_N_BASIS = "median of the per-variant N column"
 COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Packs dated on/after this day must record their interpreter/package
+# environment; earlier packs predate the field (schema.md grandfathering).
+ENVIRONMENT_REQUIRED_FROM = date(2026, 8, 16)
 
 
 def _reject_nonfinite_constant(value):
@@ -221,6 +226,50 @@ def test_provenance_is_sane(name, rec):
     commit = rec["ppb_commit"]
     assert isinstance(commit, str) and COMMIT_RE.fullmatch(commit), \
         f"{name}: ppb_commit must be a 7-40 character lowercase Git object id"
+
+
+@pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
+def test_environment_is_recorded_for_new_packs(name, rec):
+    """A pack that names its commit but not its interpreter is not replayable;
+    packs older than the field itself legitimately lack it."""
+    environment = rec.get("environment")
+    if environment is None:
+        assert date.fromisoformat(rec["date"]) < ENVIRONMENT_REQUIRED_FROM, (
+            f"{name}: packs dated {ENVIRONMENT_REQUIRED_FROM.isoformat()} or "
+            "later must record environment.python/numpy/numba/ppb")
+        return
+    assert isinstance(environment, dict), \
+        f"{name}: environment must be an object"
+    for key in ("python", "numpy", "numba", "ppb"):
+        version = environment.get(key)
+        assert isinstance(version, str) and version.strip(), \
+            f"{name}: environment.{key} must be a non-empty string"
+
+
+@pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
+def test_harmonization_loss_reasons_are_recorded_consistently(name, rec):
+    """The per-reason losses must travel together and cannot exceed the
+    unmatched fraction of the score; packs predating them legitimately lack
+    the fields (schema.md grandfathering)."""
+    metrics = rec["metrics"]
+    for side in ("w", "z"):
+        keys = [f"{side}_n_{reason}"
+                for reason in ("ambiguous_removed", "mismatch", "unmatched")]
+        present = [key for key in keys if key in metrics]
+        assert len(present) in (0, len(keys)), \
+            f"{name}: metrics per-reason losses must be recorded together"
+        for key in present:
+            value = metrics[key]
+            assert isinstance(value, int) and not isinstance(value, bool) \
+                and value >= 0, \
+                f"{name}: metrics.{key} must be a non-negative integer"
+    if "w_n_unmatched" in metrics:
+        losses = sum(metrics[f"w_n_{reason}"]
+                     for reason in ("ambiguous_removed", "mismatch", "unmatched"))
+        n_variants = rec["score"]["n_variants"]
+        assert metrics["w_match"] + losses / n_variants <= 1.0 + 1e-9, (
+            f"{name}: weight-side losses exceed the unmatched fraction of the "
+            "score; the loss counts and w_match disagree")
 
 
 @pytest.mark.parametrize("name,rec", RECORDS, ids=IDS)
@@ -494,6 +543,43 @@ def test_leaderboard_loader_rejects_unsafe_pack_shapes(tmp_path, payload, error)
     (tmp_path / "bad.json").write_text(payload, encoding="utf-8")
     with pytest.raises(ValueError, match=error):
         load_records(tmp_path)
+
+
+def test_leaderboard_loader_rejects_field_invalid_records(tmp_path):
+    """A structurally valid pack that violates the field-level rules must be
+    rejected with a ValueError naming the record and field -- not crash the
+    render with KeyError (missing field) or ZeroDivisionError (n_variants 0)
+    in the Pages deploy job."""
+    base = copy.deepcopy(RECORDS[0][1])
+    base.pop("_pack", None)
+
+    def _in_sample_without_note(r):
+        r["target"]["overlap"] = "in-sample"
+        r["overlap"]["role"] = "suspect"
+        r["overlap"]["status"] = "not_detected"
+        r["overlap"].pop("note", None)
+
+    mutations = [
+        (lambda r: r["metrics"].pop("den"), r"missing 'metrics\.den'"),
+        (lambda r: r["metrics"].update(den=0.0), "must be positive"),
+        (lambda r: r["metrics"].update(r2=1.5), r"must lie in \[0, 1\]"),
+        (lambda r: r["metrics"].update(w_match=-0.1), r"must lie in \[0, 1\]"),
+        (lambda r: r["score"].update(n_variants=0), "positive integer"),
+        (lambda r: r["target"].update(trait_type="categorical"), "trait_type"),
+        (lambda r: r["metrics"].update(scale="made up"), "trait_type"),
+        (_in_sample_without_note, "must explain itself"),
+        (lambda r: r["overlap"].update(corrected_r2=0.5), "corrected R2"),
+        (lambda r: r.update(date="2026-08-16"), "environment"),
+        (lambda r: r["target"].update(n_eff_range=[10, 20]), "n_eff_range"),
+    ]
+    for mutate, match in mutations:
+        rec = copy.deepcopy(base)
+        mutate(rec)
+        (tmp_path / "bad.json").write_text(json.dumps([rec]), encoding="utf-8")
+        with pytest.raises(ValueError, match=match) as excinfo:
+            load_records(tmp_path)
+        assert str(excinfo.value).startswith("bad.json[0]:"), \
+            "the rejection must name the record"
 
 
 # ---------------------------------------------------------------------------

@@ -27,14 +27,18 @@ validation target for Phase 4 (`FINISHING_PLAN.md`).
 Run (needs network; no local data):
 
     python scripts/anchor_validation.py
-    python scripts/anchor_validation.py --out anchor.json
+    python scripts/anchor_validation.py --out results/anchor-<date>.json
+
+The ``--out`` snapshot records the fetch date inside the file, so Tables 3–4
+of ``docs/REAL_DATA.md`` can rest on a committed, dated snapshot rather than a
+live query (review 2026-08-16, F5).
 """
 from __future__ import annotations
 
 import argparse
 import json
-import ssl
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
@@ -46,14 +50,49 @@ from scripts.regenerate_results import TRAITS  # noqa: E402
 
 API = "https://www.pgscatalog.org/rest/performance/search"
 EUROPEAN_GROUP = "UK (+ Ireland)"
-CA_BUNDLE = "/root/.ccr/ca-bundle.crt"
+PAGE_LIMIT = 50
+# A hard cap so a server that ignores `offset` (and would return the same full
+# page forever) fails loudly instead of looping.
+MAX_PAGES = 40
 
 
-def _context():
-    try:
-        return ssl.create_default_context(cafile=CA_BUNDLE)
-    except (FileNotFoundError, ssl.SSLError):
-        return ssl.create_default_context()
+def _fetch(url, opener=None):
+    if opener is not None:
+        return opener(url)
+    # Default certificate verification. An earlier version pinned a
+    # dev-machine CA bundle here, which made the documented one-liner fail
+    # everywhere else; there is no custom bundle to trust.
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "ppb-anchor-validation"})
+    with urllib.request.urlopen(request, timeout=120) as fh:
+        return json.load(fh)
+
+
+def _performance_results(pgs_id, *, opener=None):
+    """Every performance record for one score, following pagination.
+
+    ``limit=50`` can truncate a score with more performance entries than that
+    (each ancestry group of each evaluation is its own record), so pages are
+    followed until a short one. The response shape is checked defensively:
+    anything but an object with a ``results`` list is an error naming the
+    score, never a silently empty result.
+    """
+    results = []
+    for page in range(MAX_PAGES):
+        payload = _fetch(
+            f"{API}?pgs_id={pgs_id}&limit={PAGE_LIMIT}"
+            f"&offset={page * PAGE_LIMIT}", opener=opener)
+        if not isinstance(payload, dict) \
+                or not isinstance(payload.get("results"), list):
+            raise ValueError(
+                f"{pgs_id}: unexpected PGS Catalog response shape (expected "
+                "an object with a 'results' list)")
+        results.extend(payload["results"])
+        if len(payload["results"]) < PAGE_LIMIT:
+            return results
+    raise ValueError(
+        f"{pgs_id}: more than {MAX_PAGES * PAGE_LIMIT} performance records; "
+        "refusing to page further without revisiting the query")
 
 
 def published_accuracy(pgs_id, *, opener=None):
@@ -61,17 +100,8 @@ def published_accuracy(pgs_id, *, opener=None):
 
     The catalog stores a partial correlation, so partial R^2 is its square.
     """
-    url = f"{API}?pgs_id={pgs_id}&limit=50"
-    if opener is None:
-        request = urllib.request.Request(
-            url, headers={"User-Agent": "ppb-anchor-validation"})
-        with urllib.request.urlopen(request, timeout=120, context=_context()) as fh:
-            payload = json.load(fh)
-    else:
-        payload = opener(url)
-
     groups = {}
-    for result in payload.get("results", []):
+    for result in _performance_results(pgs_id, opener=opener):
         samples = result.get("sampleset", {}).get("samples", [])
         if not samples:
             continue
@@ -149,10 +179,15 @@ def main(argv=None):
         return 1
     summarize(rows, curves)
     if args.out:
+        # The date stamp inside the snapshot is what makes it a snapshot: a
+        # committed file whose numbers were fetched on a recorded day.
+        snapshot = dict(
+            date=time.strftime("%Y-%m-%d", time.gmtime()),
+            api=API, registry=str(args.registry),
+            rows=rows, portability=curves)
         Path(args.out).write_text(
-            json.dumps(dict(rows=rows, portability=curves), indent=1) + "\n",
-            encoding="utf-8")
-        print(f"\n{len(rows)} comparisons -> {args.out}")
+            json.dumps(snapshot, indent=1) + "\n", encoding="utf-8")
+        print(f"\n{len(rows)} comparisons ({snapshot['date']}) -> {args.out}")
     return 0
 
 

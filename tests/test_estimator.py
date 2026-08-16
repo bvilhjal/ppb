@@ -150,3 +150,13 @@ def test_frozen_to_dosage_divides_by_fit_cohort_sd_and_zeroes_monomorphs():
     assert dosage[2] == pytest.approx(0.3)
     with pytest.raises(ValueError, match="non-negative"):
         frozen_to_dosage(w, np.array([0.5, -0.1, 2.0]))
+
+
+def test_empty_inputs_are_refused_rather_than_returning_a_number():
+    """A zero-variant problem has no correlation to report; the estimator must
+    say so rather than return 0.0, which would read as a measured null."""
+    empty_ld = DenseLD(np.zeros((0, 0)))
+    with pytest.raises(ValueError, match="not positive"):
+        r2(np.zeros(0), np.zeros(0), empty_ld)
+    with pytest.raises(ValueError, match="not positive"):
+        corrected_r2(0.0, 0.0, 100.0)

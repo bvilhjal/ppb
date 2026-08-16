@@ -140,6 +140,23 @@ def _block_sizes(m, block_size):
     return sizes
 
 
+def _polymorphic_columns(*matrices):
+    """Boolean mask of variants polymorphic in every matrix.
+
+    ``ppb.simulate`` passes a monomorphic draw through as an all-zero column
+    (its standardizer maps sd 0 to 1), and such a column has no standardized
+    scale: it would put a zero on ``D``'s diagonal and a constant column in
+    the PCA design. The package rule for a variant monomorphic in the cohort
+    it has no scale in is to drop it (``docs/CROSS_ANCESTRY.md``, hard
+    requirement 3), so the experiment drops the joint-train/test monomorphic
+    set instead of failing on the seeds that produce one.
+    """
+    keep = np.ones(matrices[0].shape[1], dtype=bool)
+    for X in matrices:
+        keep &= X.std(axis=0) > 0.0
+    return keep
+
+
 def _ppb_r2(X, y, w, n_pcs):
     """PPB R^2 without and with PC adjustment (test-set LD, so exact)."""
     n = X.shape[0]
@@ -150,14 +167,22 @@ def _ppb_r2(X, y, w, n_pcs):
 
 
 def run(m=400, block_size=40, fst=0.3, rho=0.5, n=3000, n_causal=40,
-        confound=4.0, n_pcs=2, n_reps=10, seed=0):
+        confound=4.0, n_pcs=2, n_reps=10, seed=0, return_diagnostics=False):
     rng = np.random.default_rng(seed)
     bs = _block_sizes(m, block_size)
     rows = {"null+confound": ([], []), "genetic,no confound": ([], [])}
+    n_dropped = 0
 
     for _ in range(n_reps):
         Xtr, ltr = simulate_structured_genotypes(n, bs, fst, rho, rng)
         Xte, lte = simulate_structured_genotypes(n, bs, fst, rho, rng)
+        keep = _polymorphic_columns(Xtr, Xte)
+        n_dropped += int((~keep).sum())
+        if not keep.any():
+            raise ValueError(
+                "every variant is monomorphic in this draw; raise the MAF "
+                "floor in bn_freqs or increase n before rerunning")
+        Xtr, Xte = Xtr[:, keep], Xte[:, keep]
 
         # (A) null genetic signal + ancestry confounder -> spurious prediction.
         def confounded(X, labels):
@@ -168,12 +193,15 @@ def run(m=400, block_size=40, fst=0.3, rho=0.5, n=3000, n_causal=40,
         rows["null+confound"][0].append(u); rows["null+confound"][1].append(a)
 
         # (B) true genetic signal, no confounding -> adjustment ~harmless.
-        beta = draw_effects(m, n_causal, rng)
+        beta = draw_effects(Xtr.shape[1], n_causal, rng)
         w2 = marginal_stats(Xtr, simulate_phenotype(Xtr, beta, 0.5, rng))[0]
         u2, a2 = _ppb_r2(Xte, simulate_phenotype(Xte, beta, 0.5, rng), w2, n_pcs)
         rows["genetic,no confound"][0].append(u2); rows["genetic,no confound"][1].append(a2)
 
-    return {name: (float(np.mean(u)), float(np.mean(a))) for name, (u, a) in rows.items()}
+    out = {name: (float(np.mean(u)), float(np.mean(a))) for name, (u, a) in rows.items()}
+    if return_diagnostics:
+        return out, {"n_monomorphic_dropped": n_dropped, "n_reps": n_reps}
+    return out
 
 
 def main():
@@ -181,11 +209,13 @@ def main():
     ap.add_argument("--n-reps", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
-    res = run(n_reps=args.n_reps, seed=args.seed)
+    res, diag = run(n_reps=args.n_reps, seed=args.seed, return_diagnostics=True)
     print(f"{'scenario':<22}{'R2 unadjusted':>16}{'R2 PC-adjusted':>16}")
     print("-" * 54)
     for name, (unadj, adj) in res.items():
         print(f"{name:<22}{unadj:>16.4f}{adj:>16.4f}")
+    print(f"\nmonomorphic variants dropped (joint over train/test): "
+          f"{diag['n_monomorphic_dropped']} across {diag['n_reps']} replicate(s)")
 
 
 if __name__ == "__main__":

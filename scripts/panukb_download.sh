@@ -7,12 +7,32 @@ mkdir -p "$SCRIPT_DIR/../data/panukb"
 cd "$SCRIPT_DIR/../data/panukb"
 BASE="https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files"
 
+md5_of() {
+  # Portable MD5 digest: GNU/BSD `md5sum`, macOS `md5 -q`, or stdlib python3.
+  # All three print the bare hex digest; callers compare it as a string, so a
+  # missing tool yields an empty digest and the validation below fails closed.
+  if command -v md5sum >/dev/null 2>&1; then
+    md5sum "$1" | awk '{print $1}'
+  elif command -v md5 >/dev/null 2>&1; then
+    md5 -q "$1"
+  else
+    python3 - "$1" <<'PY'
+import hashlib, sys
+digest = hashlib.md5()
+with open(sys.argv[1], "rb") as fh:
+    for chunk in iter(lambda: fh.read(1 << 20), b""):
+        digest.update(chunk)
+print(digest.hexdigest())
+PY
+  fi
+}
+
 validate() {
   local path=$1 expected_size=$2 expected_md5=$3 actual_size
   [ -f "$path" ] || return 1
   actual_size=$(wc -c < "$path")
   [ "$actual_size" = "$expected_size" ] || return 1
-  printf '%s  %s\n' "$expected_md5" "$path" | md5sum --check --status -
+  [ "$(md5_of "$path")" = "$expected_md5" ] || return 1
   gzip -t "$path"
 }
 

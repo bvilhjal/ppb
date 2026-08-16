@@ -8,6 +8,7 @@ from ppb import DenseLD, r2
 from experiments.pumas_agreement import (  # noqa: E402
     pumas_r2,
     run,
+    run_diploid,
     subsample_sumstats,
 )
 
@@ -185,11 +186,74 @@ def test_pumas_requires_one_valid_weight_source():
         pumas_r2(*args, fit=lambda z: np.ones(3), n_reps=1)
 
 
+# Fixed replication list: the agreement claim is made on the cross-seed mean
+# with an SE-derived bound, not on a single-seed realization (review F3 -- the
+# single-seed |PUMAS - gold| reaches 0.038 at other seeds).
+SEEDS = (0, 1, 2, 3, 4)
+
+
+def _mean_se(values):
+    """Cross-seed mean and standard error of a per-seed statistic."""
+    values = np.asarray(values, dtype=float)
+    return float(values.mean()), float(values.std(ddof=1) / np.sqrt(values.size))
+
+
 def test_pumas_agrees_with_ppb_and_individual_level():
-    rows = run(n_reps=40, seed=0)
-    assert rows
-    for arch, method, gold, ppb, pum in rows:
+    by_cell = {}
+    for seed in SEEDS:
+        for arch, method, gold, ppb, pum in run(n_reps=40, seed=seed):
+            by_cell.setdefault((arch, method), []).append((gold, ppb, pum))
+    for (arch, method), rows in sorted(by_cell.items()):
+        ppb_diffs = np.array([ppb - gold for gold, ppb, _ in rows])
+        pum_diffs = np.array([pum - gold for gold, _, pum in rows])
+        pum_mean, pum_se = _mean_se(pum_diffs)
         # PPB with exact target cross-products is algebraically the truth.
-        assert abs(ppb - gold) <= 1e-9, f"{arch}/{method}: PPB {ppb} != gold {gold}"
-        # PUMAS-style repeated learning estimates out-of-sample performance.
-        assert abs(pum - gold) <= 0.03, f"{arch}/{method}: PUMAS {pum} vs gold {gold}"
+        worst_ppb = float(np.abs(ppb_diffs).max())
+        assert worst_ppb <= 1e-9, (
+            f"{arch}/{method}: worst |PPB - gold| {worst_ppb:.2e} across seeds")
+        # PUMAS-style repeated learning estimates out-of-sample performance:
+        # the cross-seed mean difference stays within 0.03 R^2, and so does its
+        # upper 3-SE bound. The bound is one-sided because the fitted-weight
+        # cells carry a small systematic negative offset (worst mean -0.024);
+        # the upper side is where a real regression would breach tolerance.
+        assert abs(pum_mean) <= 0.03, (
+            f"{arch}/{method}: PUMAS mean-vs-gold {pum_mean:+.4f} R^2")
+        assert pum_mean + 3 * pum_se <= 0.03, (
+            f"{arch}/{method}: PUMAS vs gold {pum_mean:+.4f} +/- {3 * pum_se:.4f}")
+
+
+def test_pumas_diploid_leg_agreement():
+    """The diploid leg (review F4a): the same claim on 0/1/2 dosages.
+
+    Equation 1's moment covariance is exact only for Gaussian genotypes; on
+    bounded, MAF-skewed dosages it is a fourth-moment approximation, and this
+    leg reports what that approximation costs rather than assuming it away.
+    What is actually true across the five seeds: the exact-summary identity is
+    untouched and the independent causal oracle stays unbiased, while scores
+    *fitted* on the pseudo-training splits shift systematically downward
+    (measured means -0.012 to -0.035 R^2). The bounds assert that direction,
+    with margins for both "no worse than" and "genuinely one-sided".
+    """
+    by_cell = {}
+    for seed in SEEDS:
+        for arch, method, gold, ppb, pum in run_diploid(n_reps=40, seed=seed):
+            assert abs(ppb - gold) <= 1e-9, (
+                f"{arch}/{method} seed {seed}: PPB with exact cross-products "
+                f"must stay algebraically exact on any generator")
+            # The approximation's worst single-seed cost stays well bounded.
+            assert abs(pum - gold) <= 0.05, (
+                f"{arch}/{method} seed {seed}: |PUMAS - gold| {abs(pum - gold):.4f}")
+            by_cell.setdefault((arch, method), []).append(pum - gold)
+    for (arch, method), gaps in sorted(by_cell.items()):
+        mean, se = _mean_se(gaps)
+        if method == "causal":
+            # Independent weights: the pseudo-split model stays unbiased.
+            assert abs(mean) <= 0.03, (
+                f"{arch}/causal: oracle shifted {mean:+.4f} on the diploid leg")
+        else:
+            # Fitted weights: the Gaussian V under-disperses the pseudo-splits
+            # for dosages, so the shift is one-directional. Assert it as such.
+            assert -0.07 <= mean <= -0.01, (
+                f"{arch}/{method}: diploid shift {mean:+.4f} +/- {se:.4f} must "
+                "stay small and downward -- a larger or upward shift would mean "
+                "the approximation is broken or the finding went stale")

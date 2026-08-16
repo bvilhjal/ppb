@@ -10,7 +10,8 @@ No submission service; records enter by maintainer-run baselines and reviewed
 pull requests only (see `FINISHING_PLAN.md`, Gate D and the delivery plan).
 
 Each `*.json` file here is a **result pack**: a JSON array of evaluation
-records, one per (score × target GWAS) evaluation.
+records, one per (score × target GWAS) evaluation. (The dated `anchor-*.json`
+snapshots described below are provenance objects, not packs.)
 
 > **These are maintainer-run baselines, and the metric is not
 > competition-safe.** `R² = (wᵀz)²/(wᵀDw)` is maximized at `w ∝ D⁻¹z`, so once
@@ -42,7 +43,7 @@ records, one per (score × target GWAS) evaluation.
 | `target.ancestry` | target ancestry (evaluation frame) |
 | `target.trait_type` | `"quantitative"` \| `"binary"` |
 | `target.n_eff` | the sample size the estimator actually used to standardize `z` |
-| `target.n_eff_basis` | how `n_eff` was derived — a trait-level constant, a binary-trait effective N, or the median of a per-variant `N` column |
+| `target.n_eff_basis` | how `n_eff` was derived — the median of a per-variant `N` column, a trait-level sample size, or a binary-trait effective N (computed from recorded case/control counts when they are recorded; otherwise a trait-level constant explicitly labelled "case/control counts unrecorded") |
 | `target.n_eff_range` | `[min, max]` of the per-variant `N` column, when `n_eff` is a median over a varying column |
 | `target.overlap` | `"none (declared)"` \| `"in-sample"` |
 | `ld_ref` | LD reference id/version |
@@ -50,6 +51,8 @@ records, one per (score × target GWAS) evaluation.
 | `metrics.r2` | registry R² from (R1) |
 | `metrics.scale` | `"quantitative correlation R2"` \| `"standardized logistic-summary approximation (not liability R2)"` |
 | `metrics.w_match`, `metrics.z_match` | harmonized-variant fractions |
+| `metrics.w_n_ambiguous_removed`, `metrics.w_n_mismatch`, `metrics.w_n_unmatched` | per-reason weight-harmonization loss counts (from `ppb.harmonize.HarmonizeReport`) |
+| `metrics.z_n_ambiguous_removed`, `metrics.z_n_mismatch`, `metrics.z_n_unmatched` | the same per-reason counts, for the target summary statistics |
 | `metrics.n_variants_scored` | count of non-zero weights on the target-specific joint `w`/`z` support |
 | `metrics.jackknife` | delete-one-**block** jackknife: `se`, `n_blocks`, `n_groups`, `max_variance_share` |
 | `metrics.jackknife_chromosome` | the same, deleting whole chromosomes — the more conservative grouping when block sizes are uneven |
@@ -67,6 +70,7 @@ records, one per (score × target GWAS) evaluation.
 | `overlap.note` | reason a correction is not applicable or was refused |
 | `overlap.legacy_unidentified` | optional quarantined pre-v1 slope fields, retained for audit only and never treated as a current correction |
 | `date`, `ppb_commit` | provenance |
+| `environment.python`, `environment.numpy`, `environment.numba`, `environment.ppb` | interpreter and package versions the pack was generated with |
 
 **(R1) Registry score metric.**
 
@@ -123,8 +127,8 @@ status here. See [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
 
 - A result pack is a non-empty, strict-JSON array of objects. `NaN`,
   `Infinity`, booleans in numeric fields, and non-finite numeric values are
-  invalid. The leaderboard loader rejects malformed pack structure even when
-  it is run outside CI.
+  invalid. The leaderboard loader rejects malformed pack structure and the
+  field-level rules above even when it is run outside CI.
 - `trait`, `ld_ref`, the score labels, the target labels, and
   `target.n_eff_basis` are required non-empty strings. `score.n_variants` and
   `target.n_eff` are positive integers; recorded metrics are finite real
@@ -176,6 +180,24 @@ status here. See [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
 - `target.n_eff_range` is present exactly when `target.n_eff_basis` is
   `"median of the per-variant N column"`. It contains two positive integers,
   and the recorded median lies within that inclusive range.
+- A constant `n` column must be labelled with its actual derivation. The
+  binary consortium intermediates carry constants injected by
+  `scripts/consortium_prep.py` — an effective N computed from recorded
+  case/control counts when they are recorded, otherwise a trait-level constant
+  explicitly labelled "case/control counts unrecorded" — never as though the
+  source GWAS itself had shipped the constant. Those constants scale R²
+  directly (`z = t/√(t²+n−2)`), so the distinction is load-bearing.
+- Records dated **2026-08-16 or later** must carry `environment` with
+  non-empty `python`, `numpy`, `numba`, and `ppb` versions: a pack that names
+  its commit but not its interpreter is not replayable. Packs generated before
+  the field existed (including `baseline-2026-07.json`) legitimately lack it —
+  the same grandfathering as the block diagnostics below.
+- The per-reason harmonization loss counts
+  (`w_n_ambiguous_removed`/`w_n_mismatch`/`w_n_unmatched` and the `z_`
+  counterparts) are optional with that same grandfathering: they are recorded
+  together or not at all, are non-negative integers when present, and the
+  weight-side losses can never exceed the unmatched fraction of the score
+  (`w_match + (w losses)/score.n_variants ≤ 1`).
 - `date` is a non-future ISO date (`YYYY-MM-DD`) and `ppb_commit` is a 7–40
   character lowercase hexadecimal Git object id. A versioned evaluation is
   identified by trait, score id, target GWAS/cohort/ancestry, date, and commit;
@@ -192,8 +214,44 @@ status here. See [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
 `python scripts/regenerate_results.py [traits...] --out results/<pack>.json`
 emits records directly from the source data at full precision — never
 hand-transcribe numbers from a script's printed table. One pass covers both
-targets of a trait and records overlap eligibility/provenance; it takes ~5.5
+targets of a trait and records overlap eligibility/provenance, the per-reason
+harmonization losses, and the interpreter/package `environment`; it takes ~5.5
 min per trait.
 
 These rules are enforced by `tests/test_results_registry.py`, so a malformed
 pack fails CI on the pull request rather than in the Pages deploy job.
+`scripts/build_leaderboard.py` re-validates the field-level rules at load time
+so a pack that never met the tests is still rejected (by name and field)
+before it can crash the deploy.
+
+## Input manifest
+
+`inputs.tsv` catalogues every external input the real-data path consumes: the
+consortium GWAS source files (`scripts/consortium_prep.py`), the PGS Catalog
+weight files, the bigsnpr HM3+ LD reference (`LD_with_blocks_chr*.rds` and
+`map_hm3_plus.rds`), and the Pan-UKB flat files. Tab-separated, with leading
+`#` comment rows; columns:
+
+| column | meaning |
+|---|---|
+| `artifact` | the file name exactly as the scripts reference it |
+| `role` | what the artifact is and which path consumes it |
+| `source_url_or_accession` | publisher URL or accession; `UNKNOWN` where the repo records none — never guessed |
+| `checksum_md5` | publisher MD5 where one is recorded (the Pan-UKB files); the literal `unrecorded` otherwise |
+| `date_recorded` | when the row was written, ISO `YYYY-MM-DD` |
+
+The registry's reproducibility rests on this file. An `unrecorded` checksum
+means a replaced upstream file cannot be detected after the fact, and an
+`UNKNOWN` source means the artifact cannot be re-found from the repo alone;
+the manifest marks exactly those gaps instead of hiding them (review
+2026-08-16, F5). Structure and script coverage are enforced by
+`tests/test_panukb_manifest.py`.
+
+## Anchor snapshots
+
+`anchor-*.json` are dated snapshots written by
+`scripts/anchor_validation.py --out results/anchor-<date>.json`: the PGS
+Catalog performance fetch behind Tables 3–4 of `docs/REAL_DATA.md`, with the
+fetch date recorded inside the file. They are provenance objects, not result
+packs — the leaderboard loader and the schema tests skip them, and they carry
+no evaluation records.

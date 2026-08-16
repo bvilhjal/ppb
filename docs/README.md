@@ -135,8 +135,9 @@ An `M` before the number (`[M20]`) marks an exercise that is mathematical rather
 than about the code. The scale is logarithmic: a `[30]` is a great deal more than
 three times a `[10]`.
 
-The `[40]` and `[50]` exercises are not rhetorical. (X3) is the outstanding v0.1
-completion criterion listed in [`NOTATION.md`](NOTATION.md) §5, and the first
-real cross-ancestry evaluation is Phase 4 of
-[`../FINISHING_PLAN.md`](../FINISHING_PLAN.md). They are exercises in the sense
-that a reader could do them, and open in the sense that nobody has.
+The `[40]` and `[50]` exercises are not rhetorical. (X3) is implemented
+(`ppb.estimator.corrected_r2`, shipped 2026-08-16; the published EUR pack has
+not been regenerated with it), and the first real cross-ancestry evaluation is
+Phase 4 of [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md). They are exercises
+in the sense that a reader could do them, and open in the sense that nobody
+has.

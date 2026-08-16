@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from ppb.harmonize import VariantTable
+from scripts import consortium_prep
 from scripts import eval_consortium, eval_panukb
 from scripts import regenerate_results as regenerate
 
@@ -170,7 +171,7 @@ def test_build_records_fails_closed_and_labels_metric_scale(monkeypatch):
     })
     monkeypatch.setattr(
         regenerate, "load_target",
-        lambda path, n_eff=None, trait_type=None: target,
+        lambda path, n_eff=None, trait_type=None, constant_n_basis=None: target,
     )
 
     def fake_sweep(pgs, targets):
@@ -181,7 +182,13 @@ def test_build_records_fails_closed_and_labels_metric_scale(monkeypatch):
         totals = {
             "w_matched": 8,
             "w_total": 10,
+            "w_n_ambiguous_removed": 1,
+            "w_n_mismatch": 0,
+            "w_n_unmatched": 1,
             "z_matched": {name: 1 for name in targets},
+            "z_n_ambiguous_removed": {name: 0 for name in targets},
+            "z_n_mismatch": {name: 0 for name in targets},
+            "z_n_unmatched": {name: 0 for name in targets},
             "z_total": {name: 1 for name in targets},
             "n_variants_scored": {
                 name: 2 if name == "consortium" else 3 for name in targets
@@ -191,29 +198,133 @@ def test_build_records_fails_closed_and_labels_metric_scale(monkeypatch):
 
     monkeypatch.setattr(regenerate, "sweep", fake_sweep)
 
+    env = dict(python="3.14.6", numpy="2.4.6", numba="0.66.0", ppb="0.0.1.dev1")
     reference, suspect = regenerate.build_records(
-        "height", regenerate.TRAITS["height"], "abc1234", "2026-07-22")
+        "height", regenerate.TRAITS["height"], "abc1234", "2026-07-22", env)
     assert reference["target"]["trait_type"] == "quantitative"
     assert reference["metrics"]["scale"] == "quantitative correlation R2"
     assert reference["metrics"]["den"] == 4.0
     assert reference["metrics"]["n_variants_scored"] == 2
     assert reference["overlap"]["method"] == regenerate.OVERLAP_METHOD
+    assert reference["environment"] == env
     assert suspect["metrics"]["den"] == 9.0
     assert suspect["metrics"]["n_variants_scored"] == 3
     assert suspect["overlap"]["status"] == "basis_unavailable"
     assert suspect["overlap"]["basis"]["kind"] == "unavailable"
     assert "trainer sensitivity" in suspect["overlap"]["basis"]["provenance"]
     assert "reference" in suspect["overlap"]
+    for record in (reference, suspect):
+        # Per-reason harmonization losses travel with the match fractions.
+        assert record["metrics"]["w_n_ambiguous_removed"] == 1
+        assert record["metrics"]["w_n_unmatched"] == 1
+        assert record["metrics"]["w_n_mismatch"] == 0
+        assert record["metrics"]["z_n_unmatched"] == 0
     for legacy in ("gamma", "gamma_se", "z", "m_total", "corrected_r2"):
         assert legacy not in suspect["overlap"]
 
     (unpaired,) = regenerate.build_records(
-        "asthma", regenerate.TRAITS["asthma"], "abc1234", "2026-07-22")
+        "asthma", regenerate.TRAITS["asthma"], "abc1234", "2026-07-22", env)
     assert unpaired["target"]["trait_type"] == "binary"
     assert unpaired["metrics"]["scale"] == (
         "standardized logistic-summary approximation (not liability R2)")
     assert unpaired["overlap"]["status"] == "basis_unavailable"
     assert "no independent reference" in unpaired["overlap"]["note"]
+
+
+def test_binary_consortium_constant_n_is_labelled_with_its_derivation(monkeypatch):
+    """The intermediate file's constant n was injected by consortium_prep.py,
+    not read from the GWAS: the recorded basis must say how it was derived
+    (here: that the counts are unrecorded), never imply the GWAS shipped it."""
+    bases = {}
+
+    def fake_load(path, n_eff=None, trait_type=None, constant_n_basis=None):
+        bases[str(path)] = constant_n_basis
+        return (_variants([1]), np.array([0.1]),
+                dict(n_eff=1000, n_eff_basis=constant_n_basis or "unlabelled"))
+
+    def fake_sweep(pgs, targets):
+        u = {name: np.array([1.0]) for name in targets}
+        v = {name: np.array([4.0]) for name in targets}
+        totals = {
+            "w_matched": 1, "w_total": 1,
+            "w_n_ambiguous_removed": 0, "w_n_mismatch": 0, "w_n_unmatched": 0,
+            "z_matched": {name: 1 for name in targets},
+            "z_n_ambiguous_removed": {name: 0 for name in targets},
+            "z_n_mismatch": {name: 0 for name in targets},
+            "z_n_unmatched": {name: 0 for name in targets},
+            "z_total": {name: 1 for name in targets},
+            "n_variants_scored": {name: 1 for name in targets},
+        }
+        return {"chrom": np.array(["1"]), "u": u, "v": v}, totals
+
+    monkeypatch.setattr(regenerate, "load_target", fake_load)
+    monkeypatch.setattr(regenerate, "sweep", fake_sweep)
+
+    (reference, _) = regenerate.build_records(
+        "CAD", regenerate.TRAITS["CAD"], "abc1234", "2026-08-16",
+        dict(python="3", numpy="2", numba="0", ppb="0"))
+
+    consortium_call = [path for path in bases if "consortium" in path]
+    assert consortium_call, "the consortium target was never loaded"
+    assert "unrecorded" in bases[consortium_call[0]]
+    assert bases[consortium_call[0]] is not None, (
+        "a binary consortium target must not default to an unlabelled constant")
+    assert "unrecorded" in reference["target"]["n_eff_basis"]
+    # The Pan-UKB target carries no n column, so no constant label is asked of it.
+    panukb_call = [path for path in bases if "panukb" in path]
+    assert bases[panukb_call[0]] is None
+
+
+def test_constant_n_without_a_supplied_basis_says_derivation_unrecorded(tmp_path):
+    path = tmp_path / "target.tsv"
+    path.write_text(
+        "chrom\tpos\ta1\ta2\tbeta\tse\tn\n1\t1\tA\tC\t0.1\t0.02\t88810\n",
+        encoding="utf-8",
+    )
+
+    _, _, labelled = regenerate.load_target(
+        path, trait_type="binary",
+        constant_n_basis="binary effective N, trait-level constant "
+                         "(case/control counts unrecorded)")
+    _, _, default = regenerate.load_target(path, trait_type="binary")
+
+    assert labelled["n_eff"] == 88810
+    assert "unrecorded" in labelled["n_eff_basis"]
+    assert default["n_eff"] == 88810
+    assert default["n_eff_basis"] == (
+        "trait-level constant in the sumstats file (derivation unrecorded)")
+    for summary in (labelled, default):
+        assert "n_eff_range" not in summary
+
+
+def test_sweep_reports_per_reason_harmonization_losses(monkeypatch):
+    """One ambiguous, one mismatched, one unmatched target variant: the
+    aggregate z_match fraction alone would conflate all three."""
+    reference = _variants([1, 2, 3])
+    weights = np.ones(3)
+    target = VariantTable(
+        np.repeat("1", 3), np.asarray([1, 2, 4]),
+        np.array(["A", "A", "A"]), np.array(["T", "G", "C"]))
+    monkeypatch.setattr(regenerate, "CHROMS", ["1"])
+    monkeypatch.setattr(
+        regenerate, "read_weights", lambda path: (reference, weights))
+    monkeypatch.setattr(
+        regenerate, "read_ldref",
+        lambda path: {
+            "variants": reference,
+            "af": np.repeat(0.5, 3),
+            "ld": _OneBlockLD(),
+        },
+    )
+
+    _, totals = regenerate.sweep(
+        "PGS000000", {"target": (target, np.ones(3), {})})
+
+    assert totals["z_matched"]["target"] == 0
+    assert totals["z_n_ambiguous_removed"]["target"] == 1
+    assert totals["z_n_mismatch"]["target"] == 1
+    assert totals["z_n_unmatched"]["target"] == 1
+    assert totals["w_n_ambiguous_removed"] == 0
 
 
 @pytest.mark.parametrize(

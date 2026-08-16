@@ -32,7 +32,13 @@ class EvaluationResult:
     ``mse`` is meaningful only when the weights carry an absolute scale. ``R^2``
     is invariant to a global rescale of ``w``, so the usual per-allele PGS
     Catalog weights (in trait units, e.g. cm) give a correct ``R^2`` and a
-    meaningless ``MSE``; ``mse_interpretable`` records which case applies.
+    meaningless ``MSE``; ``mse_interpretable`` records which case applies. It
+    defaults to True only for ``'standardized'`` weights. ``'dosage'`` and
+    ``'frozen'`` weights become absolute only through the ``genotype_sd``
+    multiply of step V3, whose provenance the caller vouches for (empirical
+    target SD, HWE approximation, or something weaker); passing
+    ``mse_interpretable=`` explicitly promotes a dosage-scale evaluation whose
+    SD provenance the caller is prepared to stand behind.
 
     ``genotype_sd`` is always in the order of the table that carries it: a
     bundle stores it on the LD reference; a sumstats file stores it on the

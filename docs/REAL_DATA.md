@@ -1,8 +1,11 @@
 # Real-data demonstration (within-ancestry anchor)
 
 Status: record. Numbers here are reproducible from committed code at the stated
-commit. Symbols and labels: [`NOTATION.md`](NOTATION.md). Results are labelled
-(G1)–(G5).
+commit, given the external inputs catalogued in
+[`../results/inputs.tsv`](../results/inputs.tsv) (several of those inputs carry
+no recorded checksum or accession — the manifest marks the gaps rather than
+hiding them). Symbols and labels: [`NOTATION.md`](NOTATION.md). Results are
+labelled (G1)–(G5).
 
 First run of ppb on real data: public PGS Catalog scores evaluated against real
 GWAS summary statistics with the bigsnpr HapMap3+ European LD reference
@@ -58,8 +61,11 @@ summing the per-block products of (M3):
 `ppb.standardized_marginal`, as recorded in the results registry. The GIANT and
 GLGC files carry per-variant `N`, so the table reports its median and range; no
 single `n_eff` exists for those rows. Case/control studies use a trait-level
-effective size (for example, T2D 88,810 and CAD 163,123). Published headline or
-total sample sizes are not substituted for the values fed to the estimator.
+effective size (for example, T2D 88,810 and CAD 163,123); the case/control
+counts behind those constants were not recorded, and the registry labels them
+"case/control counts unrecorded" rather than presenting them as computed.
+Published headline or total sample sizes are not substituted for the values fed
+to the estimator.
 `Score support` is the fraction of non-zero score weights retained on the joint
 weight/target-summary-statistic support. The height, BMI, and LDL estimates
 therefore describe explicitly restricted scores, not the complete catalog
@@ -115,7 +121,12 @@ the hand-wave can be replaced by ratios:
 
 ```bash
 python scripts/anchor_validation.py          # needs network, no local data
+python scripts/anchor_validation.py --out results/anchor-<date>.json
 ```
+
+The second form commits a dated snapshot of the fetch (the date is recorded
+inside the file), so the tables below rest on a recorded fetch rather than a
+live query.
 
 **Table 3. PPB against published individual-level accuracy** (partial R² in the
 held-out UK Biobank "UK (+ Ireland)" group; PPB against its consortium target).
@@ -281,6 +292,9 @@ joint-support and provenance checks. Do not transcribe rounded numbers from them
 — at `wᵀDw ≈ 8e-4` four decimals leaves one significant figure and `r2` can no
 longer be recomputed from the recorded `num`/`den`.
 
-Scripts resolve `data/` relative to the repository root. PGS Catalog weights
-(`data/pgs_weights/`) are downloaded directly from the PGS Catalog FTP
-(`PGS{id}_hmPOS_GRCh37.txt.gz`).
+Scripts resolve `data/` relative to the repository root. Every external input
+(consortium GWAS, PGS weights, LD reference, Pan-UKB files) and its recorded
+accession/checksum is catalogued in [`../results/inputs.tsv`](../results/inputs.tsv).
+PGS Catalog weights (`data/pgs_weights/`) arrive from the PGS Catalog as
+`PGS{id}_hmPOS_GRCh37.txt.gz` and are read **uncompressed** as
+`PGS{id}_hmPOS_GRCh37.txt` — gunzip them after downloading.

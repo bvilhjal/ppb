@@ -89,7 +89,8 @@ def test_the_intercept_tracks_one_over_lambda_under_genomic_control():
 
 
 def test_deflation_is_not_claimed_without_evidence():
-    """At 2,000 variants the intercept's own SE exceeds 1, so nothing is claimed.
+    """At 2,000 variants the intercept's own SE is of order one, so nothing is
+    claimed.
 
     A detector that fires on noise is worse than none: it would license dividing
     a correct R² by a number pulled out of the sampling error.
@@ -107,6 +108,26 @@ def test_deflation_is_not_claimed_without_evidence():
                ("not by two standard errors", "no standard error", "not positive"))
     if fit.intercept <= 0.0:
         assert fit.z_scale is None and fit.r2_scale is None
+
+
+def test_stratification_raises_the_intercept_and_withholds_the_scale():
+    """The competing mechanism the deflation sweep cannot simulate: a pooled
+    two-population cohort with an ancestry effect and no PC adjustment. The
+    diagnostic must flag *inflation* (measured intercept ~250 against a paired
+    null of 1.5-7.6, seeds 0-4, 2026-08-16) and must not offer a (C3) scale --
+    rescaling a stratified target would understate an already-confounded
+    statistic instead of fixing it."""
+    from experiments.z_calibration import stratification_arm
+
+    for seed in (0, 1):
+        fit, fit_null = stratification_arm(np.random.default_rng(seed))
+        assert fit.inflation_detected
+        assert not fit.deflation_detected
+        assert fit.z_scale is None and fit.r2_scale is None
+        assert "stratification" in fit.note
+        # The paired contrast is the claim: the ancestry effect dominates the
+        # structured-but-unconfounded null by more than an order of magnitude.
+        assert fit.intercept > 10.0 * max(fit_null.intercept, 1.0)
 
 
 def test_deflation_is_not_claimed_when_no_blocks_are_given():
