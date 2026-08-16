@@ -21,8 +21,11 @@ from pathlib import Path
 
 import numpy as np
 
-from .estimator import _mse_from_quad, _r2_from_quad, _var_y
-from .evaluate import EvaluationResult
+from .diagnostics import block_diagnostics
+from .estimator import (
+    _mse_from_quad, _r2_from_quad, _var_y, corrected_r2, frozen_to_dosage,
+)
+from .evaluate import EvaluationResult, _require_weight_scale
 from .harmonize import (
     HarmonizeReport,
     VariantTable,
@@ -44,6 +47,10 @@ _VARIANT_ALIASES = {
 _WEIGHT_ALIASES = {
     **_VARIANT_ALIASES,
     "weight": ("weight", "effect_weight", "beta", "effect_size", "w", "effectweight"),
+}
+_FROZEN_ALIASES = {
+    "af_ref": ("af_ref",),
+    "sd_ref": ("sd_ref",),
 }
 _SUMSTATS_ALIASES = {**_VARIANT_ALIASES, "z": ("z",)}
 
@@ -103,15 +110,95 @@ def _read_value_table(path, *, aliases, value_name, table_name):
     return variants, np.array(value, dtype=np.float64)
 
 
+@dataclass
+class WeightFile:
+    """Parsed PGS weights, including optional LDpred3 frozen-scale columns.
+
+    ``weights`` is the file's ``WEIGHT`` column as written. LDpred3 writes a
+    *standardized* effect there. ``af_ref`` / ``sd_ref`` are the fit-cohort
+    A1 frequency and dosage SD (``AF_REF`` / ``SD_REF``), present only on a
+    frozen-deploy file. They are discovery-cohort moments, not target SDs.
+    """
+
+    variants: VariantTable
+    weights: np.ndarray
+    af_ref: np.ndarray | None = None
+    sd_ref: np.ndarray | None = None
+
+    @property
+    def has_frozen_scale(self) -> bool:
+        return self.sd_ref is not None
+
+
+def read_weight_file(path) -> WeightFile:
+    """Read weights, keeping optional ``AF_REF`` / ``SD_REF`` if both are present."""
+    variants, weights = _read_value_table(
+        path, aliases=_WEIGHT_ALIASES, value_name="weight",
+        table_name="weights")
+    af_ref = sd_ref = None
+    with open(path, "r", encoding="utf-8") as fh:
+        lines = (
+            ln.rstrip("\r\n")
+            for ln in fh
+            if ln.strip() and not ln.lstrip().startswith("#")
+        )
+        try:
+            header_line = next(lines)
+        except StopIteration:
+            raise ValueError(f"weights file {path!r} has no header") from None
+        delim = ("\t" if "\t" in header_line
+                 else ("," if "," in header_line else None))
+        split = (lambda ln: ln.split(delim)) if delim else (lambda ln: ln.split())
+        lut = {name.strip().lower().lstrip("#"): i
+               for i, name in enumerate(split(header_line))}
+        has_af = "af_ref" in lut
+        has_sd = "sd_ref" in lut
+        if has_af != has_sd:
+            raise ValueError(
+                f"weights file {path!r} must carry both AF_REF and SD_REF, "
+                "or neither")
+        if has_sd:
+            af_col, sd_col = lut["af_ref"], lut["sd_ref"]
+            af_vals, sd_vals = [], []
+            for lineno, ln in enumerate(lines, start=2):
+                r = split(ln)
+                need = max(af_col, sd_col) + 1
+                if len(r) < need:
+                    raise ValueError(
+                        f"weights file {path!r} line {lineno}: expected "
+                        f"{need} fields, got {len(r)}")
+                af = float(r[af_col])
+                sd = float(r[sd_col])
+                if not np.isfinite(af) or not (0.0 <= af <= 1.0):
+                    raise ValueError(
+                        f"weights file {path!r} line {lineno}: AF_REF must "
+                        "be finite and in [0, 1]")
+                if not np.isfinite(sd) or sd < 0.0:
+                    raise ValueError(
+                        f"weights file {path!r} line {lineno}: SD_REF must "
+                        "be finite and non-negative")
+                af_vals.append(af)
+                sd_vals.append(sd)
+            if len(af_vals) != variants.n:
+                raise ValueError(
+                    f"weights file {path!r} AF_REF/SD_REF rows "
+                    f"({len(af_vals)}) do not match weight rows ({variants.n})")
+            af_ref = np.array(af_vals, dtype=np.float64)
+            sd_ref = np.array(sd_vals, dtype=np.float64)
+    return WeightFile(
+        variants=variants, weights=weights, af_ref=af_ref, sd_ref=sd_ref)
+
+
 def read_weights(path):
     """Read a PGS weights file -> ``(VariantTable, weights)``.
 
     The file is consumed line by line, so a million-row file does not coexist
-    with a second, raw-text copy of itself.
+    with a second, raw-text copy of itself. Optional ``AF_REF`` / ``SD_REF``
+    are ignored here; use :func:`read_weight_file` when the frozen-deploy
+    scale is required.
     """
-    return _read_value_table(
-        path, aliases=_WEIGHT_ALIASES, value_name="weight",
-        table_name="weights")
+    parsed = read_weight_file(path)
+    return parsed.variants, parsed.weights
 
 
 def read_sumstats(path, *, read_genotype_sd: bool = True):
@@ -185,7 +272,6 @@ class LDRefEvaluationResult(EvaluationResult):
     source: str = "ldref_shards"
     n_ldref_files: int = 0
     chromosomes: tuple[str, ...] = field(default_factory=tuple)
-    genotype_sd_source: str = "not_used"
 
 
 _REPORT_COUNTS = (
@@ -254,7 +340,9 @@ def evaluate_ldrefs(
         ldref_paths, weights_variants: VariantTable, weights,
         sumstats_variants: VariantTable, z, *, var_y: float = 1.0,
         weight_scale: str = "standardized", genotype_sd=None,
-        hwe_genotype_sd: bool = False, remove_ambiguous: bool = True,
+        sd_ref=None, genotype_sd_frame: str = "sumstats",
+        hwe_genotype_sd: bool = False, n_eff=None,
+        remove_ambiguous: bool = True,
         mse_interpretable: bool | None = None) -> LDRefEvaluationResult:
     """Evaluate chromosome-sharded block-int8 LD references in one pass.
 
@@ -265,13 +353,18 @@ def evaluate_ldrefs(
     denominator ``w'Dw`` are summed before R2 and MSE are formed. Chromosome R2
     values are never averaged.
 
-    ``genotype_sd`` is an empirical target-cohort vector in
-    ``sumstats_variants`` order. As an explicit approximation,
-    ``hwe_genotype_sd=True`` instead uses ``sqrt(2*af*(1-af))`` from each LD
-    reference. Exactly one is required for dosage weights; neither is used for
-    standardized weights. ``mse_interpretable`` follows ``weight_scale`` by
-    default and may be overridden only when the weight and phenotype scales are
-    known independently.
+    ``genotype_sd`` is always in the order of the table that carries it.
+    The default ``genotype_sd_frame='sumstats'`` is the GWAS-file column
+    (``sumstats_variants`` order). ``'reference'`` is not used here: each
+    shard has its own reference, so a single reference-order vector does
+    not exist. As an explicit approximation, ``hwe_genotype_sd=True``
+    uses ``sqrt(2*af*(1-af))`` from each LD reference. Exactly one SD
+    source is required for dosage and frozen weights; neither is used
+    for standardized weights.
+
+    ``weight_scale='frozen'`` converts LDpred3 ``WEIGHT / SD_REF`` to
+    dosage first (``sd_ref`` in ``weights_variants`` order). Block
+    jackknife and sign-flip diagnostics are accumulated across shards.
     """
     if isinstance(ldref_paths, (str, Path)):
         ldref_paths = [ldref_paths]
@@ -289,13 +382,27 @@ def evaluate_ldrefs(
         raise ValueError(
             f"z must be a finite vector of length {sumstats_variants.n}")
     var_y = _var_y(var_y)
+    weight_scale = _require_weight_scale(weight_scale)
+    if genotype_sd_frame != "sumstats":
+        raise ValueError(
+            "evaluate_ldrefs only accepts genotype_sd_frame='sumstats': "
+            "each shard has its own reference, so a single reference-order "
+            "genotype_sd vector does not exist")
 
-    if weight_scale == "dosage":
+    if weight_scale == "frozen":
+        if sd_ref is None:
+            raise ValueError(
+                "frozen-scale weights require sd_ref (the file's SD_REF column)")
+        weights = frozen_to_dosage(weights, sd_ref)
+
+    needs_sd = weight_scale in ("dosage", "frozen")
+    if needs_sd:
         n_sd_sources = int(genotype_sd is not None) + int(hwe_genotype_sd)
         if n_sd_sources != 1:
             raise ValueError(
-                "dosage-scale weights require exactly one genotype-SD source: "
-                "the sumstats genotype_sd vector or hwe_genotype_sd=True")
+                f"{weight_scale}-scale weights require exactly one "
+                "genotype-SD source: the sumstats genotype_sd vector or "
+                "hwe_genotype_sd=True")
         if genotype_sd is not None:
             genotype_sd = np.asarray(genotype_sd, dtype=np.float64)
             if (genotype_sd.shape != (sumstats_variants.n,)
@@ -307,13 +414,12 @@ def evaluate_ldrefs(
             sd_source = "sumstats_empirical"
         else:
             sd_source = "ldref_hwe"
-    elif weight_scale == "standardized":
-        if hwe_genotype_sd:
-            raise ValueError(
-                "hwe_genotype_sd is only used with weight_scale='dosage'")
-        sd_source = "not_used"
+    elif hwe_genotype_sd:
+        raise ValueError(
+            "hwe_genotype_sd is only used with weight_scale='dosage' or "
+            "'frozen'")
     else:
-        raise ValueError("weight_scale must be 'standardized' or 'dosage'")
+        sd_source = "not_used"
     if mse_interpretable is None:
         mse_interpretable = weight_scale == "standardized"
 
@@ -325,6 +431,7 @@ def evaluate_ldrefs(
     chromosomes = []
     num = den = 0.0
     n_reference = n_scored = 0
+    u_blocks, v_blocks, chrom_tag = [], [], []
 
     for path in ldref_paths:
         ref = read_ldref(path)
@@ -349,12 +456,11 @@ def evaluate_ldrefs(
             return_mask=True)
         z_aligned, zrep, zmask, _, z_source = _harmonize_to_details(
             reference, z_var, z_local, remove_ambiguous=remove_ambiguous,
-            return_target_index=(weight_scale == "dosage"
-                                 and not hwe_genotype_sd))
+            return_target_index=(needs_sd and not hwe_genotype_sd))
         _add_report(w_report, wrep)
         _add_report(z_report, zrep)
 
-        if weight_scale == "dosage":
+        if needs_sd:
             if hwe_genotype_sd:
                 if "af" not in ref:
                     raise ValueError(
@@ -379,8 +485,20 @@ def evaluate_ldrefs(
         joint = wmask & zmask
         w_aligned[~joint] = 0.0
         z_aligned[~joint] = 0.0
-        local_num = float(w_aligned @ z_aligned)
-        local_den = float(ref["ld"].quad(w_aligned))
+        ld = ref["ld"]
+        if hasattr(ld, "block_quads") and hasattr(ld, "blocks"):
+            v_chr = ld.block_quads(w_aligned)
+            u_chr = np.empty(len(ld.blocks), dtype=np.float64)
+            for b, (_backend, idx) in enumerate(ld.blocks):
+                u_chr[b] = float(w_aligned[idx] @ z_aligned[idx])
+            local_num = float(u_chr.sum())
+            local_den = float(v_chr.sum())
+            u_blocks.append(u_chr)
+            v_blocks.append(v_chr)
+            chrom_tag.extend([chrom] * u_chr.size)
+        else:
+            local_num = float(w_aligned @ z_aligned)
+            local_den = float(ld.quad(w_aligned))
         if not np.isfinite(local_num):
             raise ValueError(f"chromosome {chrom} w^T z is not finite")
         if not np.isfinite(local_den):
@@ -390,9 +508,9 @@ def evaluate_ldrefs(
         n_reference += reference.n
         n_scored += int(np.count_nonzero(w_aligned))
         # Drop the large LD payload before opening the next shard. Assignment
-        # evaluates its right-hand side first, so retaining ``ref`` here would
-        # otherwise make peak memory include two chromosome files.
-        del ref
+        # evaluates its right-hand side first, so retaining ``ref`` / ``ld``
+        # here would otherwise make peak memory include two chromosome files.
+        del ld, ref
 
     # A whole-table harmonization would count rows on chromosomes absent from
     # the reference as unmatched. Preserve that report contract after sharding.
@@ -403,7 +521,7 @@ def evaluate_ldrefs(
     z_report["n_target"] += missing_z
     z_report["n_unmatched"] += missing_z
 
-    return LDRefEvaluationResult(
+    result = LDRefEvaluationResult(
         r2=_r2_from_quad(num, den, var_y),
         mse=_mse_from_quad(num, den, var_y),
         n_reference=n_reference,
@@ -412,10 +530,27 @@ def evaluate_ldrefs(
         mse_interpretable=bool(mse_interpretable),
         weights_report=HarmonizeReport(**w_report).to_dict(),
         sumstats_report=HarmonizeReport(**z_report).to_dict(),
+        genotype_sd_source=sd_source,
         n_ldref_files=len(ldref_paths),
         chromosomes=tuple(chromosomes),
-        genotype_sd_source=sd_source,
     )
+    if u_blocks:
+        u_all = np.concatenate(u_blocks)
+        v_all = np.concatenate(v_blocks)
+        payload = block_diagnostics(
+            u_all, v_all, chrom=np.asarray(chrom_tag, dtype=object),
+            var_y=var_y)
+        result.diagnostics_unavailable = payload.get("diagnostics_unavailable")
+        result.jackknife = payload.get("jackknife")
+        result.jackknife_chromosome = payload.get("jackknife_chromosome")
+        result.per_chromosome = payload.get("per_chromosome")
+        result.sign_flip_null = payload.get("sign_flip_null")
+    if n_eff is not None:
+        _raw, corrected, se = corrected_r2(num, den, n_eff, var_y)
+        result.n_eff = float(n_eff)
+        result.r2_corrected = corrected
+        result.r2_se_finite_sample = se
+    return result
 
 
 def write_bundle(path, variants: VariantTable, z, *, D=None, U=None, var_y=1.0,

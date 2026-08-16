@@ -179,7 +179,7 @@ it to account.
 | (M6) | observed-to-liability rescaling for binary traits | *not implemented* (documented formula; implementation removed 2026-07-31) | — |
 | (X1) | (M1) with target-ancestry moments `z_B`, `D_B` | `ppb.estimator.r2` (same code) | `tests/test_cross_ancestry.py` |
 | (X2) | gauge self-consistency; `w_B,j = w_A,j · sd_B,j / sd_A,j` | `ppb.evaluate` (`weight_scale`) | `tests/test_cli.py` |
-| (X3) | finite-sample numerator bias `≈ wᵀD_Bw / N_B` | *not implemented* | — |
+| (X3) | finite-sample numerator bias `≈ wᵀD_Bw / N_B` | `ppb.estimator.corrected_r2` | `tests/test_estimator.py` |
 | (O1) | shared-noise block model | `experiments/overlap_detection.py` (`fit_overlap`) | `tests/test_overlap.py` |
 | (O2) | generalized Deming objective | `experiments/overlap_detection.py` (`_profile_eiv`) | `tests/test_overlap.py` |
 | (O3) | linear-trainer basis `q_b = tr(Φ_bᵀ K_b)` | caller-supplied `OverlapBasis` | `tests/test_overlap.py` |
@@ -202,10 +202,10 @@ it to account.
 | (E2) | per-variant LD concordance `s_j = cos(D_A row_j, D_B row_j)` | `experiments/transferability.py` (`ld_concordance`) | `tests/test_transferability.py` |
 | (E3) | target-informed optimum `argmax_w (wᵀz_B)²/(wᵀD_Bw) ∝ D_B⁻¹z_B` | — (algebra; its consequence is demonstrated) | `tests/test_transferability.py` |
 
-Five rows carry no implementation, and they are not the same kind of gap. (M1)
+Four rows carry no implementation, and they are not the same kind of gap. (M1)
 is a definition and (E3) is algebra, so there is nothing to implement. (M6)'s
 formula is documented and its implementation was removed on 2026-07-31; binary
 metrics are a v1.0 item. (P3) is specified, and its test pins the simulation
-that motivates the correction rather than the correction itself. **(X3) alone is
-an outstanding v0.1 completion criterion** — its constant has been verified by
-simulation, and it is listed here rather than quietly omitted.
+that motivates the correction rather than the correction itself. (X3) ships
+when the caller supplies `n_eff`; the published EUR pack has not been
+regenerated with it.

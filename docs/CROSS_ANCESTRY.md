@@ -121,11 +121,13 @@ the standardized genotypes represented by `D_B`.
 4. **Tri-panel allele harmonization** (weights, `z_B`, `D_B`); drop strand-ambiguous
    SNPs — cross-ancestry MAF differences make frequency-based strand tie-breaks unreliable.
 5. **Sample independence** between the A training GWAS and the `z_B` GWAS; PC-adjust within B.
-6. **(X3) Finite-sample numerator correction** *(not yet implemented)*: the plug-in
+6. **(X3) Finite-sample numerator correction**: the plug-in
    `(wᵀẑ_B)²` is biased upward by `≈ wᵀD_B w / N_B` (an absolute R² bias of
-   `≈ 1/N_B` — small even at modest GWAS N, but cheap to remove); subtract it
-   (or use within-B PUMAS subsampling) and report an SE. Tracked as a v0.1
-   completion item in `FINISHING_PLAN.md`.
+   `≈ 1/N_B` — small even at modest GWAS N). `ppb.corrected_r2` / `--n-eff`
+   subtracts that term and reports `SE(R²) ≈ 2√(R²/N_B)`. The block
+   jackknife (G2) is the SE to quote for ranking; (X3) is the `1/N` term
+   only. On a meta-analysis, `N_B` is the sample size the estimator used
+   (the registry's `n_eff`).
 7. **Matched coverage**: estimate on the intersection of `w`, `z_B`, `D_B`; report retained fraction.
 
 ## What is impossible without target-ancestry data
@@ -266,6 +268,28 @@ cross-population weights — PPB scores whatever they emit), **Popcorn / S-LDXR*
 **Wang et al. 2020** (the deterministic *predict* branch that forecasts what PPB
 measures). Individual-level portability benchmarks (Martin 2019, Ding 2023) are
 the ground truth PPB substitutes for when only a B GWAS + LD panel exist.
+
+In this workspace the constructors are LDpred3, BiPred, MultiPGS, and GWFM.
+They emit a linear `w`; PPB measures (X1). Two composition rules follow.
+
+- **Discovery LD is not `D_B`.** An LDpred3/BiPred/GWFM fit cache is
+  ancestry-matched to the *discovery* GWAS. Passing it to PPB as `D`
+  estimates `R²_A`, or an in-sample quadratic. Convert a *target-ancestry*
+  cache with `scripts/ldpred3_cache_to_ppb.py` (D8/float only; LR8 and
+  pre-shrunk caches are refused).
+- **MultiPGS sumstats is Gate D as a product.**
+  `multipgs.multi_pgs_sumstats` maximises the same `(wᵀz)²/(wᵀDw)` in the
+  span of `K` scores. PPB may evaluate that combined `w` only on a GWAS
+  that entered **neither** the component fits **nor** the stacking step.
+  `tune="none"` plus PPB on the same `z` is the training criterion.
+  LDpred3 `WEIGHT` is standardized; `WEIGHT` plus `SD_REF` is frozen-deploy
+  (`--weight-scale frozen`), and `SD_REF` is the *fit-cohort* SD, not the
+  target SD. Do not feed LDpred3 `beta_hat` to PPB as `z`.
+
+The Phase-4 entry point is `scripts/cross_ancestry_eval.py`. Without a
+target-ancestry GWAS and matched LD panel it exits 2; it does not invent a
+number. Table 4 of [`REAL_DATA.md`](REAL_DATA.md) is the individual-level
+comparison for the six catalog scores.
 
 ## Exercises
 

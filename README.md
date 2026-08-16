@@ -182,11 +182,29 @@ ppb evaluate --weights weights.tsv --ldref-dir ldref/ \
   the estimator; PPB deliberately does not guess a beta/SE/N conversion.
 
 The command harmonizes both inputs to the LD variants and prints a JSON
-`EvaluationResult` with `R²`, `MSE`, and harmonization counts. Sharded
-evaluation sums chromosome numerators and denominators before forming the one
-genome-wide ratio; it never averages chromosome `R²` values. For case/control
-GWAS, this summary-statistic `R²` is an approximation on the chosen standardized
-scale; it is **not** liability-scale `R²`.
+`EvaluationResult` with `R²`, `MSE`, harmonization counts, and — when `D` is
+block-diagonal with at least two blocks — the delete-one-block jackknife
+and sign-flip null. `--n-eff` adds the finite-sample correction (X3).
+Sharded evaluation sums chromosome numerators and denominators before
+forming the one genome-wide ratio; it never averages chromosome `R²`
+values. For case/control GWAS, this summary-statistic `R²` is an
+approximation on the chosen standardized scale; it is **not**
+liability-scale `R²`.
+
+`--weight-scale` is required and is never inferred from the file.
+
+**Table 1. How to declare a sibling weight file.**
+
+| Artifact | `--weight-scale` | Notes |
+|---|---|---|
+| PGS Catalog per-allele weights | `dosage` | Needs target `genotype_sd`, or `--hwe-genotype-sd` |
+| LDpred3 / BiPred / GWFM `WEIGHT` (no `SD_REF`) | `standardized` | Posterior-mean effect on standardized genotypes |
+| LDpred3 / MultiPGS `WEIGHT` + `SD_REF` | `frozen` | Converts `WEIGHT/SD_REF` to dosage, then applies **target** `genotype_sd`. `SD_REF` is the *fit-cohort* SD |
+| MultiPGS `combine_weights` scored on the stacking GWAS | — | **Do not.** That is the training criterion. Use a third, independent GWAS |
+
+`scripts/ldpred3_cache_to_ppb.py` converts a non-mmap LDpred3 D8/float cache
+into `ldref_chr*.npz`. LR8, memory-mapped, and pre-shrunk caches are
+refused. The Phase-4 entry point is `scripts/cross_ancestry_eval.py`.
 
 ## Experiments
 

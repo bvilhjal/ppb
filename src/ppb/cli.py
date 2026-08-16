@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from .evaluate import evaluate
-from .io import evaluate_ldrefs, read_bundle, read_sumstats, read_weights
+from .io import evaluate_ldrefs, read_bundle, read_sumstats, read_weight_file
 
 
 def _ldref_paths(directory):
@@ -48,15 +48,17 @@ def _cmd_evaluate(args) -> int:
         if args.var_y != 1.0:
             raise ValueError(
                 "--var-y applies only with --ldref-dir; bundles carry var_y")
-        weights_variants, weights = read_weights(args.weights)
+        wf = read_weight_file(args.weights)
         bundle = read_bundle(args.bundle)
         result = evaluate(
             bundle["ld"], bundle["variants"],
-            weights_variants, weights,
+            wf.variants, wf.weights,
             bundle["variants"], bundle["z"],
             var_y=bundle["var_y"],
             weight_scale=args.weight_scale,
             genotype_sd=bundle["genotype_sd"],
+            sd_ref=wf.sd_ref,
+            n_eff=args.n_eff,
             remove_ambiguous=not args.keep_ambiguous,
             # R^2 is invariant to a global rescale of w, MSE is not. Ordinary
             # PGS Catalog weights are in trait units (e.g. cm), so their MSE
@@ -67,22 +69,23 @@ def _cmd_evaluate(args) -> int:
         if not args.sumstats:
             raise ValueError("--sumstats is required with --ldref-dir")
         ldref_paths = _ldref_paths(args.ldref_dir)
-        weights_variants, weights = read_weights(args.weights)
-        use_empirical_sd = (
-            args.weight_scale == "dosage" and not args.hwe_genotype_sd
+        wf = read_weight_file(args.weights)
+        needs_empirical_sd = (
+            args.weight_scale in ("dosage", "frozen")
+            and not args.hwe_genotype_sd
         )
         sumstats_variants, z, genotype_sd = read_sumstats(
-            args.sumstats, read_genotype_sd=use_empirical_sd)
+            args.sumstats, read_genotype_sd=needs_empirical_sd)
         result = evaluate_ldrefs(
             ldref_paths,
-            weights_variants, weights,
+            wf.variants, wf.weights,
             sumstats_variants, z,
             var_y=args.var_y,
             weight_scale=args.weight_scale,
-            genotype_sd=(genotype_sd
-                         if (args.weight_scale == "dosage"
-                             and not args.hwe_genotype_sd) else None),
+            genotype_sd=(genotype_sd if needs_empirical_sd else None),
+            sd_ref=wf.sd_ref,
             hwe_genotype_sd=args.hwe_genotype_sd,
+            n_eff=args.n_eff,
             remove_ambiguous=not args.keep_ambiguous,
             mse_interpretable=args.weight_scale == "standardized",
         )
@@ -95,8 +98,9 @@ def _cmd_evaluate(args) -> int:
     else:
         print(text)
     if not result.mse_interpretable:
-        print("note: MSE is not interpretable for dosage-scale weights (the "
-              "weight scale is arbitrary); R^2 is unaffected.", file=sys.stderr)
+        print("note: MSE is not interpretable for dosage/frozen-scale weights "
+              "(the weight scale is arbitrary); R^2 is unaffected.",
+              file=sys.stderr)
     return 0
 
 
@@ -119,10 +123,17 @@ def build_parser() -> argparse.ArgumentParser:
         help=("standardized-z table for --ldref-dir: chrom, pos, a1, a2, z; "
               "optionally empirical genotype_sd"))
     ev.add_argument(
-        "--weight-scale", required=True, choices=("dosage", "standardized"),
-        help=("scale of the submitted weights: ordinary per-dosage weights "
-              "need empirical genotype_sd or the explicit HWE approximation; "
-              "standardized weights already multiply standardized genotypes"))
+        "--weight-scale", required=True,
+        choices=("dosage", "standardized", "frozen"),
+        help=("scale of the submitted weights: 'dosage' is ordinary "
+              "per-allele PGS Catalog weights (needs target genotype_sd or "
+              "--hwe-genotype-sd); 'standardized' is LDpred3/BiPred/GWFM "
+              "WEIGHT; 'frozen' is WEIGHT/SD_REF then target genotype_sd "
+              "(refuse to guess — SD_REF is the fit-cohort SD, not the target)"))
+    ev.add_argument(
+        "--n-eff", type=float, default=None,
+        help="target GWAS effective sample size for the (X3) finite-sample "
+             "correction and its 1/N SE")
     ev.add_argument(
         "--hwe-genotype-sd", action="store_true",
         help=("with --ldref-dir and dosage weights, use sqrt(2*af*(1-af)) "

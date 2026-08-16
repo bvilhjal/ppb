@@ -419,3 +419,100 @@ def test_sharded_evaluation_releases_ld_before_reading_next(monkeypatch):
 
     assert calls == 2
     assert result.n_ldref_files == 2
+
+
+def test_read_weight_file_keeps_ldpred3_frozen_columns(tmp_path):
+    from ppb import read_weight_file
+
+    path = tmp_path / "w.tsv"
+    path.write_text(
+        "ID\tCHR\tPOS\tA1\tA2\tWEIGHT\tAF_REF\tSD_REF\n"
+        "rs1\t1\t100\tA\tG\t0.2\t0.4\t0.5\n"
+        "rs2\t1\t200\tC\tT\t0.4\t0.1\t0.0\n",
+        encoding="utf-8")
+    wf = read_weight_file(path)
+    assert wf.has_frozen_scale
+    assert np.allclose(wf.weights, [0.2, 0.4])
+    assert np.allclose(wf.sd_ref, [0.5, 0.0])
+    assert list(wf.variants.a1) == ["A", "C"]
+
+
+def test_cli_frozen_scale_uses_sd_ref_then_target_sd(tmp_path, capsys):
+    variants = VariantTable([1, 1], [10, 20], ["A", "A"], ["G", "C"])
+    z = np.array([0.2, 0.1])
+    bundle = tmp_path / "bundle.npz"
+    write_bundle(bundle, variants, z, D=np.eye(2), genotype_sd=[0.5, 2.0])
+    weights = tmp_path / "weights.tsv"
+    weights.write_text(
+        "ID\tCHR\tPOS\tA1\tA2\tWEIGHT\tAF_REF\tSD_REF\n"
+        "rs1\t1\t10\tA\tG\t0.2\t0.3\t0.5\n"
+        "rs2\t1\t20\tA\tC\t0.4\t0.4\t2.0\n",
+        encoding="utf-8")
+    assert main([
+        "evaluate", "--weights", str(weights), "--bundle", str(bundle),
+        "--weight-scale", "frozen"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    # WEIGHT/SD_REF = [0.4, 0.2], then × target sd [0.5, 2.0] → [0.2, 0.4]
+    w = np.array([0.2, 0.4])
+    assert result["r2"] == pytest.approx((w @ z) ** 2 / (w @ w))
+    assert result["weight_scale"] == "frozen"
+    assert result["mse_interpretable"] is False
+
+
+def test_frozen_scale_refuses_to_guess_without_sd_ref(tmp_path):
+    weights_path, bundle_path, _ = _fixture(tmp_path)
+    with pytest.raises(ValueError, match="sd_ref"):
+        main(["evaluate", "--weights", str(weights_path),
+              "--bundle", str(bundle_path), "--weight-scale", "frozen"])
+
+
+def test_evaluate_emits_block_diagnostics_and_x3(tmp_path):
+    from ppb import BlockDiagonalLD, DenseLD, evaluate
+
+    variants = VariantTable(
+        ["1", "1", "2", "2"], [1, 2, 1, 2],
+        ["A", "A", "A", "A"], ["C", "C", "C", "C"])
+    blocks = [
+        (DenseLD(np.eye(2)), np.array([0, 1])),
+        (DenseLD(np.eye(2)), np.array([2, 3])),
+    ]
+    ld = BlockDiagonalLD(blocks)
+    w = np.array([1.0, 0.5, 0.25, 0.1])
+    z = np.array([0.2, 0.1, 0.05, 0.02])
+    result = evaluate(ld, variants, variants, w, variants, z, n_eff=500.0)
+    assert result.jackknife is not None
+    assert result.jackknife["n_blocks"] == 2
+    assert result.sign_flip_null["z_ceiling"] == pytest.approx(np.sqrt(2.0))
+    assert result.r2_corrected == pytest.approx(result.r2 - 1.0 / 500.0)
+    assert result.r2_se_finite_sample == pytest.approx(
+        2.0 * np.sqrt(result.r2 / 500.0))
+
+
+def test_sharded_evaluation_emits_chromosome_jackknife(tmp_path):
+    _, paths, variants, weights, z = _ldref_fixture(tmp_path)
+    result = evaluate_ldrefs(paths, variants, weights, variants, z)
+    assert result.jackknife["n_blocks"] == 2
+    assert result.jackknife_chromosome["n_groups"] == 2
+    assert set(result.per_chromosome) == {"1", "2"}
+
+
+def test_evaluate_sumstats_frame_matches_reference_frame():
+    from ppb import DenseLD, evaluate
+
+    ref = VariantTable(["1", "1"], [10, 20], ["A", "A"], ["G", "C"])
+    # Sumstats in reverse row order, with SDs attached to those rows.
+    ss = VariantTable(["1", "1"], [20, 10], ["A", "A"], ["C", "G"])
+    z = np.array([0.4, 0.1])           # pos 20, pos 10
+    sd = np.array([2.0, 0.5])
+    w = np.array([1.0, 1.0])
+    via_sumstats = evaluate(
+        DenseLD(np.eye(2)), ref, ref, w, ss, z,
+        weight_scale="dosage", genotype_sd=sd,
+        genotype_sd_frame="sumstats")
+    via_ref = evaluate(
+        DenseLD(np.eye(2)), ref, ref, w, ss, z,
+        weight_scale="dosage", genotype_sd=np.array([0.5, 2.0]),
+        genotype_sd_frame="reference")
+    assert via_sumstats.r2 == pytest.approx(via_ref.r2)
+    assert via_sumstats.genotype_sd_source == "sumstats_empirical"
+    assert via_ref.genotype_sd_source == "reference_empirical"

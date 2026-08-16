@@ -7,7 +7,7 @@ in the completion plan.
 import numpy as np
 import pytest
 
-from ppb import DenseLD, LowRankLD, mse, r2
+from ppb import DenseLD, LowRankLD, corrected_r2, frozen_to_dosage, mse, r2
 
 TOL = 1e-10
 
@@ -122,3 +122,31 @@ def test_estimators_reject_invalid_phenotype_variance(var_y):
 def test_estimators_reject_nonfinite_vectors(weights, z):
     with pytest.raises(ValueError, match="finite"):
         r2(weights, z, DenseLD(np.eye(1)))
+
+
+def test_x3_subtracts_the_leading_one_over_n_term():
+    """(X3) is one subtraction: (num² − den/N) / den, plus SE = 2√(R²/N)."""
+    num, den, n_eff = 0.4, 2.0, 1000.0
+    raw, corrected, se = corrected_r2(num, den, n_eff)
+    assert raw == pytest.approx((0.4 ** 2) / 2.0)
+    assert corrected == pytest.approx(raw - 1.0 / n_eff)
+    assert se == pytest.approx(2.0 * np.sqrt(raw / n_eff))
+    assert corrected < raw
+
+
+def test_x3_rejects_tiny_or_nonfinite_n():
+    with pytest.raises(ValueError, match="n_eff"):
+        corrected_r2(0.1, 1.0, 2.0)
+    with pytest.raises(ValueError, match="n_eff"):
+        corrected_r2(0.1, 1.0, np.nan)
+
+
+def test_frozen_to_dosage_divides_by_fit_cohort_sd_and_zeroes_monomorphs():
+    w = np.array([0.2, 0.4, 0.6])
+    sd = np.array([0.5, 0.0, 2.0])
+    dosage = frozen_to_dosage(w, sd)
+    assert dosage[0] == pytest.approx(0.4)
+    assert dosage[1] == 0.0
+    assert dosage[2] == pytest.approx(0.3)
+    with pytest.raises(ValueError, match="non-negative"):
+        frozen_to_dosage(w, np.array([0.5, -0.1, 2.0]))

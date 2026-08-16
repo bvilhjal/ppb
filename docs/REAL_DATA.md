@@ -235,9 +235,13 @@ and its null together. See the caveat below and [`LIMITATIONS.md`](LIMITATIONS.m
   entirely from the reported `beta`, `se` and `n`. Genomic control — applied at
   study and meta level by GIANT and GLGC — inflates `se` and therefore deflates
   these estimates by roughly the inflation factor; the `n_eff` choice does the
-  same (the T2D note above is a 1.2× example). No step in this pipeline detects
-  or corrects that, so read every row as conditional on how its source study
-  processed its standard errors. See [`LIMITATIONS.md`](LIMITATIONS.md).
+  same (the T2D note above is a 1.2× example). The guard exists
+  (`experiments/z_calibration.py`, (C2)–(C3)) and has **not been run on
+  these targets**. Treat the GIANT height and BMI rows as **lower bounds**
+  (published/PPB = 1.49 and 2.08). The committed pack
+  `results/baseline-2026-07.json` also predates the block jackknife; it
+  cannot be regenerated in a checkout that lacks the GWAS files. See
+  [`LIMITATIONS.md`](LIMITATIONS.md).
 - **Adjusted `z`, unadjusted `D`.** The target GWAS report covariate-adjusted
   (partial) correlations; the bigsnpr LD reference is an unadjusted genotype
   correlation matrix. `METHOD.md` §4 specifies adjusting both. The mismatch is

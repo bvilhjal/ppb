@@ -238,3 +238,72 @@ def sign_flip_null(u, v, *, var_y: float = 1.0, n_draws: int = 0,
         r2=observed, null_mean=null_mean, z=z,
         ratio=observed / null_mean, n_blocks=u.size,
         p_value=p_value, n_draws=n_draws)
+
+
+def block_diagnostics(u, v, *, chrom=None, var_y: float = 1.0) -> dict:
+    """Jackknife (G2) and sign-flip null (G3) from per-block products.
+
+    The payload matches ``scripts/regenerate_results.py`` so a CLI evaluation
+    and a registry pack report the same fields. Returns
+    ``diagnostics_unavailable`` instead when there are fewer than two blocks.
+    """
+    u = np.asarray(u, dtype=np.float64)
+    v = np.asarray(v, dtype=np.float64)
+    if u.size < 2:
+        return {
+            "diagnostics_unavailable": (
+                f"{u.size} LD block(s): the block jackknife and sign-flip "
+                "null need at least 2"),
+        }
+    block = r2_block_jackknife(u, v, var_y=var_y)
+    out = {
+        "jackknife": {
+            "method": "delete-one-block",
+            "se": block.se,
+            "n_blocks": block.n_blocks,
+            "n_groups": block.n_groups,
+            "max_variance_share": block.max_variance_share,
+        },
+    }
+    if chrom is not None:
+        chrom = np.asarray(chrom)
+        if chrom.shape != (u.size,):
+            raise ValueError(
+                f"chrom must have one label per block ({u.size},); "
+                f"got {chrom.shape}")
+        def _chrom_key(c):
+            try:
+                return (0, int(c))
+            except (TypeError, ValueError):
+                return (1, str(c))
+
+        order = sorted(dict.fromkeys(chrom.tolist()), key=_chrom_key)
+        if len(order) > 1:
+            by_chrom = r2_block_jackknife(u, v, groups=chrom, var_y=var_y)
+            out["jackknife_chromosome"] = {
+                "method": "delete-one-chromosome",
+                "se": by_chrom.se,
+                "n_blocks": by_chrom.n_blocks,
+                "n_groups": by_chrom.n_groups,
+                "max_variance_share": by_chrom.max_variance_share,
+            }
+        out["per_chromosome"] = {
+            c: [float(u[chrom == c].sum()), float(v[chrom == c].sum())]
+            for c in order
+        }
+    try:
+        control = sign_flip_null(u, v, var_y=var_y)
+    except ValueError as exc:
+        if "degenerate" not in str(exc):
+            raise
+        out["diagnostics_unavailable"] = str(exc)
+        return out
+    out["sign_flip_null"] = {
+        "method": "block-sign-flip",
+        "null_mean": control.null_mean,
+        "z": control.z,
+        "ratio": control.ratio,
+        "n_blocks": control.n_blocks,
+        "z_ceiling": float(np.sqrt(control.n_blocks)),
+    }
+    return out

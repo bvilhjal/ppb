@@ -17,6 +17,30 @@ import numpy as np
 from .ld_backend import LDBackend
 
 
+def frozen_to_dosage(weights, sd_ref):
+    """Convert LDpred3 standardized ``WEIGHT`` to per-allele dosage weights.
+
+    ``b_j = WEIGHT_j / SD_REF_j``. ``SD_REF`` is the *fit-cohort* dosage SD.
+    Variants with ``SD_REF <= 0`` (monomorphic in the fit cohort) are set to
+    zero rather than divided. The result still needs the *target* genotype SD
+    before it multiplies ``D``.
+    """
+    w = np.asarray(weights, dtype=np.float64)
+    sd = np.asarray(sd_ref, dtype=np.float64)
+    if w.shape != sd.shape or w.ndim != 1:
+        raise ValueError(
+            f"weights and sd_ref must be 1-D of equal length; got {w.shape} "
+            f"and {sd.shape}")
+    if not np.isfinite(w).all() or not np.isfinite(sd).all():
+        raise ValueError("weights and sd_ref must contain only finite numbers")
+    if np.any(sd < 0.0):
+        raise ValueError("sd_ref must be non-negative")
+    out = np.zeros(w.shape[0], dtype=np.float64)
+    positive = sd > 0.0
+    out[positive] = w[positive] / sd[positive]
+    return out
+
+
 def _wz(weights, z):
     w = np.asarray(weights, dtype=np.float64)
     z = np.asarray(z, dtype=np.float64)
@@ -60,6 +84,30 @@ def _mse_from_quad(wz: float, den: float, var_y: float) -> float:
     if not np.isfinite(value):
         raise ValueError("estimated MSE is not finite")
     return value
+
+
+def corrected_r2(num: float, den: float, n_eff: float,
+                 var_y: float = 1.0) -> tuple[float, float, float]:
+    """Finite-sample correction (X3) and its delta-method SE.
+
+    The plug-in ``(wᵀẑ)²`` is biased upward by ``≈ wᵀ D w / N`` on the
+    standardized-phenotype scale of Algorithm V. Subtract that term from the
+    squared numerator before dividing. The reported SE is the leading
+    ``1/N`` sampling term, ``2 √(R² / N)``, not the block jackknife (G2).
+
+    Returns ``(r2_raw, r2_corrected, se)``. A corrected value may be
+    negative when the numerator is noise; it is not clamped.
+    """
+    var_y = _var_y(var_y)
+    n_eff = float(n_eff)
+    if not np.isfinite(n_eff) or n_eff <= 2.0:
+        raise ValueError("n_eff must be finite and greater than 2")
+    raw = _r2_from_quad(num, den, var_y)
+    corrected = (num * num - den / n_eff) / (den * var_y)
+    if not np.isfinite(corrected):
+        raise ValueError("corrected R^2 is not finite")
+    se = 2.0 * float(np.sqrt(max(raw, 0.0) / n_eff))
+    return raw, float(corrected), se
 
 
 def r2(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:

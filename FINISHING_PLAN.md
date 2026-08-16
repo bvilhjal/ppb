@@ -134,52 +134,52 @@ are specified in `docs/METHOD.md`; the cross-ancestry extension in
 **Stack and LD handling (decided 2026-07-17).** The evaluator is a Python package
 named `ppb`, `numpy` + **`numba`** for the performance kernels (no scipy in the
 core). The estimator only needs `wᵀz` and `wᵀDw`, so `D` is never materialised
-densely: it is stored block-diagonal with **D8** (packed int8 dense) and **LR8**
-(int8 low-rank `R ≈ U Uᵀ`) representations mirroring the local `ldpred3` project,
-with numba sweep kernels. Low-rank factors are PSD by construction, so `wᵀDw ≥ 0`.
+densely: it is stored block-diagonal as **D8** (packed int8 dense). A float
+low-rank factor is the PSD-by-construction fallback; **LR8 is not
+implemented**. Shrinkage toward the identity is not applied (it would
+inflate R²).
 Toolchain: a dedicated `ppb` conda env on **Python 3.14** (Python 3.14.6,
 numpy 2.4.6, numba 0.66.0, pytest, OpenBLAS). Gotcha: `conda create python=3.14`
 resolves to the **free-threaded** build (`*_cp314t`), under which numpy/MKL matmul
 hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out of
 `njit`.
 
-## Current state (2026-07-22)
+## Current state (2026-08-16)
 
-**Built and tested locally (CI targets Python 3.11/3.12):**
+**The installable package is the estimator path.** CI targets Python 3.11/3.12.
 
-- Core estimator (`r2`, `mse`) and LD backends: dense, block-diagonal, low-rank
-  (LR8), and int8 (D8/LR8, ~8× smaller), validated against individual-level
-  truth at representation-appropriate tolerances. The LD loader now checks exact
-  tiling/coverage, offsets, dtypes, annotations, packed diagonals, LR8 zero rows,
-  and low-rank definiteness; large D8 blocks are not claimed to have a universal
-  PSD certificate.
-- Allele harmonization (`harmonize`), covariate/PC adjustment (`covariates`),
-  per-variant sample sizes (`sumstats`), a CLI (`ppb evaluate`) and `.npz` bundle
-  format. Evaluation requires an explicit dosage/standardized weight scale, uses
-  coherent joint weight/summary-statistic support, and rejects non-finite inputs
-  and degenerate residual covariates.
-- Simulation harness: block-AR(1) LD, diploid genotypes, Balding-Nichols
-  two-population structure.
-- Validated demonstrations (all encoded as tests): within-ancestry LD-reference
-  behaviour (Fig. S1), cross-method concordance/ranking (Fig. 1 / Table 1 style),
-  PC adjustment removing stratification, per-variant-N correction, PUMAS-style
-  repeated learning that refits each pseudo-training split, and **cross-ancestry
-  portability** (`experiments/cross_ancestry.py`).
-- Training/target shared-noise **detection and labelling** (`ppb.overlap`):
-  an in-sample evaluation is published as an upper bound, measured against an
-  independent target where one exists (T2D 0.509 vs 0.044). Correction is
-  withdrawn as dominated by that comparison; the fitting apparatus is retained
-  as experimental and the registry rejects it (`docs/OVERLAP.md`).
-- A score's population distribution from allele frequencies and LD
-  (`ppb.score_distribution`, (P1)-(P2)), benchmarked against simulated
-  individuals: SD within 0.2%, and `max_variance_share` calibrated against tail
-  error so a percentile carries a usable warning (`docs/SCORE_DISTRIBUTION.md`).
-- Stage-1 leaderboard: the versioned results registry (`results/`, schema
-  enforced by `tests/test_results_registry.py`) regenerated end-to-end from
-  source data by `scripts/regenerate_results.py`, rendered to a static site by
-  `scripts/build_leaderboard.py`. Pack validation rejects non-finite metrics,
-  malformed structures, inconsistent identities, and incomplete provenance before
-  deployment.
+- Core estimator (`r2`, `mse`) and LD backends: dense float, block-diagonal
+  D8 (square or packed), and a float low-rank factor. **LR8 is not
+  implemented** (measured 1.34× smaller than the packed triangle at 4× the
+  error). The loader checks tiling, offsets, dtypes, packed diagonals, and
+  low-rank row support; large D8 blocks are not certified PSD.
+- Allele harmonization, per-variant sample sizes, a CLI (`ppb evaluate`), and
+  `.npz` bundles / chromosome shards. `--weight-scale` is
+  `dosage` / `standardized` / `frozen` (LDpred3 `WEIGHT/SD_REF`); the scale
+  is never guessed. Joint support; non-finite inputs refused.
+- Algorithm V: the CLI/API now run V2–V7 (harmonize, gauge, joint support,
+  sweep, ratio, block jackknife + sign-flip). V1 (beta/SE/N → `z`) remains
+  the caller's job except on the registry path. (X3) is implemented when
+  `--n-eff` is given.
+- LDpred3 adapter: `ppb.convert_ldpred3_cache` /
+  `scripts/ldpred3_cache_to_ppb.py` reads a non-mmap D8/float cache and
+  writes ppb shards. LR8, mmap, and pre-shrunk caches are refused.
+- Simulation harness and validated demonstrations live in `experiments/`
+  (PC adjustment, PUMAS, overlap fit, z-calibration, transferability). They
+  are not part of the installed package.
+- Overlap: the package ships only `OverlapBasis.unavailable`. In-sample
+  rows are upper bounds. Correction is experimental and the registry
+  rejects it.
+- Score distribution (P1)–(P2) from frequencies and LD.
+- Stage-1 registry (`results/baseline-2026-07.json`) is still the 2026-07-22
+  EUR pack: no jackknife, no (C2) intercept. Regenerating it needs the
+  local GWAS + HM3+ files, which this checkout does not contain. GIANT
+  height/BMI rows remain lower bounds until that regeneration.
+
+**Not done, and not claimed:** a real `(z_B, D_B)` evaluation
+(`scripts/cross_ancestry_eval.py` is the entry point and exits 2 without
+those files). The Witteveen 8-trait golden result. Liability (M6).
+Assortative-mating correction (P3).
 
 **Historical starting point (for provenance):** this repo began as a single
 ~1.4 MB notebook (now `archive/PPB.ipynb`); the working legacy code/data live in
@@ -442,6 +442,15 @@ not a substitute, because a well-formed pack from a `D⁻¹z` refit is
 indistinguishable from an honest one on the recorded fields; and the stage-1
 registry is defensible only because every entry is a maintainer-run baseline
 (stated in `results/schema.md`).
+
+**Composition rule (sibling stack).** `multipgs.multi_pgs_sumstats` maximises
+the *same* quadratic (2) in the span of `K` scores. Evaluating that fit with
+PPB on the GWAS used to form `c = Wᵀz`, or on the GWAS used to build the
+component weights, reports the training criterion (regime C), not (1). A
+MultiPGS score may be scored by PPB only on a third GWAS that entered
+neither the components nor the stack. LDpred3-auto / BiPred / GWFM do not
+maximise (2); they are ordinary in-sample failures under (H2) and are
+labelled, not corrected.
 
 ## Governance
 

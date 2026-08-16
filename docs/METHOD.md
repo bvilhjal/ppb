@@ -112,8 +112,10 @@ and both are worth knowing before quoting a number.
     E[R^2_hat] - R^2(w) ~= (1 - R^2) / N   <=  1/N
 
 so the absolute bias is at most `1/N` — 4e-6 at `N = 250,000`, negligible beside
-any real R^2, but cheap to remove. That correction is (X3), specified and not yet
-implemented.
+any real R^2, but cheap to remove. That correction is (X3):
+`ppb.corrected_r2` / `ppb evaluate --n-eff`. It is not applied unless `N` is
+declared — a meta-analysis has no single `N`, and the sample size the
+estimator used must be the one that enters the correction.
 
 **Variance.** The blocks of `D` are independent, so the sampling variability of
 `R^2_hat` is estimable by a delete-one-block jackknife over the per-block products
@@ -217,8 +219,11 @@ shipped reference the constants invert that ordering — a full 22-chromosome sw
 of a 922,538-variant score spends more time in V2 than in V5 (§2, "On-disk LD
 store"), which is worth knowing before optimizing the quadratic form.
 
-**Implemented in** `ppb.evaluate` (V2–V6 for a single bundle) and
+**Implemented in** `ppb.evaluate` / `ppb evaluate` (V2–V7 for a bundle or
+sharded LD; V7 when `D` is block-diagonal with at least two blocks) and
 `scripts/regenerate_results.py` (V1–V7, genome-wide, one chromosome at a time).
+V1 is deliberately not inferred by the CLI: the sumstats column is already
+the standardized `z`.
 
 ## 2. Exact vs. banded LD
 
@@ -595,8 +600,10 @@ and what does (X3) do about it?
 smaller than the per-block error. Account for the factor, and state the condition
 under which the argument would fail.
 
-**8.** `[40]` Implement (X3). Explain why it is rated `[40]` and not `[20]`,
-given that the formula is one subtraction.
+**8.** `[40]` (X3) is implemented as `ppb.corrected_r2`. Explain why the
+rating was `[40]` and not `[20]`, given that the formula is one
+subtraction, and name the sample size that must enter `n_eff` on a
+GIANT-style meta-analysis.
 
 **9.** `[50]` §2 leaves large D8 blocks with no *proof* of positive
 semi-definiteness: the Lanczos scan can refute, never certify. Find a block
@@ -665,8 +672,9 @@ size exists ([`LIMITATIONS.md`](LIMITATIONS.md)), so the "sample size the
 estimator used" that [`../results/schema.md`](../results/schema.md) records has to
 be the same quantity that enters the correction. A corrected value also cannot
 replace a published one without the (G2) standard error beside it, since the
-correction is `~1/N` and the jackknife SE is routinely larger. Tracked as a v0.1
-completion criterion in [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md).
+correction is `~1/N` and the jackknife SE is routinely larger. Implemented as
+`ppb.corrected_r2`; the GIANT `n_eff` that belongs there is the median of the
+per-variant `N` column, which is what the registry already records.
 
 **9.** Open. The obvious candidate, LR8, satisfies the first two conditions and
 fails the third: measured on this reference it is 1.34x smaller than the packed
