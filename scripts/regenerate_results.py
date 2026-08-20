@@ -78,7 +78,7 @@ METRIC_SCALES = {
 }
 
 # Pan-UKB effective sample sizes: n for quantitative traits, 4/(1/n_case + 1/n_ctrl)
-# for binary ones (the same values scripts/eval_panukb.py derives from the counts).
+# for binary ones, from the Pan-UKB case/control counts below.
 _BINARY = {
     "T2D": (22634, 397897), "asthma": (31030, 389501), "MDD": (15674, 404857),
     "CAD": (31148, 389383), "BrCa": (11779, 408752),

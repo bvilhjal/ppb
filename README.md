@@ -151,8 +151,7 @@ reference are in [`docs/REAL_DATA.md`](docs/REAL_DATA.md); the pipelines are
 `scripts/panukb_download.sh` + `scripts/panukb_filter_hm3plus.py` (Pan-UKB
 targets), `scripts/consortium_prep.py` (consortium targets), and
 `scripts/regenerate_results.py` (the ppb evaluation that produces the results
-registry — `scripts/eval_consortium.py` / `scripts/eval_panukb.py` remain as
-human-readable single-target tables).
+registry; `python scripts/regenerate_results.py <trait>` evaluates one trait).
 
 ## Command line
 

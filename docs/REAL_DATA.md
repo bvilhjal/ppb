@@ -285,11 +285,11 @@ pass over the LD reference and writes the JSON records at full precision (~5.5
 min per trait, ~35 min for all nine). It records the current final-weight overlap
 basis as unavailable and does not manufacture a corrected statistic from variant
 count. Future scores with a documented linear operator or stable rerunnable
-trainer can use the retained basis-aware correction. The older
-`scripts/eval_consortium.py` / `scripts/eval_panukb.py` are human-readable
-diagnostics, not the publication path; they do not replace the registry's strict
-joint-support and provenance checks. Do not transcribe rounded numbers from them
-— at `wᵀDw ≈ 8e-4` four decimals leaves one significant figure and `r2` can no
+trainer can use the retained basis-aware correction. For a single trait, run
+`python scripts/regenerate_results.py <trait>` — it is the only in-repo path
+that consumes the `beta`/`se`/`n` and `beta`/`se`/`af` files the prep scripts
+emit. Do not transcribe rounded numbers out of any human-readable table — at
+`wᵀDw ≈ 8e-4` four decimals leaves one significant figure and `r2` can no
 longer be recomputed from the recorded `num`/`den`.
 
 Scripts resolve `data/` relative to the repository root. Every external input
