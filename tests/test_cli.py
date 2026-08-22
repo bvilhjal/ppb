@@ -16,6 +16,7 @@ from ppb import (
     read_bundle,
     read_sumstats,
     read_weights,
+    standardized_marginal,
     write_bundle,
     write_ldref,
 )
@@ -516,3 +517,144 @@ def test_evaluate_sumstats_frame_matches_reference_frame():
     assert via_sumstats.r2 == pytest.approx(via_ref.r2)
     assert via_sumstats.genotype_sd_source == "sumstats_empirical"
     assert via_ref.genotype_sd_source == "reference_empirical"
+
+
+def test_bundle_writer_rejects_asymmetric_D(tmp_path):
+    variants = VariantTable([1, 1], [10, 20], ["A", "A"], ["G", "C"])
+    bad = np.eye(2)
+    bad[0, 1] = 0.5
+    with pytest.raises(ValueError, match="symmetric"):
+        write_bundle(tmp_path / "bad.npz", variants, [0.1, 0.2], D=bad)
+
+
+def test_read_bundle_rejects_asymmetric_D(tmp_path):
+    """The read boundary must fail closed on a legacy asymmetric bundle too."""
+    path = tmp_path / "legacy.npz"
+    bad = np.eye(2)
+    bad[0, 1] = 0.5
+    np.savez(
+        path, chrom=np.array(["1", "1"]), pos=np.array([10, 20]),
+        a1=np.array(["A", "A"]), a2=np.array(["G", "C"]),
+        z=np.array([0.1, 0.2]), var_y=np.array(1.0),
+        bundle_version=np.array(2, dtype=np.int64), D=bad)
+    with pytest.raises(ValueError, match="symmetric"):
+        read_bundle(path)
+
+
+def test_read_sumstats_converts_beta_se_n(tmp_path):
+    path = tmp_path / "sumstats.tsv"
+    path.write_text(
+        "chrom\tpos\ta1\ta2\tbeta\tse\tn\n"
+        "1\t1\tA\tC\t0.01\t0.1\t4000\n"
+        "1\t2\tA\tC\t-0.02\t0.05\t3000\n",
+        encoding="utf-8")
+
+    variants, z, sd = read_sumstats(path, scale="beta-se-n")
+    assert np.allclose(
+        z, standardized_marginal([0.01, -0.02], [0.1, 0.05], [4000, 3000]))
+    assert variants.n == 2
+    assert sd is None
+
+
+def test_read_sumstats_beta_se_n_uses_n_eff_without_n_column(tmp_path):
+    path = tmp_path / "sumstats.tsv"
+    path.write_text(
+        "chrom\tpos\ta1\ta2\tbeta\tse\n1\t1\tA\tC\t0.01\t0.1\n",
+        encoding="utf-8")
+
+    with pytest.raises(ValueError, match="n_eff"):
+        read_sumstats(path, scale="beta-se-n")
+    _, z, _ = read_sumstats(path, scale="beta-se-n", n_eff=5000.0)
+    assert np.allclose(z, standardized_marginal([0.01], [0.1], 5000.0))
+
+
+def test_read_sumstats_beta_se_n_validates_rows_with_line_numbers(tmp_path):
+    path = tmp_path / "sumstats.tsv"
+    path.write_text(
+        "chrom\tpos\ta1\ta2\tbeta\tse\tn\n1\t1\tA\tC\t0.01\t0.0\t4000\n",
+        encoding="utf-8")
+
+    with pytest.raises(ValueError, match="line 2.*se"):
+        read_sumstats(path, scale="beta-se-n")
+
+
+def test_read_sumstats_rejects_unknown_scale(tmp_path):
+    path = tmp_path / "sumstats.tsv"
+    path.write_text("chrom\tpos\ta1\ta2\tz\n1\t1\tA\tC\t0.1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="scale"):
+        read_sumstats(path, scale="or")
+
+
+def test_cli_bundle_rejects_sumstats_scale(tmp_path):
+    weights_path, bundle_path, _ = _fixture(tmp_path)
+    with pytest.raises(ValueError, match="--sumstats-scale"):
+        main(["evaluate", "--weights", str(weights_path),
+              "--bundle", str(bundle_path), "--weight-scale", "standardized",
+              "--sumstats-scale", "beta-se-n"])
+
+
+def test_cli_sharded_mode_converts_beta_se_n(tmp_path, capsys):
+    directory, paths, variants, weights, _ = _ldref_fixture(tmp_path)
+    beta = np.array([0.05, 0.05, 0.05, 0.05])
+    se = np.array([0.02] * 4)
+    n_col = np.array([4000] * 4)
+    expected = evaluate_ldrefs(
+        paths, variants, weights, variants,
+        standardized_marginal(beta, se, n_col)).r2
+
+    weights_path = tmp_path / "weights.tsv"
+    sumstats_path = tmp_path / "sumstats.tsv"
+    weights_path.write_text(
+        "chrom\tpos\ta1\ta2\tweight\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t{weights[i]}\n"
+            for i in range(variants.n)), encoding="utf-8")
+    sumstats_path.write_text(
+        "chrom\tpos\ta1\ta2\tbeta\tse\tn\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t"
+            f"{beta[i]}\t{se[i]}\t{n_col[i]}\n" for i in range(variants.n)),
+        encoding="utf-8")
+
+    assert main([
+        "evaluate", "--weights", str(weights_path),
+        "--ldref-dir", str(directory), "--sumstats", str(sumstats_path),
+        "--sumstats-scale", "beta-se-n", "--weight-scale", "standardized",
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["r2"] == pytest.approx(expected)
+
+
+def test_cli_beta_se_n_without_n_column_requires_n_eff(tmp_path, capsys):
+    directory, paths, variants, weights, _ = _ldref_fixture(tmp_path)
+    beta = np.array([0.05, 0.05, 0.05, 0.05])
+    se = np.array([0.02] * 4)
+    weights_path = tmp_path / "weights.tsv"
+    sumstats_path = tmp_path / "sumstats.tsv"
+    weights_path.write_text(
+        "chrom\tpos\ta1\ta2\tweight\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t{weights[i]}\n"
+            for i in range(variants.n)), encoding="utf-8")
+    sumstats_path.write_text(
+        "chrom\tpos\ta1\ta2\tbeta\tse\n" + "".join(
+            f"{variants.chrom[i]}\t{variants.pos[i]}\tA\tC\t"
+            f"{beta[i]}\t{se[i]}\n" for i in range(variants.n)),
+        encoding="utf-8")
+
+    with pytest.raises(ValueError, match="n_eff"):
+        main(["evaluate", "--weights", str(weights_path),
+              "--ldref-dir", str(directory), "--sumstats", str(sumstats_path),
+              "--sumstats-scale", "beta-se-n", "--weight-scale", "standardized"])
+
+    assert main([
+        "evaluate", "--weights", str(weights_path),
+        "--ldref-dir", str(directory), "--sumstats", str(sumstats_path),
+        "--sumstats-scale", "beta-se-n", "--weight-scale", "standardized",
+        "--n-eff", "5000",
+    ]) == 0
+    result = json.loads(capsys.readouterr().out)
+    expected = evaluate_ldrefs(
+        paths, variants, weights, variants,
+        standardized_marginal(beta, se, 5000.0)).r2
+    assert result["r2"] == pytest.approx(expected)
+    # The same N that converted the statistics enters the (X3) correction.
+    assert result["r2_corrected"] == pytest.approx(expected - 1.0 / 5000.0)

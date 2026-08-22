@@ -6,7 +6,7 @@ chromosome-sharded block-int8 LD references, and emit a JSON
 
     ppb evaluate --weights weights.tsv --bundle benchmark.npz [--out result.json]
     ppb evaluate --weights weights.tsv --ldref-dir ldref --sumstats z.tsv \
-        [--out result.json]
+        [--sumstats-scale beta-se-n --n-eff N] [--out result.json]
 """
 
 from __future__ import annotations
@@ -45,6 +45,8 @@ def _cmd_evaluate(args) -> int:
         if args.sumstats or args.hwe_genotype_sd:
             raise ValueError(
                 "--sumstats and --hwe-genotype-sd apply only with --ldref-dir")
+        if args.sumstats_scale != "z":
+            raise ValueError("--sumstats-scale applies only with --ldref-dir")
         if args.var_y != 1.0:
             raise ValueError(
                 "--var-y applies only with --ldref-dir; bundles carry var_y")
@@ -75,7 +77,8 @@ def _cmd_evaluate(args) -> int:
             and not args.hwe_genotype_sd
         )
         sumstats_variants, z, genotype_sd = read_sumstats(
-            args.sumstats, read_genotype_sd=needs_empirical_sd)
+            args.sumstats, read_genotype_sd=needs_empirical_sd,
+            scale=args.sumstats_scale, n_eff=args.n_eff)
         result = evaluate_ldrefs(
             ldref_paths,
             wf.variants, wf.weights,
@@ -123,6 +126,13 @@ def build_parser() -> argparse.ArgumentParser:
         help=("standardized-z table for --ldref-dir: chrom, pos, a1, a2, z; "
               "optionally empirical genotype_sd"))
     ev.add_argument(
+        "--sumstats-scale", default="z", choices=("z", "beta-se-n"),
+        help=("scale of --sumstats with --ldref-dir: 'z' (default) reads the "
+              "standardized marginal z column; 'beta-se-n' reads beta and se "
+              "columns and converts by (M4) with the file's per-variant n "
+              "column, or --n-eff when the file has none. The scale is never "
+              "inferred"))
+    ev.add_argument(
         "--weight-scale", required=True,
         choices=("dosage", "standardized", "frozen"),
         help=("scale of the submitted weights: 'dosage' is ordinary "
@@ -132,8 +142,10 @@ def build_parser() -> argparse.ArgumentParser:
               "(refuse to guess — SD_REF is the fit-cohort SD, not the target)"))
     ev.add_argument(
         "--n-eff", type=float, default=None,
-        help="target GWAS effective sample size for the (X3) finite-sample "
-             "correction and its 1/N SE")
+        help=("target GWAS effective sample size for the (X3) finite-sample "
+              "correction and its 1/N SE; with --sumstats-scale beta-se-n it "
+              "is also the trait-level n used to convert beta/SE when the "
+              "file has no per-variant n column"))
     ev.add_argument(
         "--hwe-genotype-sd", action="store_true",
         help=("with --ldref-dir and dosage weights, use sqrt(2*af*(1-af)) "

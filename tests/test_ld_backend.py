@@ -211,6 +211,19 @@ def test_block_diagonal_rejects_negative_block_quadratic_form():
         ld.quad(full)
 
 
+def test_dense_rejects_asymmetric_matrix():
+    """An LD matrix is X'X/n up to gauge, so asymmetry is always a defect.
+
+    quad() uses the full matrix, so the defect does not even cancel: it
+    computes a quadratic form no LD matrix can produce, corrupting R^2 in a
+    direction the estimator's other guards do not check.
+    """
+    bad = np.eye(3)
+    bad[0, 1] = 0.5
+    with pytest.raises(ValueError, match="symmetric"):
+        DenseLD(bad)
+
+
 def test_block_diagonal_tolerates_rounding_on_a_psd_block():
     """The negativity check must not fire on float noise from a PSD block."""
     d = np.arange(60)

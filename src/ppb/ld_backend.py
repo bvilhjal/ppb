@@ -59,6 +59,28 @@ def _all_finite(a, chunk_rows=512):
     return True
 
 
+def _require_symmetric(a, *, rtol=1e-8, atol=1e-10, chunk_rows=512):
+    """Reject an asymmetric dense LD matrix, with a bounded temporary.
+
+    An LD matrix is ``X'X/n`` up to gauge, so asymmetry is always a defect.
+    :meth:`DenseLD.quad` uses the full matrix, so the defect does not even
+    cancel: it computes a quadratic form no LD matrix can produce, silently
+    corrupting ``R^2`` -- which the "R^2 > 1 means a hypothesis failed"
+    diagnostic would then misread. ``lowrank_ld`` rejects the same defect for
+    the opposite reason (``eigh`` reads one triangle); the shared tolerance is
+    that function's.
+    """
+    m = a.shape[0]
+    for start in range(0, m, chunk_rows):
+        rows = a[start:start + chunk_rows]
+        if not np.allclose(rows, a[:, start:start + chunk_rows].T,
+                           rtol=rtol, atol=atol):
+            raise ValueError(
+                "D must be symmetric: an LD matrix is X'X/n up to gauge, and "
+                "an asymmetric input computes a quadratic form no LD matrix "
+                "can produce")
+
+
 class LDBackend:
     """Interface: a length ``m`` LD operator exposing the quadratic form."""
 
@@ -85,12 +107,17 @@ class LDBackend:
 
 
 class DenseLD(LDBackend):
-    """Dense LD matrix ``D`` (m x m). Exact reference backend."""
+    """Dense LD matrix ``D`` (m x m). Exact reference backend.
+
+    ``D`` must be symmetric -- an LD matrix is ``X'X/n`` up to gauge -- and the
+    constructor rejects an asymmetric input.
+    """
 
     def __init__(self, D):
         D = np.ascontiguousarray(np.asarray(D, dtype=np.float64))
         if D.ndim != 2 or D.shape[0] != D.shape[1]:
             raise ValueError(f"D must be a square 2-D array; got shape {D.shape}")
+        _require_symmetric(D)
         self.D = D
         self.m = D.shape[0]
 

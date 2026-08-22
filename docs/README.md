@@ -83,7 +83,7 @@ numbered result to its module and its test, then the module.
 ## Reviews
 
 Point-in-time assessments, kept because the reasoning behind a change is worth
-more than the change. Neither is a live document; where one disagrees with a
+more than the change. None is a live document; where one disagrees with a
 specification above, the specification wins.
 
 - [`../REVIEW.md`](../REVIEW.md) — commit `bd5d0d9`, 2026-07-18. All findings resolved.
@@ -91,6 +91,11 @@ specification above, the specification wins.
   resolved, with one severity corrected in place after the original claim was
   disproved; two follow-ups (block diagnostics, and the overlap salvage) recorded
   at the end.
+- [`../REVIEW-2026-08-16.md`](../REVIEW-2026-08-16.md) — commit `5d2d680`, 2026-08-16.
+  Findings addressed the same day (gauge validation, novelty sweep, provenance,
+  multi-seed test rigor); three items remain open as external blockers —
+  regenerating the EUR pack with the new diagnostics, the two novelty leads, and
+  the first real cross-ancestry run.
 
 ## Conventions in the prose
 

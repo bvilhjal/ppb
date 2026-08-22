@@ -4,8 +4,10 @@
   position, effect allele, other allele, and the weight. Common PGS Catalog
   column names are recognised. ``#``-prefixed comment lines are skipped.
 - **Summary statistics**: the same four variant columns plus standardized
-  marginal ``z``. An optional empirical ``genotype_sd`` column puts ordinary
-  dosage weights on the standardized-genotype scale.
+  marginal ``z`` -- or ``beta``/``se`` with a per-variant ``n`` column (or a
+  declared trait-level ``n_eff``), converted to ``z`` by (M4) when
+  ``read_sumstats`` is asked to. An optional empirical ``genotype_sd`` column
+  puts ordinary dosage weights on the standardized-genotype scale.
 - **Bundle**: a ``.npz`` archive holding the benchmark's variant table, the target
   summary statistics ``z``, the LD reference (dense ``D`` or low-rank ``U``),
   and optionally target-cohort genotype SDs for dosage-scale weights.
@@ -32,8 +34,9 @@ from .harmonize import (
     _harmonize_to_details,
     harmonize_to,
 )
-from .ld_backend import DenseLD, LowRankLD
+from .ld_backend import DenseLD, LowRankLD, _require_symmetric
 from .ldref import read_ldref
+from .sumstats import standardized_marginal
 
 BUNDLE_VERSION = 2
 
@@ -53,6 +56,10 @@ _FROZEN_ALIASES = {
     "sd_ref": ("sd_ref",),
 }
 _SUMSTATS_ALIASES = {**_VARIANT_ALIASES, "z": ("z",)}
+_BETA_ALIASES = ("beta", "effect")
+_SE_ALIASES = ("se", "sebeta", "standard_error", "std_err")
+_N_ALIASES = ("n", "n_eff", "neff", "sample_size")
+_SUMSTATS_SCALES = ("z", "beta-se-n")
 
 
 def _resolve_columns(header, aliases, table_name):
@@ -201,11 +208,18 @@ def read_weights(path):
     return parsed.variants, parsed.weights
 
 
-def read_sumstats(path, *, read_genotype_sd: bool = True):
-    """Read a standardized-z table.
+def read_sumstats(path, *, read_genotype_sd: bool = True, scale: str = "z",
+                  n_eff: float | None = None):
+    """Read a standardized-``z`` table, or convert a ``beta``/``se`` table by (M4).
 
-    Required columns are ``chrom``, ``pos``, ``a1``, ``a2``, and exactly ``z``.
-    No beta/SE/N conversion is inferred. An optional empirical target-cohort
+    Required variant columns are ``chrom``, ``pos``, ``a1``, ``a2``. With the
+    default ``scale='z'`` the file must carry exactly ``z`` -- the standardized
+    marginal correlation the estimator consumes -- and no beta/SE/N conversion
+    is inferred. With ``scale='beta-se-n'`` the file must instead carry
+    ``beta`` and ``se``; the standardized marginal ``z_j = t_j/sqrt(t_j^2 + n_j
+    - 2)`` is then computed by :func:`ppb.standardized_marginal` from a
+    per-variant ``n`` column when the file carries one, and from the declared
+    trait-level ``n_eff`` when it does not. An optional empirical target-cohort
     ``genotype_sd`` column may be supplied on the same rows. Set
     ``read_genotype_sd=False`` when that column is deliberately irrelevant
     (standardized weights or an explicit HWE approximation); it is then neither
@@ -214,6 +228,8 @@ def read_sumstats(path, *, read_genotype_sd: bool = True):
     Returns ``(variants, z, genotype_sd)``; the last item is ``None`` when the
     optional column is absent.
     """
+    if scale not in _SUMSTATS_SCALES:
+        raise ValueError(f"scale must be one of {_SUMSTATS_SCALES}; got {scale!r}")
     with open(path, "r", encoding="utf-8") as fh:
         lines = (
             (i, ln.rstrip("\r\n"))
@@ -228,13 +244,48 @@ def read_sumstats(path, *, read_genotype_sd: bool = True):
                  else ("," if "," in header_line else None))
         split = (lambda ln: ln.split(delim)) if delim else (lambda ln: ln.split())
         header = split(header_line)
-        cols = _resolve_columns(header, _SUMSTATS_ALIASES, "sumstats")
+        cols = _resolve_columns(
+            header,
+            _SUMSTATS_ALIASES if scale == "z" else _VARIANT_ALIASES,
+            "sumstats")
         lut = {name.strip().lower().lstrip("#"): i
                for i, name in enumerate(header)}
         sd_col = lut.get("genotype_sd") if read_genotype_sd else None
-        need = max([*cols.values(), *([] if sd_col is None else [sd_col])]) + 1
 
-        chrom, pos, a1, a2, z, genotype_sd = [], [], [], [], [], []
+        def _column(aliases, field):
+            for alias in aliases:
+                if alias in lut:
+                    return lut[alias]
+            raise ValueError(
+                f"sumstats file {path!r} is missing a '{field}' column "
+                f"(looked for {aliases}); header was {header}")
+
+        beta_col = se_col = n_col = None
+        if scale == "beta-se-n":
+            beta_col = _column(_BETA_ALIASES, "beta")
+            se_col = _column(_SE_ALIASES, "se")
+            for alias in _N_ALIASES:
+                if alias in lut:
+                    n_col = lut[alias]
+                    break
+            if n_col is None:
+                if n_eff is None:
+                    raise ValueError(
+                        f"sumstats file {path!r} has no 'n' column (looked for "
+                        f"{_N_ALIASES}); pass n_eff to convert beta/SE with a "
+                        "trait-level constant sample size")
+                n_eff = float(n_eff)
+                if not np.isfinite(n_eff) or n_eff <= 2.0:
+                    raise ValueError("n_eff must be finite and greater than 2")
+
+        need_cols = [*cols.values(), *([] if sd_col is None else [sd_col])]
+        if beta_col is not None:
+            need_cols += [beta_col, se_col] + ([] if n_col is None else [n_col])
+        need = max(need_cols) + 1
+
+        chrom, pos, a1, a2, z = [], [], [], [], []
+        beta_v, se_v, n_v = [], [], []
+        genotype_sd = []
         for lineno, ln in lines:
             r = split(ln)
             if len(r) < need:
@@ -245,11 +296,31 @@ def read_sumstats(path, *, read_genotype_sd: bool = True):
             pos.append(int(r[cols["pos"]]))
             a1.append(r[cols["a1"]].strip())
             a2.append(r[cols["a2"]].strip())
-            value = float(r[cols["z"]])
-            if not np.isfinite(value):
-                raise ValueError(
-                    f"sumstats file {path!r} line {lineno}: z must be finite")
-            z.append(value)
+            if scale == "z":
+                value = float(r[cols["z"]])
+                if not np.isfinite(value):
+                    raise ValueError(
+                        f"sumstats file {path!r} line {lineno}: z must be finite")
+                z.append(value)
+            else:
+                b = float(r[beta_col])
+                s = float(r[se_col])
+                if not np.isfinite(b):
+                    raise ValueError(
+                        f"sumstats file {path!r} line {lineno}: beta must be finite")
+                if not np.isfinite(s) or s <= 0.0:
+                    raise ValueError(
+                        f"sumstats file {path!r} line {lineno}: se must be "
+                        "finite and positive")
+                beta_v.append(b)
+                se_v.append(s)
+                if n_col is not None:
+                    nj = float(r[n_col])
+                    if not np.isfinite(nj) or nj <= 2.0:
+                        raise ValueError(
+                            f"sumstats file {path!r} line {lineno}: n must be "
+                            "finite and greater than 2")
+                    n_v.append(nj)
             if sd_col is not None:
                 value = float(r[sd_col])
                 if not np.isfinite(value) or value <= 0.0:
@@ -257,12 +328,17 @@ def read_sumstats(path, *, read_genotype_sd: bool = True):
                         f"sumstats file {path!r} line {lineno}: genotype_sd "
                         "must be finite and strictly positive")
                 genotype_sd.append(value)
-    if not z:
+    if not chrom:
         raise ValueError(f"sumstats file {path!r} has no data rows")
     variants = VariantTable(chrom, pos, a1, a2)
+    if scale == "beta-se-n":
+        n = np.array(n_v) if n_col is not None else n_eff
+        z = standardized_marginal(np.array(beta_v), np.array(se_v), n)
+    else:
+        z = np.array(z, dtype=np.float64)
     sd = (np.array(genotype_sd, dtype=np.float64)
           if sd_col is not None else None)
-    return variants, np.array(z, dtype=np.float64), sd
+    return variants, z, sd
 
 
 @dataclass
@@ -577,6 +653,10 @@ def write_bundle(path, variants: VariantTable, z, *, D=None, U=None, var_y=1.0,
     if D is not None and operator.shape != (variants.n, variants.n):
         raise ValueError(
             f"D has shape {operator.shape}, expected ({variants.n}, {variants.n})")
+    if D is not None:
+        # Read-side validation would catch this through DenseLD, but fail at
+        # the write boundary instead of shipping a bundle that cannot be read.
+        _require_symmetric(operator)
     if U is not None and (operator.ndim != 2 or operator.shape[0] != variants.n):
         raise ValueError(
             f"U has shape {operator.shape}, expected ({variants.n}, r)")

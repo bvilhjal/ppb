@@ -177,8 +177,11 @@ ppb evaluate --weights weights.tsv --ldref-dir ldref/ \
   `ppb.write_bundle(..., genotype_sd=target_sd)`.
 - **sharded LD**: `--ldref-dir` reads `ldref_chr*.npz` files one at a time. The
   required `--sumstats` table has `chrom, pos, a1, a2, z` and may carry
-  `genotype_sd`. Here `z` means the standardized marginal correlation used by
-  the estimator; PPB deliberately does not guess a beta/SE/N conversion.
+  `genotype_sd`. By default `z` is the standardized marginal correlation used
+  by the estimator; with `--sumstats-scale beta-se-n` the table instead
+  carries `beta` and `se` (plus a per-variant `n` column, or `--n-eff` for a
+  trait-level constant), and PPB converts by (M4). The scale is never
+  inferred — both are declared.
 
 The command harmonizes both inputs to the LD variants and prints a JSON
 `EvaluationResult` with `R²`, `MSE`, harmonization counts, and — when `D` is

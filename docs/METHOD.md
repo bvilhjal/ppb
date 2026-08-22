@@ -222,8 +222,9 @@ store"), which is worth knowing before optimizing the quadratic form.
 **Implemented in** `ppb.evaluate` / `ppb evaluate` (V2–V7 for a bundle or
 sharded LD; V7 when `D` is block-diagonal with at least two blocks) and
 `scripts/regenerate_results.py` (V1–V7, genome-wide, one chromosome at a time).
-V1 is deliberately not inferred by the CLI: the sumstats column is already
-the standardized `z`.
+V1 is deliberately not inferred by the CLI: the default sumstats column is
+already the standardized `z`, and beta/SE/N inputs are converted only when
+`--sumstats-scale beta-se-n` declares them.
 
 ## 2. Exact vs. banded LD
 
