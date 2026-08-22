@@ -208,6 +208,36 @@ liability-scale `R²`.
 into `ldref_chr*.npz`. LR8, memory-mapped, and pre-shrunk caches are
 refused. The Phase-4 entry point is `scripts/cross_ancestry_eval.py`.
 
+## Cross-ancestry targets: FinnGen
+
+Two scripts set up summary-statistics-based evaluation against non-UKB
+biobanks; both store nothing themselves (the prep script streams).
+
+- `scripts/pgs_independence.py` screens the whole PGS Catalog for (H2): a
+  score is evaluable against a FinnGen target iff no FinnGen cohort entered
+  its training, and against a UKB-derived target iff no UKB cohort did. It
+  reads `samples_training` from the catalog REST API and writes one TSV row
+  per score (~7,000). `--ids PGS002026 ...` screens a subset.
+- `scripts/finngen_prep.py --endpoint T2D --pgs PGS002026 --out t2d.tsv`
+  joins a FinnGen DF13 endpoint (GRCh38) to the score's `hmPOS_GRCh37`
+  scoring file **on rsID**, emits the `chrom, pos, a1, a2, beta, se` table on
+  the reference build, and records the trait-level `n_eff =
+  4/(1/n_cases + 1/n_controls)` from the release manifest. Feed the output to
+
+  ```bash
+  ppb evaluate --weights <score weights> --ldref-dir ldref/ \
+    --sumstats t2d.tsv --sumstats-scale beta-se-n --n-eff <n_eff> \
+    --weight-scale standardized
+  ```
+
+  FinnGen publishes only case/control counts (no per-variant `n`), so binary
+  output is the standardized summary-statistic approximation on the observed
+  scale, not liability-scale R². There is no public Finnish LD panel; using
+  the EUR reference is the documented (H1) LD-mismatch approximation and must
+  be labelled as such. The scripts take `--weights` / `--endpoint-file` /
+  `--manifest` to work from local copies instead of the network (the tests
+  use exactly that).
+
 ## Experiments
 
 `experiments/` holds validated demonstrations, each encoded as a test: the
