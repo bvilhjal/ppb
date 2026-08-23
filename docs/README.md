@@ -69,6 +69,7 @@ numbered result to its module and its test, then the module.
 | [`NOTATION.md`](NOTATION.md) | reference | symbols, conventions, overloadings, index of results |
 | [`METHOD.md`](METHOD.md) | specification | the estimand and estimator (M1–M6), the hypotheses and what violating each costs, Algorithm V, LD representation, conventions, tolerances, exercises |
 | [`CROSS_ANCESTRY.md`](CROSS_ANCESTRY.md) | specification | target-ancestry inputs (X1), the gauge condition (X2), Theorem 1 on what is impossible without target data, exercises |
+| [`EMPIRICAL_SD.md`](EMPIRICAL_SD.md) | design (proposed) | extending the LD-reference schema to carry empirical per-variant SDs, and the panel options for the first non-European reference — the Phase-4 prerequisite |
 | [`OVERLAP.md`](OVERLAP.md) | scope | shared training/target noise: the mechanism, how it is detected, and why correction is not offered (the experimental apparatus lives in `../experiments/overlap_detection.py`) |
 | [`CALIBRATION.md`](CALIBRATION.md) | scope | whether the target `z` is on the assumed scale: LD scores (C1), LD-score regression (C2), the implied rescaling (C3); implemented in `../experiments/z_calibration.py` |
 | [`SCORE_DISTRIBUTION.md`](SCORE_DISTRIBUTION.md) | specification | the score's mean (P1) and variance (P2) in a population, from allele frequencies and LD; what two moments can support |
@@ -78,6 +79,7 @@ numbered result to its module and its test, then the module.
 | [`../results/schema.md`](../results/schema.md) | specification | the result-pack format (R1) and the rules CI enforces |
 | [`../experiments/README.md`](../experiments/README.md) | record | each simulation, what it demonstrates, and the numbers it produces |
 | [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md) | intent | objective, gates, delivery plan, claims discipline |
+| [`../PAPER_PLAN.md`](../PAPER_PLAN.md) | intent | manuscript plan: claim stack, preconditions, venue, display map from existing artifacts, objections, writing checklist |
 | [`../archive/README.md`](../archive/README.md) | record | what the original notebook is, and why it is an oracle rather than a source |
 
 ## Reviews
@@ -95,7 +97,9 @@ specification above, the specification wins.
   Findings addressed the same day (gauge validation, novelty sweep, provenance,
   multi-seed test rigor); three items remain open as external blockers —
   regenerating the EUR pack with the new diagnostics, the two novelty leads, and
-  the first real cross-ancestry run.
+  the first real cross-ancestry run. (The two novelty leads were closed by the
+  2026-08-23 follow-up sweep recorded in [`NOVELTY.md`](NOVELTY.md); the other
+  two remain open.)
 
 ## Conventions in the prose
 

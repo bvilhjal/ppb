@@ -32,9 +32,12 @@ family, (d) cross-population measurement as the contribution.
 | Wang et al. | 2020 | none: deterministic model *predicting* transferred R² from discovery-side quantities plus target LD/frequencies (the "predict" branch) | predicts | Wang, Guo, Ni, Yang, Visscher, Yengo, *Nat Commun* 11:3865, [doi:10.1038/s41467-020-17719-y](https://doi.org/10.1038/s41467-020-17719-y) — verified (Europe PMC) |
 | XPASS (Cai et al.) | 2021 | integrates multi-population GWAS statistics through a cross-population genetic-correlation model to output weights | constructs | Cai et al., *Am J Hum Genet* 108(4):632–655, [doi:10.1016/j.ajhg.2021.03.002](https://doi.org/10.1016/j.ajhg.2021.03.002) — verified (Europe PMC) |
 | PRS-CSx (Ruan et al.) | 2022 | couples effect-size estimation across populations via a shared signal prior on multi-population GWAS statistics + per-population LD references | constructs | Ruan et al., *Nat Genet* 54(5):573–580, [doi:10.1038/s41588-022-01054-7](https://doi.org/10.1038/s41588-022-01054-7) — verified (Europe PMC) |
+| TL-PRS (Zhao et al.) | 2022 | fine-tunes a source-trained score to the target ancestry by gradient descent on target-ancestry GWAS statistics with reference-panel LD; individual-level data still used for validation and testing, pseudovalidation named as a workaround | constructs | Zhao, Fritsche, Smith, Mukherjee, Lee, *Am J Hum Genet* 109(11):1998–2008, [doi:10.1016/j.ajhg.2022.09.010](https://doi.org/10.1016/j.ajhg.2022.09.010) — verified (PMC full text; added 2026-08-23) |
 | X-Wing (Miao et al.) | 2023 | quantifies local cross-population genetic correlation and combines population-specific scores from summary statistics | constructs | Miao et al., *Nat Commun* 14:832, [doi:10.1038/s41467-023-36544-7](https://doi.org/10.1038/s41467-023-36544-7) — verified (Europe PMC) |
 | CT-SLEB (Zhang et al.) | 2023 | empirical-Bayes ancestry-specific effects from large EUR + smaller non-EUR GWAS statistics after clumping and thresholding | constructs | Zhang et al., *Nat Genet* 55(10):1757–1768, [doi:10.1038/s41588-023-01501-z](https://doi.org/10.1038/s41588-023-01501-z) — verified (Europe PMC) |
 | Ding et al. | 2023 | none: individual-level portability measurement across the genetic ancestry continuum (All of Us) | evaluates (individual-level) | Ding et al., *Nature* 618(7966):774–781, [doi:10.1038/s41586-023-06079-4](https://doi.org/10.1038/s41586-023-06079-4) — verified (Europe PMC) |
+| Wang et al. (global biobanks) | 2023 | none: individual-level multi-biobank comparison of strategies for developing scores across diverse cohorts, ancestry-specific effect sizes among them | evaluates (individual-level) | Ying Wang, Namba, Lopera, Kerminen, Tsuo, Läll, et al., *Cell Genomics* 3(1):100241, [doi:10.1016/j.xgen.2022.100241](https://doi.org/10.1016/j.xgen.2022.100241) — verified (PubMed metadata; added 2026-08-23) |
+| Wang et al. (PRIMED) | 2023 | none: individual-level evaluation of how ancestry, genetic architecture, and methodology govern cross-population predictive performance | evaluates (individual-level) | Ying Wang, Kanai, Tan, …, Martin, *Cell Genomics* 3(10):100408, [doi:10.1016/j.xgen.2023.100408](https://doi.org/10.1016/j.xgen.2023.100408) — verified (PMC full text; added 2026-08-23) |
 | SBayesRC (Zheng et al.) | 2024 | annotation-informed priors and wider genome coverage improve prediction *between* ancestries; training LD is matched to the GWAS, one population at a time | constructs | Zheng et al., *Nat Genet* 56(5):767–777, [doi:10.1038/s41588-024-01704-y](https://doi.org/10.1038/s41588-024-01704-y) — verified (Europe PMC) |
 | MUSSEL (Jin et al.) | 2024 | ancestry-group-specific effect estimates borrowing information across multi-ancestry GWAS statistics and LD references | constructs | Jin et al., *Cell Genomics* 4(4):100539, [doi:10.1016/j.xgen.2024.100539](https://doi.org/10.1016/j.xgen.2024.100539) — verified (Europe PMC) |
 | PUMAS framework, extended (Zhao et al.) | 2024 | summary-statistic optimization, benchmarking and ensembling of existing scores on one GWAS; analyses "constrained … to the European ancestral population"; cross-ancestry benchmarking named as future work requiring ancestry-specific GWAS and LD references | tunes + benchmarks (within-ancestry) | Zhao et al., *Genome Biol* 25(1):260, [doi:10.1186/s13059-024-03400-w](https://doi.org/10.1186/s13059-024-03400-w) — verified (journal full text) |
@@ -103,11 +106,18 @@ target-ancestry summary statistics with the identity" in any unqualified form.
 (3) The claim is scholarly, not mathematical — an identity cannot be owned,
 and the framing claim is falsifiable by one uncited paper, so this sweep should
 be re-run (or extended through Google Scholar and citation-chasing from PTL-PRS
-and MIXPRS) before submission. (4) Two leads could not be verified and remain
-open: a possible Pattee-group paper "integrating cross-ancestry and
-ancestry-specific effects" surfaced by a Wiley/ResearchGate snippet whose DOI
-resolves to a conference-abstracts issue, and Wang et al. 2023 (*Cell Genomics*,
-ancestry-specific effect sizes), seen only as a search snippet.
+and MIXPRS) before submission. (4) Closed 2026-08-23. Both leads left open by
+the 2026-08-16 sweep were resolved by the follow-up recorded in the appendix:
+the "Wang et al. 2023 (*Cell Genomics*, ancestry-specific effect sizes)" lead
+is two individual-level applied papers (the global-biobank strategies paper,
+3(1):100241, and the PRIMED cross-population evaluation, 3(10):100408), both
+now in Table 1 and neither measuring portability from summary statistics; and
+no Pattee-group cross-ancestry paper exists in any indexed source reached —
+the only Pattee & Pan method remains the 2020 quasi-correlation paper, and the
+Wiley/ResearchGate snippet was almost certainly a journal article *citing* it
+(the DOI resolving to a conference-abstracts issue). The citation-chase from
+PTL-PRS added its direct predecessor TL-PRS (Zhao et al. 2022). Verdict (d) is
+unchanged by all three additions.
 
 ## Appendix: search terms used
 
@@ -139,3 +149,20 @@ blocked), biorxiv.org (data-fission preprint — timed out), and Europe PMC REST
 queries by DOI/title for: lassosum, Pattee & Pan, PUMAS, Zhao 2024, Wang 2020,
 Ding 2023, XPASS, CT-SLEB, PRS-CSx, MUSSEL, SBayesRC, X-Wing, PRStuning,
 MIXPRS, PTL-PRS, Witteveen et al.
+
+Addendum — follow-up sweep 2026-08-23 (closing the two open leads and the
+PTL-PRS citation chase; run by web search with primary-source fetches):
+
+17. `Wang 2023 "Cell Genomics" ancestry-specific effect sizes polygenic score`
+18. `Pattee Pan "cross-ancestry" "ancestry-specific" effects polygenic score abstract Genetic Epidemiology Wiley`; variants restricted to `onlinelibrary.wiley.com`
+19. `polygenic score accuracy evaluation "summary statistics" target ancestry without individual-level data method 2024 2025 PTL-PRS citing`
+20. `"Polygenic prediction across populations is influenced by ancestry, genetic architecture, and methodology" Cell Genomics authors year`
+
+Primary-source fetches: pmc.ncbi.nlm.nih.gov PMC9674947 (TL-PRS — title, DOI,
+and target-summary-statistic usage confirmed from the full text) and PMC10589629
+(Wang et al. 2023 3(10):100408 — DOI confirmed from the article header); the
+3(1):100241 record was confirmed from PubMed metadata (PMID 36777179) and the
+publisher page. The Pattee-group queries (18) surfaced only articles *citing*
+Pattee & Pan (2020); no cross-ancestry method paper from that group was found.
+No change to the verdict; the additions strengthen the "individual-level
+evaluation" cluster rather than the measurement slot.
