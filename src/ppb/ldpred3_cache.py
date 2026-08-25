@@ -124,14 +124,24 @@ def _load_dense_block(store, i, k, kind, *, allow_lr_expand):
         U = np.asarray(store[ukey])
         if U.ndim != 2 or U.shape[0] != k:
             raise ValueError(f"block {i} low-rank factor has shape {U.shape}")
-        scale = 1.0
+        scale = None
         if "scales" in store.files:
             scales = np.asarray(store["scales"], dtype=np.float64)
             if i < scales.size:
                 scale = float(scales[i])
         if U.dtype == np.int8:
+            if scale is None:
+                raise ValueError(
+                    f"block {i} is an int8 (LR8) factor but the cache has no "
+                    "'scales' entry for it; the quantization scale is "
+                    "unrecoverable, so the block cannot be expanded")
             U = U.astype(np.float64) * scale
         else:
+            if scale is not None and scale != 1.0:
+                raise ValueError(
+                    f"block {i} is a float low-rank factor but carries "
+                    f"scale={scale}; per-block scales apply to int8 (LR8) "
+                    "factors only and would be silently ignored here")
             U = U.astype(np.float64)
         D = U @ U.T
         if dkey in store.files:
@@ -149,13 +159,16 @@ def convert_ldpred3_cache(path, out_dir, *, packed: bool = True,
                           allow_lr_expand: bool = False,
                           allow_shrunk: bool = False,
                           compress: bool = False,
-                          psd_scan: bool = False) -> ConvertReport:
+                          psd_scan: bool = True) -> ConvertReport:
     """Write per-chromosome ppb LD-reference files from one LDpred3 cache.
 
     Memory-mapped caches (``ondisk=1``) are refused: reopen them with
     ``ldpred3.load_ld_blocks`` and ``save_ld_blocks(..., mmap=False)``, or
     write a non-mmap cache. Shrinkage toward the identity is refused unless
     ``allow_shrunk`` is set, because ``wᵀ D_a w`` understates the denominator.
+    ``psd_scan`` defaults to True, matching :func:`~ppb.ldref.write_ldref`;
+    pass ``psd_scan=False`` to skip the Lanczos indefiniteness scan on large
+    blocks (a write-time cost).
     """
     path = Path(path)
     out_dir = Path(out_dir)

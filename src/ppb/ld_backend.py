@@ -574,6 +574,14 @@ def lowrank_ld(corr, variance=0.99, max_rank=None, min_eig=1e-6) -> LowRankLD:
     quantise it to int8, which ppb does not implement (``docs/METHOD.md`` s2).
     ``variance=1.0`` keeps full rank and reproduces ``corr`` exactly.
 
+    Retained eigenvalues are floored at ``min_eig`` (default 1e-6) before
+    their square root is folded into ``U``: a kept direction whose true
+    eigenvalue is smaller -- including the zeros the PSD clip above can leave
+    -- enters with variance ``min_eig`` instead of its true value. The row
+    normalization still yields a unit diagonal, so the floor only perturbs
+    the reconstructed off-diagonals, and only on near-degenerate spectra
+    where the variance rule retained a numerically empty direction.
+
     The retained rank is raised past the ``variance`` rule if that rule would
     leave any variant with no support among the kept eigenvectors -- see the
     comment at the extension loop for why that case is dangerous. Raises if

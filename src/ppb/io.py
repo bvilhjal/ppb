@@ -41,9 +41,13 @@ from .sumstats import standardized_marginal
 BUNDLE_VERSION = 2
 
 # Canonical column -> accepted header aliases (lower-cased, '#' stripped).
+# The first alias present in the header wins. ``hm_chr``/``hm_pos`` lead
+# because the LD reference is GRCh37 and PGS Catalog ``*_hmPOS_GRCh37`` files
+# carry both author-build (``chr_name``/``chr_position``) and harmonized
+# columns -- the harmonized ones are the build-known coordinates.
 _VARIANT_ALIASES = {
-    "chrom": ("chrom", "chr", "chr_name", "chromosome", "hm_chr"),
-    "pos": ("pos", "position", "chr_position", "bp", "base_pair_location", "hm_pos"),
+    "chrom": ("hm_chr", "chrom", "chr", "chr_name", "chromosome"),
+    "pos": ("hm_pos", "pos", "position", "chr_position", "bp", "base_pair_location"),
     "a1": ("a1", "effect_allele", "ea", "allele1", "effectallele"),
     "a2": ("a2", "other_allele", "oa", "noneffect_allele", "allele2", "otherallele"),
 }
@@ -77,6 +81,17 @@ def _resolve_columns(header, aliases, table_name):
     return cols
 
 
+def _parse_literal(raw, cast, field, *, table_name, path, lineno):
+    """Parse one numeric literal, re-raising malformed ones with file/line."""
+    try:
+        return cast(raw)
+    except ValueError:
+        kind = "integer" if cast is int else "number"
+        raise ValueError(
+            f"{table_name} file {path!r} line {lineno}: {field} is not a "
+            f"valid {kind} (got {raw!r})") from None
+
+
 def _read_value_table(path, *, aliases, value_name, table_name):
     """Read one finite numeric value beside the canonical variant columns."""
     with open(path, "r", encoding="utf-8") as fh:
@@ -102,10 +117,14 @@ def _read_value_table(path, *, aliases, value_name, table_name):
                     f"{table_name} file {path!r} line {lineno}: expected {need} "
                     f"fields, got {len(r)}")
             chrom.append(r[cols["chrom"]].strip())
-            pos.append(int(r[cols["pos"]]))
+            pos.append(_parse_literal(
+                r[cols["pos"]], int, "pos",
+                table_name=table_name, path=path, lineno=lineno))
             a1.append(r[cols["a1"]].strip())
             a2.append(r[cols["a2"]].strip())
-            x = float(r[cols[value_name]])
+            x = _parse_literal(
+                r[cols[value_name]], float, value_name,
+                table_name=table_name, path=path, lineno=lineno)
             if not np.isfinite(x):
                 raise ValueError(
                     f"{table_name} file {path!r} line {lineno}: "
@@ -293,18 +312,31 @@ def read_sumstats(path, *, read_genotype_sd: bool = True, scale: str = "z",
                     f"sumstats file {path!r} line {lineno}: expected {need} "
                     f"fields, got {len(r)}")
             chrom.append(r[cols["chrom"]].strip())
-            pos.append(int(r[cols["pos"]]))
+            pos.append(_parse_literal(
+                r[cols["pos"]], int, "pos",
+                table_name="sumstats", path=path, lineno=lineno))
             a1.append(r[cols["a1"]].strip())
             a2.append(r[cols["a2"]].strip())
             if scale == "z":
-                value = float(r[cols["z"]])
+                value = _parse_literal(
+                    r[cols["z"]], float, "z",
+                    table_name="sumstats", path=path, lineno=lineno)
                 if not np.isfinite(value):
                     raise ValueError(
                         f"sumstats file {path!r} line {lineno}: z must be finite")
+                if abs(value) > 1.0 + 1e-12:
+                    raise ValueError(
+                        f"sumstats file {path!r} line {lineno}: z must be a "
+                        f"standardized marginal correlation, |z| <= 1; "
+                        f"got {value}")
                 z.append(value)
             else:
-                b = float(r[beta_col])
-                s = float(r[se_col])
+                b = _parse_literal(
+                    r[beta_col], float, "beta",
+                    table_name="sumstats", path=path, lineno=lineno)
+                s = _parse_literal(
+                    r[se_col], float, "se",
+                    table_name="sumstats", path=path, lineno=lineno)
                 if not np.isfinite(b):
                     raise ValueError(
                         f"sumstats file {path!r} line {lineno}: beta must be finite")
@@ -315,7 +347,9 @@ def read_sumstats(path, *, read_genotype_sd: bool = True, scale: str = "z",
                 beta_v.append(b)
                 se_v.append(s)
                 if n_col is not None:
-                    nj = float(r[n_col])
+                    nj = _parse_literal(
+                        r[n_col], float, "n",
+                        table_name="sumstats", path=path, lineno=lineno)
                     if not np.isfinite(nj) or nj <= 2.0:
                         raise ValueError(
                             f"sumstats file {path!r} line {lineno}: n must be "
@@ -352,7 +386,8 @@ class LDRefEvaluationResult(EvaluationResult):
 
 _REPORT_COUNTS = (
     "n_reference", "n_target", "n_matched", "n_sign_flipped",
-    "n_strand_flipped", "n_ambiguous_removed", "n_mismatch", "n_unmatched",
+    "n_strand_flipped", "n_ambiguous_removed", "n_ambiguous_indel_removed",
+    "n_mismatch", "n_unmatched",
 )
 
 
@@ -441,6 +476,17 @@ def evaluate_ldrefs(
     ``weight_scale='frozen'`` converts LDpred3 ``WEIGHT / SD_REF`` to
     dosage first (``sd_ref`` in ``weights_variants`` order). Block
     jackknife and sign-flip diagnostics are accumulated across shards.
+
+    Unlike :func:`ppb.evaluate.evaluate`, this path always harmonizes the
+    summary statistics: a sharded run has no whole-reference table to
+    recognise, so the ``same_variants`` shortcut never applies and
+    strand-ambiguous (palindromic) sumstats variants are dropped even when
+    the file is already in reference order. Identical inputs can therefore
+    score a slightly different variant set -- and a slightly different R2 --
+    through the two entry points. This asymmetry is deliberate (dropping
+    palindromes on the sharded path is the conservative reading); it is
+    documented rather than aligned because aligning it would change
+    published R2 values.
     """
     if isinstance(ldref_paths, (str, Path)):
         ldref_paths = [ldref_paths]

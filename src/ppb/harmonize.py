@@ -4,7 +4,8 @@ To evaluate a polygenic score, the weights ``w``, the target summary statistics
 ``z``, and the LD matrix ``D`` must all refer to the same variants in the same
 order with a consistent effect allele. :func:`harmonize_to` aligns an incoming
 table to a canonical reference variant set, flipping the sign of the value on
-allele swaps and strand flips and dropping strand-ambiguous (palindromic) SNPs.
+allele swaps and strand flips and dropping strand-ambiguous (palindromic)
+variants -- SNPs and, via reverse complementation, indels such as AT/TA.
 This mirrors ``bigsnpr::snp_match`` (Privé), the setup the benchmark follows.
 
 Variants are matched by ``(chrom, pos)``; alleles resolve the orientation.
@@ -197,6 +198,9 @@ class HarmonizeReport:
     n_ambiguous_removed: int
     n_mismatch: int          # position found but alleles incompatible
     n_unmatched: int         # position not found in the reference
+    # Palindromic indels (allele pairs invariant under reverse complementation,
+    # e.g. AT/TA) dropped alongside, but counted apart from, palindromic SNPs.
+    n_ambiguous_indel_removed: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -240,6 +244,7 @@ def _harmonize_to_details(reference: VariantTable, target: VariantTable, value,
         if return_target_index else None
     )
     n_matched = n_sign = n_strand = n_ambig = n_mismatch = n_unmatched = 0
+    n_indel_ambig = 0
 
     target_keys = zip(target.norm_chrom.tolist(),
                       target.pos.astype(np.int64).tolist())
@@ -252,9 +257,19 @@ def _harmonize_to_details(reference: VariantTable, target: VariantTable, value,
             n_unmatched += 1
             continue
         t1, t2 = target_a1[i], target_a2[i]
-        if remove_ambiguous and frozenset((t1, t2)) in _AMBIGUOUS:
-            n_ambig += 1
-            continue
+        if remove_ambiguous:
+            if frozenset((t1, t2)) in _AMBIGUOUS:
+                n_ambig += 1
+                continue
+            c1, c2 = _complement(t1), _complement(t2)
+            if (c1 is not None and c2 is not None
+                    and frozenset((c1, c2)) == frozenset((t1, t2))):
+                # Palindromic indel: the allele pair is invariant under
+                # reverse complementation (AT/TA, or mutual reverse
+                # complements like AAT/ATT), so strand is just as
+                # unresolvable as for a palindromic SNP.
+                n_indel_ambig += 1
+                continue
         match = None
         for j in candidates:
             res = _orient(t1, t2, ref_a1[j], ref_a2[j])
@@ -287,7 +302,8 @@ def _harmonize_to_details(reference: VariantTable, target: VariantTable, value,
     report = HarmonizeReport(
         n_reference=reference.n, n_target=target.n, n_matched=n_matched,
         n_sign_flipped=n_sign, n_strand_flipped=n_strand,
-        n_ambiguous_removed=n_ambig, n_mismatch=n_mismatch, n_unmatched=n_unmatched)
+        n_ambiguous_removed=n_ambig, n_mismatch=n_mismatch,
+        n_unmatched=n_unmatched, n_ambiguous_indel_removed=n_indel_ambig)
     return aligned, report, used, orientation, target_index
 
 
@@ -303,7 +319,9 @@ def harmonize_to(reference: VariantTable, target: VariantTable, value,
     matched value of zero from a missing variant and lets callers form a joint
     intersection across inputs. Strand-ambiguous palindromic SNPs are dropped
     when ``remove_ambiguous`` (the default), since strand cannot be resolved
-    from alleles alone.
+    from alleles alone; so are palindromic *indels* -- allele pairs invariant
+    under reverse complementation such as AT/TA -- counted separately as
+    ``n_ambiguous_indel_removed``.
 
     Two target rows that resolve to the same reference variant are rejected:
     silently taking the first would make the answer depend on input row order.

@@ -217,7 +217,9 @@ def assortatively_mated_offspring(hap, phenotype, block_sizes, rng, *,
     Returns ``(offspring_hap, realized_spouse_correlation)``. The realized
     correlation is reported rather than assumed: the rank-pairing construction
     hits the target closely but not exactly, and the achieved value is the one
-    any downstream theory must be checked against.
+    any downstream theory must be checked against. Two offspring are produced
+    per pair, so an even parent count ``n`` yields exactly ``n`` offspring;
+    an odd ``n`` floors to ``n - 1`` (one parent is left unpaired).
     """
     if not 0.0 <= spouse_correlation < 1.0:
         raise ValueError(
@@ -241,7 +243,7 @@ def assortatively_mated_offspring(hap, phenotype, block_sizes, rng, *,
     realized = float(np.corrcoef(y[a], y[b])[0, 1])
 
     block_starts = np.concatenate([[0], np.cumsum(list(block_sizes))[:-1]])
-    pairs = np.concatenate([a, a])          # two offspring per pair, so n is stable
+    pairs = np.concatenate([a, a])          # two offspring per pair; odd n floors to n - 1
     mates = np.concatenate([b, b])
     offspring = np.empty((pairs.size, 2, hap.shape[2]), dtype=np.uint8)
     offspring[:, 0] = _gametes(hap, pairs, block_starts, rng, recombination)

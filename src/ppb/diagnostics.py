@@ -196,8 +196,12 @@ def sign_flip_null(u, v, *, var_y: float = 1.0, n_draws: int = 0,
     ``null_mean`` is the accuracy this score would report from block noise alone
     at its own magnitudes -- read a small ``R^2`` against it rather than against
     zero. ``z`` is the sign-flip statistic: how coherently the blocks agree.
-    With ``n_draws > 0`` an empirical one-sided p-value is added; the normal
-    approximation to ``z`` is usually enough at 431 blocks.
+    With ``n_draws > 0`` an empirical two-sided p-value is added (each draw
+    compares ``|sum_b eps_b u_b|`` against ``|sum_b u_b|``); the normal
+    approximation to ``z`` is usually enough at 431 blocks. The draws use
+    ``rng`` when given; with the default ``rng=None`` a fresh unseeded
+    ``np.random.default_rng()`` is created, so the p-value is then not
+    reproducible from run to run.
 
     **``z`` is bounded by ``sqrt(n_blocks)``** by Cauchy-Schwarz, attained when
     every block contributes the same signed amount. So it is a coherence measure

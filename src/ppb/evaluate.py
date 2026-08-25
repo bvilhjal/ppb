@@ -148,6 +148,13 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
     reference order by construction -- there is no strand to resolve, so the
     pass is skipped rather than run and reported as ambiguous removals that
     never existed. ``weights_variants`` is a submission and is always resolved.
+
+    Note the asymmetry with the sharded entry point,
+    :func:`ppb.io.evaluate_ldrefs`: it has no whole-reference table to
+    recognise, so it always harmonizes (and drops palindromes). The same
+    inputs can therefore score a slightly different variant set -- and a
+    slightly different R2 -- through the two paths when the summary
+    statistics carry palindromic variants.
     """
     if ld.m != ld_variants.n:
         raise ValueError(
@@ -177,7 +184,8 @@ def evaluate(ld: LDBackend, ld_variants: VariantTable,
         zrep = HarmonizeReport(
             n_reference=ld_variants.n, n_target=ld_variants.n,
             n_matched=ld_variants.n, n_sign_flipped=0, n_strand_flipped=0,
-            n_ambiguous_removed=0, n_mismatch=0, n_unmatched=0)
+            n_ambiguous_removed=0, n_mismatch=0, n_unmatched=0,
+            n_ambiguous_indel_removed=0)
     else:
         z_aligned, zrep, zmask, _, z_source = _harmonize_to_details(
             ld_variants, sumstats_variants, z,

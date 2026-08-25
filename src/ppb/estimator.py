@@ -12,6 +12,8 @@ See ``docs/METHOD.md``.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from .ld_backend import LDBackend
@@ -22,7 +24,9 @@ def frozen_to_dosage(weights, sd_ref):
 
     ``b_j = WEIGHT_j / SD_REF_j``. ``SD_REF`` is the *fit-cohort* dosage SD.
     Variants with ``SD_REF <= 0`` (monomorphic in the fit cohort) are set to
-    zero rather than divided. The result still needs the *target* genotype SD
+    zero rather than divided; when that zeroes a nonzero weight a warning
+    reports how many, since those variants silently vanish from
+    ``n_variants_scored``. The result still needs the *target* genotype SD
     before it multiplies ``D``.
     """
     w = np.asarray(weights, dtype=np.float64)
@@ -38,6 +42,13 @@ def frozen_to_dosage(weights, sd_ref):
     out = np.zeros(w.shape[0], dtype=np.float64)
     positive = sd > 0.0
     out[positive] = w[positive] / sd[positive]
+    n_zeroed = int(np.count_nonzero(~positive & (w != 0.0)))
+    if n_zeroed:
+        warnings.warn(
+            f"frozen_to_dosage zeroed {n_zeroed} nonzero weight(s) with "
+            "SD_REF == 0 (monomorphic in the fit cohort); they drop out of "
+            "n_variants_scored",
+            stacklevel=2)
     return out
 
 

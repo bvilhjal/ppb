@@ -67,6 +67,43 @@ def test_palindromic_kept_when_disabled():
     assert rep.n_ambiguous_removed == 0 and rep.n_matched == 1
 
 
+def test_palindromic_indel_removed_by_default():
+    """AT/TA is invariant under reverse complementation: strand unresolvable."""
+    ref = VariantTable([1, 1], [100, 200], ["AT", "A"], ["TA", "G"])
+    tgt = VariantTable([1, 1], [100, 200], ["TA", "A"], ["AT", "G"])
+    aligned, rep = harmonize_to(ref, tgt, [0.9, 0.5])
+    assert np.allclose(aligned, [0.0, 0.5])
+    assert rep.n_ambiguous_removed == 0
+    assert rep.n_ambiguous_indel_removed == 1
+    assert rep.n_matched == 1
+
+
+def test_mutual_reverse_complement_indel_removed_by_default():
+    """AAT/ATT are each other's reverse complement: the pair maps to itself."""
+    ref = VariantTable([1], [100], ["AAT"], ["ATT"])
+    tgt = VariantTable([1], [100], ["ATT"], ["AAT"])
+    aligned, rep = harmonize_to(ref, tgt, [0.9])
+    assert np.allclose(aligned, [0.0])
+    assert rep.n_ambiguous_indel_removed == 1 and rep.n_matched == 0
+
+
+def test_palindromic_indel_kept_when_disabled():
+    ref = VariantTable([1], [100], ["AT"], ["TA"])
+    tgt = VariantTable([1], [100], ["AT"], ["TA"])
+    aligned, rep = harmonize_to(ref, tgt, [0.9], remove_ambiguous=False)
+    assert np.allclose(aligned, [0.9])
+    assert rep.n_ambiguous_indel_removed == 0 and rep.n_matched == 1
+
+
+def test_non_palindromic_indel_still_matches():
+    """A/AT reads T/TA on the minus strand: a different pair, so resolvable."""
+    ref = VariantTable([1], [100], ["A"], ["AT"])
+    tgt = VariantTable([1], [100], ["AT"], ["A"])           # swapped, not palindromic
+    aligned, rep = harmonize_to(ref, tgt, [0.5])
+    assert np.allclose(aligned, [-0.5])
+    assert rep.n_ambiguous_indel_removed == 0 and rep.n_sign_flipped == 1
+
+
 def test_allele_mismatch_is_counted_as_mismatch():
     ref = _ref()
     tgt = VariantTable([1], [200], ["A"], ["C"])          # pos 200 is C/T in ref

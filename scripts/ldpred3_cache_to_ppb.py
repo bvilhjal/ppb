@@ -36,13 +36,13 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--compress", action="store_true", help="np.savez_compressed")
     parser.add_argument(
-        "--psd-scan", action="store_true",
-        help="Lanczos indefiniteness scan on large blocks (slow)")
+        "--no-psd-scan", action="store_true",
+        help="skip the Lanczos indefiniteness scan on large blocks (faster)")
     args = parser.parse_args(argv)
     report = convert_ldpred3_cache(
         args.cache, args.out_dir, packed=not args.square,
         allow_lr_expand=args.allow_lr_expand, allow_shrunk=args.allow_shrunk,
-        compress=args.compress, psd_scan=args.psd_scan)
+        compress=args.compress, psd_scan=not args.no_psd_scan)
     print(f"wrote {len(report.paths)} chromosome file(s) "
           f"({report.n_variants} variants, {report.n_blocks} blocks; "
           f"d8={report.n_d8} float={report.n_float_quantised} "

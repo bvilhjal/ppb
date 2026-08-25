@@ -4,6 +4,8 @@ matrix and identical standardization are used. This is validation criterion #1
 in the completion plan.
 """
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -144,12 +146,25 @@ def test_x3_rejects_tiny_or_nonfinite_n():
 def test_frozen_to_dosage_divides_by_fit_cohort_sd_and_zeroes_monomorphs():
     w = np.array([0.2, 0.4, 0.6])
     sd = np.array([0.5, 0.0, 2.0])
-    dosage = frozen_to_dosage(w, sd)
+    with pytest.warns(UserWarning, match="zeroed 1 nonzero weight"):
+        dosage = frozen_to_dosage(w, sd)
     assert dosage[0] == pytest.approx(0.4)
     assert dosage[1] == 0.0
     assert dosage[2] == pytest.approx(0.3)
     with pytest.raises(ValueError, match="non-negative"):
         frozen_to_dosage(w, np.array([0.5, -0.1, 2.0]))
+
+
+def test_frozen_to_dosage_warns_with_the_zeroed_count():
+    """SD_REF == 0 drops variants from n_variants_scored; that must be loud."""
+    w = np.array([0.2, 0.4, 0.6, 0.0])
+    sd = np.array([0.5, 0.0, 0.0, 0.0])
+    with pytest.warns(UserWarning, match="zeroed 2 nonzero weight"):
+        dosage = frozen_to_dosage(w, sd)
+    assert dosage.tolist() == [0.4, 0.0, 0.0, 0.0]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        frozen_to_dosage(np.zeros(2), np.zeros(2))   # nothing nonzero: silent
 
 
 def test_empty_inputs_are_refused_rather_than_returning_a_number():

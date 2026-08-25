@@ -84,6 +84,21 @@ def test_read_weights_recognises_pgs_catalog_columns(tmp_path):
     assert np.allclose(w, [0.25, -0.5])
 
 
+def test_read_weights_prefers_harmonized_columns_over_author_build(tmp_path):
+    """A PGS Catalog *_hmPOS_GRCh37 file carries both author-build
+    (chr_name/chr_position) and harmonized (hm_chr/hm_pos) coordinates. The LD
+    reference is GRCh37, so the build-known harmonized columns must win."""
+    p = tmp_path / "w.tsv"
+    p.write_text("chr_name\thm_chr\tchr_position\thm_pos\teffect_allele\t"
+                 "other_allele\teffect_weight\n"
+                 "1\t1\t100\t500\tA\tG\t0.25\n",
+                 encoding="utf-8")
+    variants, _ = read_weights(p)
+    assert variants.n == 1
+    assert variants.pos.tolist() == [500]
+    assert variants.chrom.tolist() == ["1"]
+
+
 def test_read_weights_missing_column_errors(tmp_path):
     p = tmp_path / "w.tsv"
     p.write_text("chr\tpos\tbeta\n1\t100\t0.1\n", encoding="utf-8")  # no alleles
@@ -140,6 +155,22 @@ def test_read_weights_rejects_nonfinite_weight(tmp_path):
     p.write_text(
         "chr\tpos\ta1\ta2\tweight\n1\t100\tA\tG\tnan\n", encoding="utf-8")
     with pytest.raises(ValueError, match="line 2.*finite"):
+        read_weights(p)
+
+
+def test_read_weights_noninteger_pos_errors_with_line_number(tmp_path):
+    p = tmp_path / "w.tsv"
+    p.write_text("chr\tpos\ta1\ta2\tweight\n1\t100\tA\tG\t0.25\n2\tn/a\tC\tT\t0.5\n",
+                 encoding="utf-8")
+    with pytest.raises(ValueError, match="line 3.*pos.*valid integer"):
+        read_weights(p)
+
+
+def test_read_weights_nonnumeric_weight_errors_with_line_number(tmp_path):
+    p = tmp_path / "w.tsv"
+    p.write_text("chr\tpos\ta1\ta2\tweight\n1\t100\tA\tG\tNA\n",
+                 encoding="utf-8")
+    with pytest.raises(ValueError, match="line 2.*weight.*valid number"):
         read_weights(p)
 
 
@@ -584,6 +615,19 @@ def test_read_sumstats_rejects_unknown_scale(tmp_path):
 
     with pytest.raises(ValueError, match="scale"):
         read_sumstats(path, scale="or")
+
+
+def test_read_sumstats_rejects_z_outside_correlation_range(tmp_path):
+    """A standardized marginal is a correlation: |z| > 1 cannot be one."""
+    path = tmp_path / "sumstats.tsv"
+    path.write_text("chrom\tpos\ta1\ta2\tz\n1\t1\tA\tC\t0.1\n1\t2\tA\tC\t1.5\n",
+                    encoding="utf-8")
+    with pytest.raises(ValueError, match=r"line 3.*\|z\|"):
+        read_sumstats(path)
+    path.write_text("chrom\tpos\ta1\ta2\tz\n1\t1\tA\tC\t1.0\n1\t2\tA\tC\t-1.0\n",
+                    encoding="utf-8")
+    _, z, _ = read_sumstats(path)
+    assert np.allclose(z, [1.0, -1.0])
 
 
 def test_cli_bundle_rejects_sumstats_scale(tmp_path):

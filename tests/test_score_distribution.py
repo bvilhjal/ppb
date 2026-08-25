@@ -70,6 +70,20 @@ def test_predicted_moments_match_simulated_individuals_under_ld():
     assert scores.std() == pytest.approx(dist.sd, rel=0.01)
 
 
+def test_percentile_extreme_tails_do_not_saturate():
+    """50 * (1 + erf(x)) pins |z| >~ 6 to exactly 0/100; erfc keeps the tail."""
+    dist = ScoreDistribution(
+        mean=0.0, sd=1.0, variance=1.0, n_reference=1, n_variants_scored=1)
+    lo = float(dist.percentile(-10.0))
+    assert 0.0 < lo < 1e-8
+    lo8 = float(dist.percentile(-8.0))
+    hi8 = float(dist.percentile(8.0))
+    assert 0.0 < lo8 < 1e-8
+    assert 100.0 - 1e-8 < hi8 < 100.0
+    assert hi8 == pytest.approx(100.0 - lo8, rel=1e-12)
+    assert float(dist.percentile(0.0)) == pytest.approx(50.0)
+
+
 def test_percentiles_track_the_empirical_ranks():
     rng = np.random.default_rng(2)
     block_sizes = [20] * 6

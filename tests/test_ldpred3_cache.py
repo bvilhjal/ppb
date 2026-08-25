@@ -13,7 +13,8 @@ def _d8_eye(m):
 
 
 def _write_cache(path, *, kinds=None, residual=False, shrunk=False,
-                 ridge=0.0, mmap=False, drop_alleles=False):
+                 ridge=0.0, mmap=False, drop_alleles=False,
+                 scales=(1.0, 1.0)):
     """A two-chromosome, two-block non-mmap LDpred3 cache."""
     sizes = np.array([2, 2], dtype=np.int64)
     if kinds is None:
@@ -24,7 +25,6 @@ def _write_cache(path, *, kinds=None, residual=False, shrunk=False,
         ids=np.array(["rs1", "rs2", "rs3", "rs4"]),
         sizes=sizes,
         kinds=np.asarray(kinds, dtype=np.int8),
-        scales=np.array([1.0, 1.0]),
         provenance_complete=np.array([0], dtype=np.int8),
         ld_shrunk=np.array([1 if shrunk else 0], dtype=np.int8),
         ld_ridge=np.array([ridge], dtype=np.float64),
@@ -33,6 +33,8 @@ def _write_cache(path, *, kinds=None, residual=False, shrunk=False,
         reference_af=np.array([0.1, 0.2, 0.3, 0.4]),
         n_ref=np.array([500], dtype=np.int64),
     )
+    if scales is not None:
+        arrays["scales"] = np.asarray(scales, dtype=np.float64)
     if not drop_alleles:
         arrays["counted_allele"] = np.array(["A", "A", "C", "C"])
         arrays["other_allele"] = np.array(["G", "G", "T", "T"])
@@ -91,6 +93,28 @@ def test_refuses_low_rank_unless_expanded(tmp_path):
         cache, tmp_path / "out", allow_lr_expand=True, packed=False,
         psd_scan=False)
     assert report.n_lr_expanded == 2
+
+
+def test_refuses_lr8_without_block_scales(tmp_path):
+    """An int8 factor without its quantization scale is unrecoverable."""
+    cache = tmp_path / "ld.npz"
+    _write_cache(cache, kinds=[3, 3], scales=None)
+    with pytest.raises(ValueError, match="scales"):
+        convert_ldpred3_cache(cache, tmp_path / "out", allow_lr_expand=True,
+                              psd_scan=False)
+    _write_cache(cache, kinds=[3, 3], scales=(1.0,))      # short: no entry for block 1
+    with pytest.raises(ValueError, match="scales"):
+        convert_ldpred3_cache(cache, tmp_path / "out", allow_lr_expand=True,
+                              psd_scan=False)
+
+
+def test_refuses_float_factor_with_nonunit_scale(tmp_path):
+    """A per-block scale on a float (LR32) factor would be silently dropped."""
+    cache = tmp_path / "ld.npz"
+    _write_cache(cache, kinds=[2, 2], residual=True, scales=(2.0, 1.0))
+    with pytest.raises(ValueError, match="scale=2.0"):
+        convert_ldpred3_cache(cache, tmp_path / "out", allow_lr_expand=True,
+                              psd_scan=False)
 
 
 def test_refuses_shrunk_cache(tmp_path):

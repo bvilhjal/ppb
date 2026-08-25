@@ -46,7 +46,7 @@ import numpy as np
 from .harmonize import VariantTable, _harmonize_to_details
 from .ld_backend import BlockDiagonalLD, LDBackend
 
-_erf = np.vectorize(math.erf, otypes=[np.float64])
+_erfc = np.vectorize(math.erfc, otypes=[np.float64])
 
 
 @dataclass
@@ -79,9 +79,18 @@ class ScoreDistribution:
         Exact only insofar as ``S`` is normal; see ``max_variance_share`` and
         this module's docstring. Do not read the extreme tail off this number
         without checking that the variance is spread over many blocks.
+
+        The tail is evaluated with ``erfc`` on the side that carries the
+        precision: ``1 + erf(x)`` saturates to exactly 0 or 2 for
+        ``|z| >~ 6``, pinning the percentile to exactly 0/100, while the
+        ``erfc`` form keeps the lower tail representable to ~1e-300 and the
+        upper tail to within ~1e-14 of 100.
         """
         z = self.standardize(raw_score)
-        return 50.0 * (1.0 + _erf(z / math.sqrt(2.0)))
+        x = z / math.sqrt(2.0)
+        return np.where(x >= 0.0,
+                        100.0 - 50.0 * _erfc(x),
+                        50.0 * _erfc(-x))
 
     def to_dict(self) -> dict:
         return asdict(self)
