@@ -134,6 +134,281 @@ def bn_freqs(rng, m, fst):
             np.clip(rng.beta(a, b), 1e-3, 1 - 1e-3))
 
 
+def bn_freqs_multi(rng, m, fst, k):
+    """Balding-Nichols frequencies for ``k`` populations ``fst`` apart.
+
+    Returns a ``(k, m)`` array; row 0 is the shared ancestral draw's first
+    descendant. Each population marginalises to the same ancestral mean, so
+    ancestry-informative variants arise from drift, not ascertainment.
+    """
+    if not 0.0 < fst < 1.0:
+        raise ValueError(f"fst must be in (0, 1); got {fst}")
+    if k < 2:
+        raise ValueError("need at least two populations")
+    anc = rng.uniform(0.1, 0.9, size=m)
+    a = anc * (1 - fst) / fst
+    b = (1 - anc) * (1 - fst) / fst
+    return np.clip(rng.beta(a, b, size=(k, m)), 1e-3, 1 - 1e-3)
+
+
+def population_ld_blocks(block_sizes, rho_blocks):
+    """Block-diagonal AR(1) correlation with a per-block correlation strength."""
+    block_sizes = list(block_sizes)
+    rho_blocks = np.asarray(rho_blocks, dtype=np.float64)
+    if rho_blocks.shape != (len(block_sizes),):
+        raise ValueError("rho_blocks must have one value per block")
+    if ((rho_blocks < 0) | (rho_blocks >= 1)).any():
+        raise ValueError("rho_blocks must be in [0, 1)")
+    m = int(sum(block_sizes))
+    Sigma = np.zeros((m, m))
+    col = 0
+    for k, rho in zip(block_sizes, rho_blocks):
+        d = np.arange(k)
+        Sigma[col:col + k, col:col + k] = rho ** np.abs(d[:, None] - d[None, :])
+        col += k
+    return Sigma
+
+
+def draw_ld_paths(rng, block_sizes, base_lo, base_hi, hotspot_frac=0.15,
+                  hotspot_hi=0.3):
+    """One ancestry's LD landscape as per-block, per-interval AR(1) paths.
+
+    Each block draws a base correlation ``~ U(base_lo, base_hi)``; most
+    intervals keep it, and a ``hotspot_frac`` of intervals drop to
+    ``U(0, hotspot_hi)`` (recombination hotspots). Per-interval variation is
+    what makes per-variant LD scores differ *within* a block -- without it
+    every interior variant of a block has the same score, the bilinear scores
+    of estimator B become functionally dependent columns, and the ancestry
+    composition is not identifiable from the chi-square moment.
+    """
+    if not 0 <= base_lo <= base_hi < 1.0:
+        raise ValueError("require 0 <= base_lo <= base_hi < 1")
+    paths = []
+    for k in block_sizes:
+        base = rng.uniform(base_lo, base_hi)
+        path = np.full(max(k - 1, 0), base)
+        if path.size:
+            hot = rng.random(path.size) < hotspot_frac
+            path[hot] = rng.uniform(0.0, hotspot_hi, size=int(hot.sum()))
+        paths.append(path)
+    return paths
+
+
+def constant_ld_paths(block_sizes, rho):
+    """Per-block constant AR(1) paths (no hotspots) at strength ``rho``."""
+    return [np.full(max(int(k) - 1, 0), rho) for k in block_sizes]
+
+
+def _check_ld_paths(paths, block_sizes):
+    block_sizes = list(block_sizes)
+    if len(paths) != len(block_sizes):
+        raise ValueError("one LD path per block is required")
+    out = []
+    for path, k in zip(paths, block_sizes):
+        path = np.asarray(path, dtype=np.float64)
+        if path.shape != (max(int(k) - 1, 0),) or ((path < 0) | (path >= 1)).any():
+            raise ValueError("each LD path must be k-1 values in [0, 1)")
+        out.append(path)
+    return out
+
+
+def block_correlations(paths):
+    """Block-diagonal correlation matrix from per-block AR(1) interval paths.
+
+    Within a block, ``R_ij = prod_{t=i}^{j-1} path_t`` -- the correlation of a
+    (non-stationary) Gaussian AR(1) process, so the matrix is PSD for any path
+    in ``[0, 1)``; hotspots in the path show up as sharp LD breaks.
+    """
+    blocks = []
+    for path in paths:
+        path = np.asarray(path, dtype=np.float64)
+        if ((path < 0) | (path >= 1)).any():
+            raise ValueError("LD paths must lie in [0, 1)")
+        log_r = np.concatenate([[0.0], np.cumsum(np.log(np.clip(path, 1e-12, None)))])
+        R = np.exp(log_r[None, :] - log_r[:, None])
+        R = np.triu(R) + np.triu(R, 1).T
+        blocks.append(R)
+    m = sum(R.shape[0] for R in blocks)
+    Sigma = np.zeros((m, m))
+    col = 0
+    for R in blocks:
+        k = R.shape[0]
+        Sigma[col:col + k, col:col + k] = R
+        col += k
+    return Sigma
+
+
+def _hap_segment_paths(n, block_sizes, maf, paths, rng):
+    """``(n, sum(block_sizes))`` founder haplotypes under per-interval AR(1) LD."""
+    maf = np.asarray(maf, dtype=np.float64)
+    thr = _norm_ppf(1.0 - maf)
+    H = np.zeros((n, maf.size), dtype=np.uint8)
+    col = 0
+    for k, path in zip(block_sizes, paths):
+        latent = rng.standard_normal((n, k))
+        for t in range(1, k):
+            rho = path[t - 1]
+            latent[:, t] = rho * latent[:, t - 1] + np.sqrt(1.0 - rho * rho) * latent[:, t]
+        H[:, col:col + k] = latent > thr[col:col + k]
+        col += k
+    return H
+
+
+def simulate_admixture_references(n_ref, block_sizes, maf_pops, ld_paths, rng):
+    """Per-ancestry LD references ``R^(k)`` from simulated reference panels.
+
+    Each ancestry's panel is ``n_ref`` diploid individuals at that ancestry's
+    allele frequencies and LD landscape (``ld_paths[k]``: one AR(1) interval
+    path per block, see :func:`draw_ld_paths`); ``R^(k)`` is the panel
+    correlation matrix. Reference sampling noise (~1/sqrt(n_ref) per entry)
+    is included deliberately: the estimators must tolerate it.
+    """
+    maf_pops = np.asarray(maf_pops, dtype=np.float64)
+    block_sizes = list(block_sizes)
+    if len(ld_paths) != maf_pops.shape[0]:
+        raise ValueError("need one LD landscape per ancestry")
+    refs = []
+    for k in range(maf_pops.shape[0]):
+        paths = _check_ld_paths(ld_paths[k], block_sizes)
+        hap = _hap_segment_paths(2 * n_ref, block_sizes, maf_pops[k], paths, rng)
+        G = _standardize_cols(
+            hap.reshape(n_ref, 2, -1).sum(axis=1, dtype=np.float64))
+        refs.append(np.corrcoef(G, rowvar=False))
+    return refs
+
+
+def simulate_admixed_genotypes(n, block_sizes, maf_pops, ld_paths, pi, rng,
+                               segment_blocks=1):
+    """Admixed genomes as ancestry mosaics over LD blocks.
+
+    For each of the ``n`` individuals, both haplotypes draw their ancestry
+    independently per *segment* of ``segment_blocks`` consecutive blocks, with
+    probabilities ``pi``; the segment's haplotype is then drawn from that
+    ancestry's LD landscape and allele frequencies. ``ld_paths[k]`` is
+    ancestry ``k``'s landscape (one AR(1) interval path per block, see
+    :func:`draw_ld_paths`). With the default ``segment_blocks=1`` there is no
+    between-block admixture LD (old admixture), but the within-block
+    Wahlund/frequency-contrast term of the report's Assumption 1 is present
+    whenever the ancestries' frequencies differ, so the mixture approximation
+    is stressed, not assumed.
+
+    Returns the standardized ``(n, m)`` genotype matrix of the admixed
+    population.
+    """
+    block_sizes = list(block_sizes)
+    maf_pops = np.asarray(maf_pops, dtype=np.float64)
+    K, m = maf_pops.shape
+    pi = np.asarray(pi, dtype=np.float64)
+    if pi.shape != (K,) or (pi < 0).any() or abs(pi.sum() - 1.0) > 1e-8:
+        raise ValueError("pi must be a probability vector of length K")
+    if len(ld_paths) != K:
+        raise ValueError("need one LD landscape per ancestry")
+    if segment_blocks < 1:
+        raise ValueError("segment_blocks must be >= 1")
+    paths_pops = [_check_ld_paths(ld_paths[k], block_sizes) for k in range(K)]
+    starts = np.concatenate([[0], np.cumsum(block_sizes)])
+    segments = [range(s, min(s + segment_blocks, len(block_sizes)))
+                for s in range(0, len(block_sizes), segment_blocks)]
+    G = np.zeros((n, m))
+    individuals = np.repeat(np.arange(n), 2)
+    for seg in segments:
+        seg = list(seg)
+        sizes = [block_sizes[b] for b in seg]
+        cols = np.concatenate([np.arange(starts[b], starts[b] + block_sizes[b])
+                               for b in seg])
+        ancestry = rng.choice(K, size=(n, 2), p=pi)
+        for k in range(K):
+            mask = ancestry == k
+            count = int(mask.sum())
+            if count == 0:
+                continue
+            hap = _hap_segment_paths(count, sizes, maf_pops[k][cols],
+                                     [paths_pops[k][b] for b in seg], rng)
+            rows = np.repeat(individuals[mask.ravel()], cols.size)
+            np.add.at(G, (rows, np.tile(cols, count)),
+                      hap.ravel().astype(np.float64))
+    return _standardize_cols(G)
+
+
+def simulate_admixture_sumstats(n, block_sizes, fst, ld_paths, pi, h2, n_causal,
+                                rng, n_ref=2000, segment_blocks=1,
+                                return_r_admixed=False):
+    """End-to-end admixed-GWAS simulation for the ancestry estimators.
+
+    Draws Balding-Nichols frequencies for ``K = len(ld_paths)`` ancestries,
+    estimates per-ancestry reference LD from ``n_ref``-individual panels,
+    builds an admixed population as an ancestry mosaic with composition
+    ``pi``, simulates a phenotype with heritability ``h2`` on the admixed
+    genotypes, and runs the marginal GWAS. ``ld_paths[k]`` is ancestry ``k``'s
+    LD landscape (one AR(1) interval path per block; use
+    :func:`draw_ld_paths` for hotspot landscapes or
+    :func:`constant_ld_paths` for plain AR(1) blocks). Returns a dict with
+    the z-statistics ``z``, the reference matrices ``refs``, and the truth
+    ``pi``/``maf_pops``; ``R_admixed`` (the realized admixed correlation
+    matrix) only when ``return_r_admixed`` is set.
+    """
+    block_sizes = list(block_sizes)
+    K = len(ld_paths)
+    m = int(sum(block_sizes))
+    maf_pops = bn_freqs_multi(rng, m, fst, K)
+    refs = simulate_admixture_references(n_ref, block_sizes, maf_pops, ld_paths, rng)
+    X = simulate_admixed_genotypes(n, block_sizes, maf_pops, ld_paths, pi, rng,
+                                   segment_blocks=segment_blocks)
+    beta = draw_effects(m, n_causal, rng)
+    y = simulate_phenotype(X, beta, h2, rng)
+    _, t = marginal_stats(X, y)
+    starts = np.concatenate([[0], np.cumsum(block_sizes)])
+    blocks = [np.arange(starts[b], starts[b] + block_sizes[b])
+              for b in range(len(block_sizes))]
+    out = {
+        "z": t,
+        "refs": [[R[np.ix_(b, b)] for b in blocks] for R in refs],
+        "blocks": blocks,
+        "pi": np.asarray(pi, dtype=np.float64),
+        "maf_pops": maf_pops,
+    }
+    if return_r_admixed:
+        out["R_admixed"] = np.corrcoef(X, rowvar=False)
+    return out
+
+
+def simulate_admixture_mvn(R_pops, pi, h2, n, rng, blocks=None):
+    """Model-consistent z-scores: the report's pair-moment equation exactly.
+
+    Draws ``z ~ N(0, Sigma)`` with, per LD block,
+    ``Sigma_b = (1 - h^2) R^(A)_b + (n h^2 / m) R^(A)_b R^(A)_b`` and
+    ``R^(A) = sum_k pi_k R^(k)`` -- the infinitesimal moment model with no
+    admixture-LD or reference-estimation complications, so estimator error is
+    pure Monte Carlo noise and jackknife SEs can be calibrated against it.
+    References may be dense ``(m, m)`` matrices (then ``blocks`` must slice
+    them) or per-ancestry lists of per-block matrices, the scalable form;
+    computation is per block either way, so cost is linear in genome size.
+    """
+    pi = np.asarray(pi, dtype=np.float64)
+    if abs(pi.sum() - 1.0) > 1e-8 or len(R_pops) != pi.size:
+        raise ValueError("pi must be a probability vector matching the references")
+    first = R_pops[0]
+    if isinstance(first, np.ndarray) and first.ndim == 2:
+        m = first.shape[0]
+        if blocks is None:
+            blocks = [np.arange(m)]
+        ref_blocks = [[np.asarray(R)[np.ix_(b, b)] for b in blocks]
+                      for R in R_pops]
+    else:
+        ref_blocks = [[np.asarray(Rb, dtype=np.float64) for Rb in R]
+                      for R in R_pops]
+        blocks = [np.arange(Rb.shape[0]) for Rb in ref_blocks[0]]
+    m = int(sum(Rb.shape[0] for Rb in ref_blocks[0]))
+    parts = []
+    for b in range(len(blocks)):
+        kb = ref_blocks[0][b].shape[0]
+        R_A = sum(p * ref_blocks[k][b] for k, p in enumerate(pi))
+        Sigma = (1.0 - h2) * R_A + (n * h2 / m) * (R_A @ R_A)
+        Sigma = (Sigma + Sigma.T) / 2 + 1e-10 * np.eye(kb)
+        parts.append(np.linalg.cholesky(Sigma) @ rng.standard_normal(kb))
+    return np.concatenate(parts)
+
+
 def simulate_structured_genotypes(n, block_sizes, fst, rho, rng, prop_pop1=0.5):
     """Two subpopulations (Balding-Nichols ``fst``) with block LD.
 

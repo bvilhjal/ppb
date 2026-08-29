@@ -456,3 +456,41 @@ that structure, unbounded only in the worst case. Pinned by
 `tests/test_gauge.py` (4 tests, 5 seeds each).
 
 Run: `python experiments/gauge_validation.py --seed 0 [--sub-fst 0.1]`.
+
+## `ancestry_ld_study.py` — LD-moment ancestry-composition estimators
+
+The simulation benchmark for the two summary-statistics ancestry estimators
+derived in [`../docs/ancestry_report/ancestry_report.pdf`](../docs/ancestry_report/ancestry_report.pdf)
+— Estimator A (within-block pair products `z_i z_j` on per-ancestry reference
+correlations, with the quadratic signal-absorber columns) and Estimator B
+(truncated chi-square on the bilinear LD scores `l^(kk')`). The genomes are
+block-structured with per-block, per-interval AR(1) LD landscapes
+(recombination hotspots), which is what gives the LD-score moments real
+variation; the individual-level arm simulates admixed genomes as ancestry
+mosaics with Balding-Nichols frequency contrast, so the mixture approximation
+is stressed by the Wahlund term rather than assumed.
+
+Observed (24 MVN / 12 individual-level replicates, m ≈ 10k variants in 400
+blocks for the scale arms, truth π = (0.65, 0.35)):
+
+| arm | result |
+|---|---|
+| A, h²=0 (null trait) | unbiased: mean (0.644, 0.355), SD 0.064, jackknife SE 0.078 |
+| A, nh²/m=0.025 raw / +absorber | 0.055 / 0.046 max bias |
+| A, nh²/m=0.5 raw / +absorber | 0.346 (saturated) / 0.045 — the absorber removes the tagging bias |
+| B, nh²/m = 0.5–8 | unbiased (max err ≤ 0.01), SD 0.12–0.14, declines 1/24 at the weakest signal |
+| A, K=4, h²=0 | max err 0.022 on (0.4, 0.3, 0.2, 0.1) |
+| B, K=4, nh²/m=8 | declines 24/24 — the 14-column bilinear design is too collinear at this scale; the guard refuses rather than fabricates |
+| A, confusable references | still recovers (err 0.020) but the SE doubles (0.127 vs 0.078) — honest diagnostics |
+| A, individual level, fst 0.05 / 0.2 | err 0.006 / 0.010 — the Wahlund term does not materially bias A at these levels |
+| B, individual level, h²=0.5, m≈1.5k | declines 9/24; accepted runs are noisy — B wants genome-scale m |
+
+The quantitative summary: both estimators are unbiased where the report says
+they should be identified; Estimator A works at h²=0 (it is driven by the
+correlated-noise covariance) and its raw form is biased toward the high-LD
+ancestry by the tagging term at nh²/m ≳ 0.1, which the absorber columns
+largely remove; Estimator B needs real polygenic signal and scale. Reference
+panel size (n_ref 500–8000) was secondary to z-noise at these scales. Pinned
+by `tests/test_ancestry.py` (18 tests).
+
+Run: `python experiments/ancestry_ld_study.py [--reps 24 --il-reps 12]`.

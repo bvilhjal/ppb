@@ -12,6 +12,7 @@ The estimator is ancestry-agnostic in form; supplying target-ancestry ``z`` and
 """
 
 from .diagnostics import block_diagnostics, r2_block_jackknife, sign_flip_null
+from .ancestry import estimate_bilinear, estimate_pair_products
 from .estimator import corrected_r2, frozen_to_dosage, mse, r2
 from .evaluate import EvaluationResult, evaluate
 from .score_distribution import score_distribution
@@ -56,5 +57,6 @@ __all__ = [
     "convert_ldpred3_cache",
     "OverlapBasis",
     "standardized_marginal",
+    "estimate_pair_products", "estimate_bilinear",
 ]
 __version__ = "0.0.1.dev1"
