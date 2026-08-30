@@ -12,7 +12,12 @@ The estimator is ancestry-agnostic in form; supplying target-ancestry ``z`` and
 """
 
 from .diagnostics import block_diagnostics, r2_block_jackknife, sign_flip_null
-from .ancestry import estimate_bilinear, estimate_pair_products
+from .ancestry import (
+    estimate_bilinear,
+    estimate_bilinear_from_design,
+    estimate_pair_products,
+    estimate_pair_products_from_design,
+)
 from .ancestry_frequency import (
     FrequencyPanel,
     MatchedFrequencies,
@@ -66,7 +71,8 @@ __all__ = [
     "convert_ldpred3_cache",
     "OverlapBasis",
     "standardized_marginal",
-    "estimate_pair_products", "estimate_bilinear",
+    "estimate_pair_products", "estimate_pair_products_from_design",
+    "estimate_bilinear", "estimate_bilinear_from_design",
     "FrequencyPanel", "MatchedFrequencies",
     "write_frequency_panel", "load_frequency_panel",
     "match_effect_allele_frequencies", "estimate_frequency_composition",

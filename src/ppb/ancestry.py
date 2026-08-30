@@ -322,14 +322,34 @@ def _fit_pair_nnls(L, y):
     return u / s, s
 
 
-def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
-                           groups=None, absorb_signal=True,
-                           max_design_condition=1e3):
-    """Estimator A: composition from within-block z-score pair products.
+def _design_block_count(block_ids, n_blocks, *, label):
+    """Validate integer design block IDs and return the represented count."""
+    raw = np.asarray(block_ids)
+    if raw.ndim != 1 or not np.issubdtype(raw.dtype, np.integer):
+        raise ValueError(f"{label} must be a one-dimensional integer vector")
+    block_ids = raw.astype(int, copy=False)
+    if block_ids.size == 0 or (block_ids < 0).any():
+        raise ValueError(f"{label} must contain non-negative block IDs")
+    minimum = int(block_ids.max()) + 1
+    if n_blocks is None:
+        return block_ids, minimum
+    if (isinstance(n_blocks, (bool, np.bool_)) or
+            not isinstance(n_blocks, (int, np.integer)) or n_blocks < minimum):
+        raise ValueError(f"n_blocks must be an integer at least {minimum}")
+    return block_ids, int(n_blocks)
 
-    ``z`` are the marginal z-scores (genome-wide; every chromosome's blocks
-    should be represented), ``refs`` the per-ancestry reference correlations
-    (dense ``(m, m)`` each, or per-block matrix lists). With
+
+def estimate_pair_products_from_design(
+        z, ii, jj, design, pair_block, *, quadratic_design=None,
+        n_blocks=None, groups=None, absorb_signal=True,
+        max_design_condition=1e3):
+    """Estimator A from a compact, precomputed reference-LD design.
+
+    ``design[p, k]`` is ancestry ``k``'s LD correlation for summary-statistic
+    pair ``(ii[p], jj[p])``. ``quadratic_design`` contains the corresponding
+    ``K(K+1)/2`` Jordan-product absorber columns in lexicographic ``(k, k')``
+    order. This is the scalable entry point: a reference builder can process
+    and discard one LD block at a time. With
     ``absorb_signal=True`` (default) the ``K(K+1)/2`` quadratic columns
     ``(R^(k) R^(k'))_ij`` join the fit as non-negative absorbers: they span
     the tagging term ``(n h^2 / m) (R^(A))^2`` exactly under the mixture
@@ -355,14 +375,50 @@ def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
     fitting; the default limit is 1,000.
     """
     z = np.asarray(z, dtype=np.float64)
-    _, blocks = _as_ref_blocks(refs, blocks)
-    if z.ndim != 1 or z.size != sum(len(block) for block in blocks):
-        raise ValueError("z must be one-dimensional and match the references")
+    if z.ndim != 1:
+        raise ValueError("z must be one-dimensional")
     if not np.isfinite(z).all():
         raise ValueError("z must contain only finite values")
-    K = len(refs)
-    ii, jj, L, pair_block, L2 = pair_design(refs, blocks, floor=floor, cap=cap,
-                                            quadratic=True)
+    L = np.asarray(design, dtype=np.float64)
+    if L.ndim != 2 or L.shape[1] < 2 or L.shape[0] == 0:
+        raise ValueError(
+            "design must be a non-empty two-dimensional array with at "
+            "least two ancestry columns"
+        )
+    if not np.isfinite(L).all():
+        raise ValueError("design must contain only finite values")
+    K = L.shape[1]
+    P = K * (K + 1) // 2
+    raw_ii, raw_jj = np.asarray(ii), np.asarray(jj)
+    if (raw_ii.shape != (L.shape[0],) or raw_jj.shape != (L.shape[0],) or
+            not np.issubdtype(raw_ii.dtype, np.integer) or
+            not np.issubdtype(raw_jj.dtype, np.integer)):
+        raise ValueError(
+            "ii and jj must be integer vectors matching the design rows"
+        )
+    ii = raw_ii.astype(int, copy=False)
+    jj = raw_jj.astype(int, copy=False)
+    if ((ii < 0).any() or (jj < 0).any() or (ii >= z.size).any() or
+            (jj >= z.size).any() or (ii == jj).any()):
+        raise ValueError("ii and jj must be distinct valid indices into z")
+    pair_block, n_blocks = _design_block_count(
+        pair_block, n_blocks, label="pair_block"
+    )
+    if pair_block.shape != (L.shape[0],):
+        raise ValueError("pair_block must match the design rows")
+    if absorb_signal:
+        L2 = np.asarray(quadratic_design, dtype=np.float64)
+        if L2.shape != (L.shape[0], P):
+            raise ValueError(
+                "quadratic_design must have shape "
+                f"({L.shape[0]}, {P}) when absorb_signal=True"
+            )
+        if not np.isfinite(L2).all():
+            raise ValueError(
+                "quadratic_design must contain only finite values"
+            )
+    else:
+        L2 = None
     y_all = z[ii] * z[jj]
     design_rank, design_condition = _design_diagnostics(L)
     if design_rank < K:
@@ -377,7 +433,6 @@ def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
             f"(limit {max_design_condition:.3g})"
         )
     pairs = [(k, kp) for k in range(K) for kp in range(k, K)]
-    P = len(pairs)
 
     def split(u):
         s_u = float(u[:K].sum())
@@ -418,10 +473,10 @@ def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
         mask = np.isin(pair_block, np.flatnonzero(kept_blocks))
         return _conditional_design_diagnostics(L[mask], L2[mask])
 
-    pi, s, pi_signal, signal, u_full = fit(np.ones(len(blocks), dtype=bool))
+    pi, s, pi_signal, signal, u_full = fit(np.ones(n_blocks, dtype=bool))
     absorber_retained = signal > 0.0
     conditional_rank, conditional_condition = conditional_diagnostics(
-        np.ones(len(blocks), dtype=bool), absorber_retained
+        np.ones(n_blocks, dtype=bool), absorber_retained
     )
     if conditional_rank < K:
         raise ValueError(
@@ -440,7 +495,7 @@ def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
         raise ValueError(
             "degenerate fit: no positive fitted linear pair-product component"
         )
-    grps = block_groups(len(blocks), groups)
+    grps = block_groups(n_blocks, groups)
 
     def stat(kept_blocks):
         out, _, _, out_signal, _ = fit(kept_blocks)
@@ -454,7 +509,7 @@ def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
     if len(grps) < 2:
         se, per_group = None, None
     else:
-        se, per_group = _delete_one_jackknife(stat, len(blocks), grps)
+        se, per_group = _delete_one_jackknife(stat, n_blocks, grps)
     fitted = np.hstack([L, L2]) @ u_full if absorb_signal else s * (L @ pi)
     center = L - L.mean(axis=0)
     denom = np.sqrt((center ** 2).sum(axis=0))
@@ -483,7 +538,7 @@ def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
         ),
         "boundary_note": boundary_note,
         "n_pairs": int(y_all.size),
-        "n_blocks": int(len(blocks)),
+        "n_blocks": n_blocks,
         "design_rank": design_rank,
         "design_columns": K,
         "design_condition": design_condition,
@@ -497,6 +552,39 @@ def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
                            "fewer than two block groups or a non-identifiable "
                            "leave-group fit; no jackknife SEs"),
     }
+
+
+def estimate_pair_products(z, refs, *, blocks=None, floor=0.05, cap=250,
+                           groups=None, absorb_signal=True,
+                           max_design_condition=1e3):
+    """Estimator A from z-scores and per-ancestry LD references.
+
+    This compatibility wrapper builds the compact pair design from dense or
+    block-native references, then delegates to
+    :func:`estimate_pair_products_from_design`.
+    """
+    _, canonical_blocks = _as_ref_blocks(refs, blocks)
+    z_array = np.asarray(z)
+    if (z_array.ndim != 1 or
+            z_array.size != sum(len(block) for block in canonical_blocks)):
+        raise ValueError("z must be one-dimensional and match the references")
+    if absorb_signal:
+        ii, jj, L, pair_block, L2 = pair_design(
+            refs, canonical_blocks, floor=floor, cap=cap, quadratic=True
+        )
+    else:
+        ii, jj, L, pair_block = pair_design(
+            refs, canonical_blocks, floor=floor, cap=cap, quadratic=False
+        )
+        L2 = None
+    return estimate_pair_products_from_design(
+        z_array, ii, jj, L, pair_block,
+        quadratic_design=L2,
+        n_blocks=len(canonical_blocks),
+        groups=groups,
+        absorb_signal=absorb_signal,
+        max_design_condition=max_design_condition,
+    )
 
 
 def _bilinear_recover(b, pairs, K):
@@ -557,11 +645,12 @@ def _block_cross_validated_signal(X, y, variant_block, groups):
     return float(statistic), mean, correlations
 
 
-def estimate_bilinear(z, refs, *, blocks=None, groups=None, c=None,
-                      sample_size=None, max_design_condition=1e3,
-                      min_signal_z=4.0, max_rank1_distance=0.25,
-                      max_psd_violation=0.1):
-    """Estimator B: composition from chi-squares on bilinear LD scores.
+def estimate_bilinear_from_design(
+        z, bilinear_design, variant_block, *, n_blocks=None, groups=None,
+        c=None, sample_size=None, max_design_condition=1e3,
+        min_signal_z=4.0, max_rank1_distance=0.25,
+        max_psd_violation=0.1):
+    """Estimator B from precomputed bilinear LD-score columns.
 
     Regresses ``z^2`` on the ``K(K+1)/2`` bilinear scores with a free
     intercept and non-negativity constraints (eq. (17)), then recovers pi
@@ -590,14 +679,30 @@ def estimate_bilinear(z, refs, *, blocks=None, groups=None, c=None,
     rejected fits.
     """
     z = np.asarray(z, dtype=np.float64)
-    K = len(refs)
-    _, blocks = _as_ref_blocks(refs, blocks)
-    m = sum(len(block) for block in blocks)
-    if z.ndim != 1 or z.size != m:
-        raise ValueError("z must be one-dimensional and match the references")
+    if z.ndim != 1:
+        raise ValueError("z must be one-dimensional")
     if not np.isfinite(z).all():
         raise ValueError("z must contain only finite values")
-    Lb, pairs = bilinear_ld_scores(refs, blocks)
+    Lb = np.asarray(bilinear_design, dtype=np.float64)
+    if Lb.ndim != 2 or Lb.shape[0] != z.size or Lb.shape[1] == 0:
+        raise ValueError(
+            "bilinear_design must be a non-empty matrix matching z rows"
+        )
+    if not np.isfinite(Lb).all():
+        raise ValueError("bilinear_design must contain only finite values")
+    P = Lb.shape[1]
+    K = int((np.sqrt(1.0 + 8.0 * P) - 1.0) / 2.0)
+    if K < 2 or K * (K + 1) // 2 != P:
+        raise ValueError(
+            "bilinear_design must have K(K+1)/2 columns for an integer K>=2"
+        )
+    pairs = [(k, kp) for k in range(K) for kp in range(k, K)]
+    variant_block, n_blocks = _design_block_count(
+        variant_block, n_blocks, label="variant_block"
+    )
+    if variant_block.shape != (z.size,):
+        raise ValueError("variant_block must match z")
+    m = z.size
     if sample_size is None:
         sample_size_scale = 1.0
         relative_n = np.ones(m)
@@ -616,11 +721,7 @@ def estimate_bilinear(z, refs, *, blocks=None, groups=None, c=None,
         raise ValueError("c must be a positive finite cap or None")
     chi2 = raw_chi2 if c is None else np.minimum(raw_chi2, c)
     n_trunc = 0 if c is None else int(np.sum(raw_chi2 > c))
-    variant_block = np.empty(m, dtype=int)
-    for b, block in enumerate(blocks):
-        variant_block[block] = b
     design_rank, design_condition = _design_diagnostics(X_all, center=True)
-    P = len(pairs)
 
     def fit(mask):
         y = chi2[mask]
@@ -636,7 +737,7 @@ def estimate_bilinear(z, refs, *, blocks=None, groups=None, c=None,
     pi, b_full, s_full, B, distance, psd_violation = fit(
         np.ones(m, dtype=bool)
     )
-    grps = block_groups(len(blocks), groups)
+    grps = block_groups(n_blocks, groups)
 
     def stat(kept_blocks):
         mask = np.isin(variant_block, np.flatnonzero(kept_blocks))
@@ -696,7 +797,7 @@ def estimate_bilinear(z, refs, *, blocks=None, groups=None, c=None,
     else:
         note = None
     if identified and len(grps) >= 2:
-        se, per_group = _delete_one_jackknife(stat, len(blocks), grps)
+        se, per_group = _delete_one_jackknife(stat, n_blocks, grps)
     else:
         se, per_group = None, None
     boundary = bool(pi is not None and (pi < 1e-6).any())
@@ -736,3 +837,30 @@ def estimate_bilinear(z, refs, *, blocks=None, groups=None, c=None,
             "jackknife SEs"
         ),
     }
+
+
+def estimate_bilinear(z, refs, *, blocks=None, groups=None, c=None,
+                      sample_size=None, max_design_condition=1e3,
+                      min_signal_z=4.0, max_rank1_distance=0.25,
+                      max_psd_violation=0.1):
+    """Estimator B from z-scores and per-ancestry LD references.
+
+    This compatibility wrapper builds the compact bilinear LD-score design,
+    then delegates to :func:`estimate_bilinear_from_design`.
+    """
+    _, canonical_blocks = _as_ref_blocks(refs, blocks)
+    Lb, _ = bilinear_ld_scores(refs, canonical_blocks)
+    variant_block = np.empty(Lb.shape[0], dtype=int)
+    for b, block in enumerate(canonical_blocks):
+        variant_block[block] = b
+    return estimate_bilinear_from_design(
+        z, Lb, variant_block,
+        n_blocks=len(canonical_blocks),
+        groups=groups,
+        c=c,
+        sample_size=sample_size,
+        max_design_condition=max_design_condition,
+        min_signal_z=min_signal_z,
+        max_rank1_distance=max_rank1_distance,
+        max_psd_violation=max_psd_violation,
+    )

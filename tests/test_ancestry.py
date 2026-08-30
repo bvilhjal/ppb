@@ -14,7 +14,9 @@ import pytest
 from ppb.ancestry import (_conditional_design_diagnostics,
                           _design_diagnostics, _nnls, bilinear_ld_scores,
                           block_groups,
-                          estimate_bilinear, estimate_pair_products, ld_scores,
+                          estimate_bilinear, estimate_bilinear_from_design,
+                          estimate_pair_products,
+                          estimate_pair_products_from_design, ld_scores,
                           pair_design)
 from ppb.simulate import (block_correlations, bn_freqs_multi,
                           draw_ld_paths,
@@ -186,6 +188,98 @@ def test_reference_validation():
     with pytest.raises(ValueError, match="same number of blocks"):
         estimate_bilinear(np.zeros(sum(sizes)), [RB[0], RB[1][:3]],
                           blocks=blocks)
+    with pytest.raises(ValueError, match="match the references"):
+        estimate_pair_products(np.zeros(sum(sizes) + 1), RB, blocks=blocks)
+
+
+def test_pair_product_precomputed_design_matches_reference_wrapper(small):
+    _, blocks, _, refs = small
+    z = simulate_admixture_mvn(
+        refs, PI, 0.0, 1000, np.random.default_rng(121)
+    )
+    ii, jj, design, pair_block, quadratic = pair_design(
+        refs, blocks, quadratic=True
+    )
+    expected = estimate_pair_products(z, refs, blocks=blocks)
+    observed = estimate_pair_products_from_design(
+        z, ii, jj, design, pair_block,
+        quadratic_design=quadratic,
+        n_blocks=len(blocks),
+    )
+    for key in (
+            "proportions", "proportions_se", "proportions_signal",
+            "jackknife_estimates"):
+        if expected[key] is None:
+            assert observed[key] is None
+        else:
+            assert np.allclose(observed[key], expected[key], equal_nan=True)
+    for key in (
+            "scale", "signal", "design_condition",
+            "conditional_design_condition", "residual_rms"):
+        assert observed[key] == pytest.approx(expected[key])
+    assert observed["n_pairs"] == expected["n_pairs"]
+    assert observed["n_blocks"] == expected["n_blocks"]
+
+
+def test_pair_product_precomputed_design_validation(small):
+    _, blocks, _, refs = small
+    m = sum(len(block) for block in blocks)
+    ii, jj, design, pair_block = pair_design(refs, blocks)
+    with pytest.raises(ValueError, match="quadratic_design"):
+        estimate_pair_products_from_design(
+            np.ones(m), ii, jj, design, pair_block
+        )
+    with pytest.raises(ValueError, match="integer vectors"):
+        estimate_pair_products_from_design(
+            np.ones(m), ii.astype(float), jj, design, pair_block,
+            absorb_signal=False,
+        )
+    with pytest.raises(ValueError, match="n_blocks"):
+        estimate_pair_products_from_design(
+            np.ones(m), ii, jj, design, pair_block,
+            absorb_signal=False, n_blocks=int(pair_block.max()),
+        )
+
+
+def test_bilinear_precomputed_design_matches_reference_wrapper(small):
+    _, blocks, _, refs = small
+    design, _ = bilinear_ld_scores(refs, blocks)
+    variant_block = np.empty(design.shape[0], dtype=int)
+    for b, block in enumerate(blocks):
+        variant_block[block] = b
+    sample_size = np.linspace(5000.0, 20000.0, design.shape[0])
+    relative_n = sample_size / np.median(sample_size)
+    coefficients = np.array([PI[0] ** 2,
+                             2 * PI[0] * PI[1], PI[1] ** 2])
+    z = np.sqrt(1.0 + 4.0 * relative_n * (design @ coefficients))
+    expected = estimate_bilinear(
+        z, refs, blocks=blocks, sample_size=sample_size
+    )
+    observed = estimate_bilinear_from_design(
+        z, design, variant_block, n_blocks=len(blocks),
+        sample_size=sample_size,
+    )
+    for key in (
+            "proportions", "proportions_se", "proportions_raw",
+            "coefficient_matrix", "heldout_signal_correlations",
+            "jackknife_estimates"):
+        assert np.allclose(observed[key], expected[key], equal_nan=True)
+    for key in (
+            "signal", "signal_z", "heldout_signal_correlation",
+            "intercept", "rank1_distance", "psd_violation",
+            "design_condition", "sample_size_scale"):
+        assert observed[key] == pytest.approx(expected[key])
+
+
+def test_bilinear_precomputed_design_validation():
+    with pytest.raises(ValueError, match=r"K\(K\+1\)/2"):
+        estimate_bilinear_from_design(
+            np.ones(20), np.ones((20, 4)), np.zeros(20, dtype=int)
+        )
+    with pytest.raises(ValueError, match="variant_block"):
+        estimate_bilinear_from_design(
+            np.ones(20), np.ones((20, 3)), np.zeros(20)
+        )
 
 
 def test_pair_products_block_native_defaults_and_identifiability():
