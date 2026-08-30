@@ -7,11 +7,12 @@ admixtures with known composition, across the regimes the report identifies:
 
 * **signal regime** -- nh^2/m from 0 (null trait) to 0.5 (tagging-dominated);
   the raw pair-product fit's bias toward the high-LD ancestry grows with
-  nh^2/m, and the absorber removes most of it.
+  nh^2/m; the absorber is evaluated as a conditional correction rather than
+  assumed to help at every signal level.
 * **ancestry contrast** -- distinct vs overlapping LD landscapes
   (confusability shows up as inflated jackknife SEs and boundary estimates).
-* **reference-panel size** -- n_ref from 500 to 8000; reference-estimation
-  noise is a leading error source for the LD channels.
+* **reference-panel size** -- an exploratory n_ref=500 versus 8000 arm using
+  one realised panel at each size; it does not estimate reference uncertainty.
 * **model mismatch** -- individual-level mosaic GWAS (Wahlund frequency
   contrast at fst = 0.05 and 0.2) versus the model-consistent MVN arm.
 
@@ -40,6 +41,23 @@ PI2 = np.array([0.65, 0.35])
 PI4 = np.array([0.4, 0.3, 0.2, 0.1])
 
 
+def _gate_reason(result):
+    note = result.get("signal_note") or ""
+    if "not identifiable" in note or "ill-conditioned" in note:
+        return "design"
+    if "fewer than four" in note:
+        return "too_few_groups"
+    if "insufficient reproducible" in note:
+        return "heldout_signal"
+    if "positive-semidefinite" in note:
+        return "non_psd"
+    if "rank-one" in note:
+        return "rank_one"
+    if "capping" in note:
+        return "capped"
+    return "other"
+
+
 def make_landscape(seed, n_blocks, ranges):
     rng = np.random.default_rng(seed)
     sizes = rng.integers(15, 36, n_blocks)
@@ -53,17 +71,36 @@ def make_landscape(seed, n_blocks, ranges):
 
 def mvn_arm(refs, blocks, pi, h2, n, reps, seed, estimator, **kw):
     ests, ses, declined = [], [], 0
+    decline_reasons = {}
+    design_condition = None
+
+    def count_decline(reason):
+        decline_reasons[reason] = decline_reasons.get(reason, 0) + 1
+
     for rep in range(reps):
         rng = np.random.default_rng(seed + rep)
         z = simulate_admixture_mvn(refs, pi, h2, n, rng)
-        r = estimator(z, refs, blocks=blocks, **kw)
+        try:
+            r = estimator(z, refs, blocks=blocks, **kw)
+        except ValueError as exc:
+            if "no positive fitted linear pair-product component" not in str(exc):
+                raise
+            declined += 1
+            count_decline("no_linear_pair_signal")
+            continue
+        if "design_condition" in r:
+            design_condition = r["design_condition"]
         if r["proportions"] is None:
             declined += 1
+            count_decline(_gate_reason(r))
             continue
         ests.append(r["proportions"])
         ses.append(r["proportions_se"])
+    diagnostic = {"decline_reasons": decline_reasons}
+    if design_condition is not None:
+        diagnostic["design_condition"] = float(design_condition)
     if not ests:
-        return {"declined": declined, "reps": reps}
+        return {"declined": declined, "reps": reps, **diagnostic}
     ests = np.asarray(ests)
     out = {
         "declined": declined,
@@ -71,6 +108,7 @@ def mvn_arm(refs, blocks, pi, h2, n, reps, seed, estimator, **kw):
         "mean": ests.mean(axis=0).round(4).tolist(),
         "max_abs_error": float(np.abs(ests.mean(axis=0) - pi).max()),
         "empirical_sd": ests.std(axis=0).round(4).tolist(),
+        **diagnostic,
     }
     ses = np.asarray([s for s in ses if s is not None])
     if ses.size:
@@ -85,18 +123,30 @@ def il_arm(sizes, blocks, paths, pi, fst, n_ref, reps, seed, h2=0.0,
     maf = bn_freqs_multi(rng, m, fst, len(paths))
     refs = simulate_admixture_references(n_ref, sizes, maf, paths, rng)
     rb = [[R[np.ix_(b, b)] for b in blocks] for R in refs]
-    ests, declined = [], 0
+    ests, declined, decline_reasons = [], 0, {}
     for _ in range(reps):
         X = simulate_admixed_genotypes(n, sizes, maf, paths, pi, rng)
         y = simulate_phenotype(X, draw_effects(m, 50, rng), h2, rng)
         _, t = marginal_stats(X, y)
-        r = estimator(t, rb, blocks=blocks, **kw)
+        try:
+            r = estimator(t, rb, blocks=blocks, **kw)
+        except ValueError as exc:
+            if "no positive fitted linear pair-product component" not in str(exc):
+                raise
+            declined += 1
+            decline_reasons["no_linear_pair_signal"] = (
+                decline_reasons.get("no_linear_pair_signal", 0) + 1
+            )
+            continue
         if r["proportions"] is None:
             declined += 1
+            reason = _gate_reason(r)
+            decline_reasons[reason] = decline_reasons.get(reason, 0) + 1
             continue
         ests.append(r["proportions"])
     if not ests:
-        return {"declined": declined, "reps": reps}
+        return {"declined": declined, "reps": reps,
+                "decline_reasons": decline_reasons}
     ests = np.asarray(ests)
     return {
         "declined": declined,
@@ -104,6 +154,7 @@ def il_arm(sizes, blocks, paths, pi, fst, n_ref, reps, seed, h2=0.0,
         "mean": ests.mean(axis=0).round(4).tolist(),
         "max_abs_error": float(np.abs(ests.mean(axis=0) - pi).max()),
         "empirical_sd": ests.std(axis=0).round(4).tolist(),
+        "decline_reasons": decline_reasons,
     }
 
 
@@ -161,14 +212,17 @@ def run(reps=16, il_reps=8):
 
 
 def _fmt(row):
+    declines = (f" | decline reasons {row['decline_reasons']}"
+                if row.get("decline_reasons") else "")
     if "mean" not in row:
-        return f"declined {row['declined']}/{row['reps']}"
+        return f"declined {row['declined']}/{row['reps']}{declines}"
     mean = ", ".join(f"{x:.3f}" for x in row["mean"])
     se = ("; SE " + ", ".join(f"{x:.3f}" for x in row["mean_jackknife_se"])
           if "mean_jackknife_se" in row else "")
     return (f"mean ({mean}) | max err {row['max_abs_error']:.3f} | "
             f"SD {', '.join(f'{x:.3f}' for x in row['empirical_sd'])}{se}"
-            + (f" | declined {row['declined']}" if row["declined"] else ""))
+            + (f" | declined {row['declined']}" if row["declined"] else "")
+            + declines)
 
 
 def main():

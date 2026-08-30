@@ -3,15 +3,18 @@ simulation harness (ppb.simulate admixture helpers).
 
 Structure: unit pins for the numerical pieces, then the two simulation arms
 of docs/ancestry_report/ancestry_report.tex -- model-consistent MVN draws
-(estimator correctness, jackknife calibration, tagging-bias absorption) and
-individual-level admixed-GWAS mosaics (robustness to Wahlund/frequency
-contrast and reference-estimation noise).
+(estimator behavior, rough jackknife scale, tagging-bias absorption) and
+individual-level admixed-GWAS mosaics (behavior under one Wahlund/frequency-
+contrast and reference-estimation-noise design).
 """
 
 import numpy as np
 import pytest
 
-from ppb.ancestry import (_nnls, bilinear_ld_scores, estimate_bilinear, estimate_pair_products, ld_scores,
+from ppb.ancestry import (_conditional_design_diagnostics,
+                          _design_diagnostics, _nnls, bilinear_ld_scores,
+                          block_groups,
+                          estimate_bilinear, estimate_pair_products, ld_scores,
                           pair_design)
 from ppb.simulate import (block_correlations, bn_freqs_multi,
                           draw_ld_paths,
@@ -19,7 +22,7 @@ from ppb.simulate import (block_correlations, bn_freqs_multi,
                           simulate_admixed_genotypes)
 
 PI = np.array([0.65, 0.35])
-RANGES_K2 = [(0.50, 0.90), (0.10, 0.50)]   # EUR-like / AFR-like LD landscapes
+RANGES_K2 = [(0.50, 0.90), (0.10, 0.50)]  # synthetic high-/low-LD landscapes
 
 
 def _landscape(seed, n_blocks, ranges=RANGES_K2):
@@ -98,6 +101,53 @@ def test_pair_design_floor_cap_and_blocks(small):
         pair_design(RB, blocks, floor=1.1)
 
 
+def test_pair_quadratic_design_exactly_spans_mixture_square():
+    """The non-commuting cross term needs both matrix-product orders."""
+    rng = np.random.default_rng(91)
+
+    def random_correlation():
+        A = rng.standard_normal((7, 7))
+        covariance = A @ A.T + np.eye(7)
+        scale = np.sqrt(np.diag(covariance))
+        return covariance / np.outer(scale, scale)
+
+    R0, R1 = random_correlation(), random_correlation()
+    assert np.linalg.norm(R0 @ R1 - R1 @ R0) > 0.1
+    pi = np.array([0.6, 0.4])
+    ii, jj, _, _, L2 = pair_design(
+        [R0, R1], floor=0.0, cap=100, quadratic=True
+    )
+    coefficients = np.array([pi[0] ** 2, 2 * pi[0] * pi[1], pi[1] ** 2])
+    mixture = pi[0] * R0 + pi[1] * R1
+    assert np.allclose(L2 @ coefficients, (mixture @ mixture)[ii, jj])
+
+
+def test_conditional_design_detects_nuisance_aliasing():
+    """Raw full rank does not identify L coefficients conditional on L2."""
+    L = np.array([[1.0, 0.0],
+                  [0.0, 1.0],
+                  [1.0, 1.0],
+                  [2.0, -1.0],
+                  [-1.0, 2.0]])
+    L2 = L[:, [0]]
+    raw_rank, raw_condition = _design_diagnostics(L)
+    rank, condition = _conditional_design_diagnostics(L, L2)
+    assert raw_rank == 2 and np.isfinite(raw_condition)
+    assert rank == 1
+    assert np.isinf(condition)
+
+
+@pytest.mark.parametrize("groups", [
+    [[0], [0], [1], [2]],
+    [[0], [], [1], [2]],
+    [[0], [1], [3]],
+    [[0], [1]],
+])
+def test_custom_block_groups_must_be_a_partition(groups):
+    with pytest.raises(ValueError, match="groups must partition|each group"):
+        block_groups(3, groups)
+
+
 def test_bilinear_scores_match_definition(small):
     sizes, blocks, paths, RB = small
     L, pairs = bilinear_ld_scores(RB, blocks)
@@ -109,6 +159,26 @@ def test_bilinear_scores_match_definition(small):
         assert np.allclose(L[block, 1], np.einsum("ij,ij->i", r0, r1))
 
 
+def test_bilinear_scores_preserve_global_order_for_reversed_dense_blocks():
+    R0 = np.array([
+        [1.0, 0.8, 0.0, 0.0], [0.8, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.2], [0.0, 0.0, 0.2, 1.0],
+    ])
+    R1 = np.array([
+        [1.0, 0.4, 0.0, 0.0], [0.4, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.7], [0.0, 0.0, 0.7, 1.0],
+    ])
+    blocks = [np.array([0, 1]), np.array([2, 3])]
+    ordered, pairs = bilinear_ld_scores([R0, R1], blocks)
+    reversed_rows, reversed_pairs = bilinear_ld_scores(
+        [R0, R1], list(reversed(blocks))
+    )
+    assert reversed_pairs == pairs
+    assert np.allclose(reversed_rows, ordered)
+    with pytest.raises(ValueError, match="partition"):
+        bilinear_ld_scores([R0, R1], [np.array([0, 1]), np.array([1, 2])])
+
+
 def test_reference_validation():
     sizes, blocks, paths, RB = _landscape(0, 6)
     with pytest.raises(ValueError, match="at least two"):
@@ -118,6 +188,29 @@ def test_reference_validation():
                           blocks=blocks)
 
 
+def test_pair_products_block_native_defaults_and_identifiability():
+    _, blocks, _, RB = _landscape(22, 8)
+    z = simulate_admixture_mvn(RB, PI, 0.0, 1000, np.random.default_rng(23))
+    result = estimate_pair_products(z, RB)
+    assert result["n_blocks"] == len(blocks)
+    assert result["design_rank"] == 2
+    assert result["conditional_design_rank"] == 2
+    assert np.isfinite(result["conditional_design_condition"])
+    raw = estimate_pair_products(z, RB, absorb_signal=False)
+    assert raw["signal"] == 0.0
+    assert raw["absorber_retained"] is False
+    assert raw["conditional_design_rank"] == raw["design_rank"]
+    assert raw["conditional_design_condition"] == pytest.approx(
+        raw["design_condition"]
+    )
+    with pytest.raises(ValueError, match="not identifiable"):
+        estimate_pair_products(z, [RB[0], RB[0]])
+    near_duplicate = [0.999 * first + 0.001 * second
+                      for first, second in zip(RB[0], RB[1])]
+    with pytest.raises(ValueError, match="condition number"):
+        estimate_pair_products(z, [RB[0], near_duplicate])
+
+
 # ------------------------------------------------- MVN arm (model-consistent)
 
 def _rep_means(estimator, RBB, blocksB, pi, h2, n, reps, seed, **kw):
@@ -125,16 +218,24 @@ def _rep_means(estimator, RBB, blocksB, pi, h2, n, reps, seed, **kw):
     for rep in range(reps):
         rng = np.random.default_rng(seed + rep)
         z = simulate_admixture_mvn(RBB, pi, h2, n, rng)
-        r = estimator(z, RBB, blocks=blocksB, **kw)
+        try:
+            r = estimator(z, RBB, blocks=blocksB, **kw)
+        except ValueError as exc:
+            if "no positive fitted linear pair-product component" not in str(exc):
+                raise
+            continue
         if r["proportions"] is None:
             continue
         ests.append(r["proportions"])
-        ses.append(r["proportions_se"])
+        ses.append(
+            np.full_like(r["proportions"], np.nan)
+            if r["proportions_se"] is None else r["proportions_se"]
+        )
     return np.asarray(ests), np.asarray(ses)
 
 
-def test_pair_products_null_trait_recovery_and_calibration(large):
-    """h2=0: A is unbiased and its jackknife SE tracks the empirical SD."""
+def test_pair_products_null_trait_recovery_and_jackknife_scale(large):
+    """Under one working-model arm, A recovers pi and SEs have rough scale."""
     _, blocksB, _, RBB = large
     ests, ses = _rep_means(estimate_pair_products, RBB, blocksB, PI, 0.0,
                            1000, reps=8, seed=300)
@@ -154,6 +255,8 @@ def test_pair_products_absorber_removes_tagging_bias(large):
                         reps=12, seed=400, absorb_signal=False)
     cor, _ = _rep_means(estimate_pair_products, RBB, blocksB, PI, 0.25, n,
                         reps=12, seed=400, absorb_signal=True)
+    # Some draws yield no estimable positive linear component and are declined.
+    assert 9 <= cor.shape[0] < 12
     raw_err = np.abs(raw.mean(axis=0) - PI).max()
     cor_err = np.abs(cor.mean(axis=0) - PI).max()
     assert raw_err > 0.25                   # raw fit saturates on the high-LD ancestry
@@ -173,14 +276,41 @@ def test_pair_products_weak_signal_regime(large):
         assert np.abs(ests.mean(axis=0) - PI).max() < 0.14
 
 
+def test_pair_products_does_not_substitute_absorber_composition():
+    """Quadratic nuisance coefficients cannot replace an absent A estimand."""
+    _, blocks, _, refs = _landscape(7, 100)
+    m = sum(block.size for block in blocks)
+    z = simulate_admixture_mvn(
+        refs, PI, 0.99, int(20 * m / 0.99), np.random.default_rng(104)
+    )
+    with pytest.raises(ValueError, match="linear pair-product component"):
+        estimate_pair_products(z, refs, blocks=blocks)
+
+
 def test_bilinear_recovery_strong_signal(large):
-    """B recovers the composition when chi-square carries real LD signal."""
+    """B accepts a noisy positive control satisfying its bilinear model."""
     _, blocksB, _, RBB = large
-    m = sum(b.size for b in blocksB)
-    ests, ses = _rep_means(estimate_bilinear, RBB, blocksB, PI, 0.5,
-                           8.0 * m / 0.5, reps=8, seed=600)
-    assert ests.shape[0] >= 6               # guard accepts strong signal
-    assert np.abs(ests.mean(axis=0) - PI).max() < 0.08
+    Lb, _ = bilinear_ld_scores(RBB, blocksB)
+    coefficients = np.array([PI[0] ** 2,
+                             2 * PI[0] * PI[1],
+                             PI[1] ** 2])
+    rng = np.random.default_rng(600)
+    chi2 = 1.0 + 4.0 * (Lb @ coefficients) + rng.normal(0.0, 0.05, Lb.shape[0])
+    result = estimate_bilinear(np.sqrt(chi2), RBB, blocks=blocksB)
+    assert np.allclose(result["proportions"], PI, atol=0.01)
+    assert result["rank1_distance"] < 0.01
+    assert result["psd_violation"] == 0.0
+    assert result["boundary_note"] is None
+
+
+def test_bilinear_boundary_note(small):
+    _, blocks, _, RB = small
+    Lb, _ = bilinear_ld_scores(RB, blocks)
+    result = estimate_bilinear(
+        np.sqrt(1.0 + 4.0 * Lb[:, 0]), RB, blocks=blocks
+    )
+    assert np.allclose(result["proportions"], [1.0, 0.0])
+    assert "simplex boundary" in result["boundary_note"]
 
 
 def test_bilinear_declines_without_signal(large):
@@ -189,7 +319,104 @@ def test_bilinear_declines_without_signal(large):
     z = simulate_admixture_mvn(RBB, PI, 0.0, 4000, rng)
     r = estimate_bilinear(z, RBB, blocks=blocksB)
     assert r["proportions"] is None
-    assert "no polygenic signal" in r["signal_note"]
+    assert "insufficient reproducible" in r["signal_note"]
+
+
+def test_bilinear_withholds_se_if_leave_group_refit_fails_screen(large):
+    _, blocks, _, refs = large
+    m = sum(block.size for block in blocks)
+    z = simulate_admixture_mvn(
+        refs, PI, 0.25, 0.5 * m / 0.25, np.random.default_rng(600)
+    )
+    result = estimate_bilinear(z, refs, blocks=blocks)
+    assert result["proportions"] is not None
+    assert result["proportions_se"] is None
+    assert np.isnan(result["jackknife_estimates"]).any()
+    assert "leave-group refit failed" in result["jackknife_note"]
+
+
+def test_bilinear_declines_old_null_false_positives(large):
+    """Every seed accepted by the former i.i.d. two-SE guard now declines."""
+    _, blocksB, _, RBB = large
+    old_false_positive_seeds = [713, 748, 758, 798, 812,
+                                819, 844, 847, 854, 866]
+    for seed in old_false_positive_seeds:
+        z = simulate_admixture_mvn(
+            RBB, PI, 0.0, 4000, np.random.default_rng(seed)
+        )
+        result = estimate_bilinear(z, RBB, blocks=blocksB)
+        assert result["proportions"] is None
+        assert result["signal_z"] < 4.0
+        assert "held-out block groups" in result["signal_note"]
+
+
+def test_bilinear_declines_nonidentifiable_references(small):
+    _, blocks, _, RB = small
+    z = simulate_admixture_mvn(
+        RB, PI, 0.25, 4000, np.random.default_rng(94)
+    )
+    result = estimate_bilinear(z, [RB[0], RB[0]], blocks=blocks)
+    assert result["proportions"] is None
+    assert result["design_rank"] < result["design_columns"]
+    assert "not identifiable" in result["signal_note"]
+
+    near_duplicate = [0.99 * first + 0.01 * second
+                      for first, second in zip(RB[0], RB[1])]
+    result = estimate_bilinear(z, [RB[0], near_duplicate], blocks=blocks)
+    assert result["design_rank"] == result["design_columns"]
+    assert result["design_condition"] > 1e3
+    assert result["proportions"] is None
+    assert "condition number" in result["signal_note"]
+
+
+def test_bilinear_declines_cross_only_coefficient_matrix(small):
+    """A strong but indefinite cross-only coefficient matrix is impossible."""
+    _, blocks, _, RB = small
+    Lb, pairs = bilinear_ld_scores(RB, blocks)
+    assert pairs == [(0, 0), (0, 1), (1, 1)]
+    z = np.sqrt(1.0 + 4.0 * Lb[:, 1])
+    result = estimate_bilinear(z, RB, blocks=blocks)
+    assert result["proportions_raw"] is not None
+    assert result["proportions"] is None
+    assert result["psd_violation"] > 0.9
+    assert "positive-semidefinite" in result["signal_note"]
+
+
+def test_bilinear_variable_sample_size_uses_n_times_ld(small):
+    _, blocks, _, RB = small
+    Lb, _ = bilinear_ld_scores(RB, blocks)
+    m = Lb.shape[0]
+    sample_size = np.linspace(5000.0, 20000.0, m)
+    relative_n = sample_size / np.median(sample_size)
+    coefficients = np.array([PI[0] ** 2,
+                             2 * PI[0] * PI[1],
+                             PI[1] ** 2])
+    z = np.sqrt(1.0 + 4.0 * relative_n * (Lb @ coefficients))
+    result = estimate_bilinear(
+        z, RB, blocks=blocks, sample_size=sample_size
+    )
+    assert np.allclose(result["proportions"], PI, atol=1e-8)
+    assert result["sample_size_scale"] == pytest.approx(
+        np.median(sample_size)
+    )
+    assert result["n_truncated"] == 0
+    assert result["truncation_cap"] is None
+    with pytest.raises(ValueError, match="sample_size"):
+        estimate_bilinear(
+            z, RB, blocks=blocks, sample_size=np.zeros(m)
+        )
+
+
+def test_bilinear_explicit_capping_is_not_accepted(small):
+    _, blocks, _, RB = small
+    z = simulate_admixture_mvn(
+        RB, PI, 0.5, 10000, np.random.default_rng(95)
+    )
+    result = estimate_bilinear(z, RB, blocks=blocks, c=1.0)
+    assert result["n_truncated"] > 0
+    assert result["proportions"] is None
+    assert result["approximation_note"] is not None
+    assert "approximate" in result["signal_note"]
 
 
 def test_naive_ldscore_regression_is_misspecified(small):

@@ -459,11 +459,15 @@ Run: `python experiments/gauge_validation.py --seed 0 [--sub-fst 0.1]`.
 
 ## `ancestry_ld_study.py` — LD-moment ancestry-composition estimators
 
-The simulation benchmark for the two summary-statistics ancestry estimators
-derived in [`../docs/ancestry_report/ancestry_report.pdf`](../docs/ancestry_report/ancestry_report.pdf)
-— Estimator A (within-block pair products `z_i z_j` on per-ancestry reference
-correlations, with the quadratic signal-absorber columns) and Estimator B
-(truncated chi-square on the bilinear LD scores `l^(kk')`). The genomes are
+The simulation benchmark for two experimental summary-statistics ancestry
+estimators described in
+[`../docs/ancestry_report/ancestry_report.pdf`](../docs/ancestry_report/ancestry_report.pdf)
+— Estimator A (within-block pair products `z_i z_j` on per-population
+reference correlations, with quadratic signal-absorber columns) and
+Estimator B (uncapped chi-square on bilinear LD scores `l^(kk')`). An
+explicit cap is available only as an exploratory robustness approximation;
+if it truncates any statistic, the implementation withholds proportions.
+The genomes are
 block-structured with per-block, per-interval AR(1) LD landscapes
 (recombination hotspots), which is what gives the LD-score moments real
 variation; the individual-level arm simulates admixed genomes as ancestry
@@ -473,24 +477,62 @@ is stressed by the Wahlund term rather than assumed.
 Observed (24 MVN / 12 individual-level replicates, m ≈ 10k variants in 400
 blocks for the scale arms, truth π = (0.65, 0.35)):
 
+**Table 11. Conditional performance of the hardened LD-moment estimators**
+
 | arm | result |
 |---|---|
-| A, h²=0 (null trait) | unbiased: mean (0.644, 0.355), SD 0.064, jackknife SE 0.078 |
-| A, nh²/m=0.025 raw / +absorber | 0.055 / 0.046 max bias |
-| A, nh²/m=0.5 raw / +absorber | 0.346 (saturated) / 0.045 — the absorber removes the tagging bias |
-| B, nh²/m = 0.5–8 | unbiased (max err ≤ 0.01), SD 0.12–0.14, declines 1/24 at the weakest signal |
+| A, h²=0, raw | mean (0.6445, 0.3555), max error 0.0055, SD 0.0639, mean jackknife SE 0.0778 |
+| A, h²=0, activation enabled | mean (0.6395, 0.3605), max error 0.0105, SD 0.0876, mean jackknife SE 0.1007 |
+| A, nh²/m=0.025 raw / +absorber | 0.0546 / 0.0500 max error |
+| A, nh²/m=0.1 raw / +absorber | 0.1916 / 0.1925 max error — no improvement at this signal level |
+| A, nh²/m=0.5 raw / +absorber | 0.3456 / 0.0747 max error; absorber accepted 20/24 and declined 4/24 with no positive fitted linear component |
+| B, nh²/m=0.5 / 2 / 8 | accepted 7/24, 5/24, 6/24; accepted-run max errors 0.0470, 0.0387, 0.0291 |
 | A, K=4, h²=0 | max err 0.022 on (0.4, 0.3, 0.2, 0.1) |
-| B, K=4, nh²/m=8 | declines 24/24 — the 14-column bilinear design is too collinear at this scale; the guard refuses rather than fabricates |
-| A, confusable references | still recovers (err 0.020) but the SE doubles (0.127 vs 0.078) — honest diagnostics |
-| A, individual level, fst 0.05 / 0.2 | err 0.006 / 0.010 — the Wahlund term does not materially bias A at these levels |
-| B, individual level, h²=0.5, m≈1.5k | declines 9/24; accepted runs are noisy — B wants genome-scale m |
+| B, K=4, nh²/m=8 | declines 24/24; condition number 8.25, so collinearity is not the observed cause |
+| A, confusable references | max error 0.0177, SD 0.0730, mean jackknife SE 0.1299 |
+| A, individual level, fst 0.05 / 0.2 | max error 0.0064 / 0.0096 in these old-admixture simulations |
+| B, individual level, h²=0.5, m≈1.5k | declines 12/12 at the held-out-signal screen |
+| A, one realised panel at n_ref 500 / 8000 | max error 0.0558 / 0.0746; this does not estimate reference-panel uncertainty |
 
-The quantitative summary: both estimators are unbiased where the report says
-they should be identified; Estimator A works at h²=0 (it is driven by the
-correlated-noise covariance) and its raw form is biased toward the high-LD
-ancestry by the tagging term at nh²/m ≳ 0.1, which the absorber columns
-largely remove; Estimator B needs real polygenic signal and scale. Reference
-panel size (n_ref 500–8000) was secondary to z-noise at these scales. Pinned
-by `tests/test_ancestry.py` (18 tests).
+**Table 12. First reported outcome of Estimator B's heuristic gate**
+
+| arm | accepted | held-out signal | rank-one | non-PSD |
+|---|---:|---:|---:|---:|
+| nh²/m=0.5 | 7 | 4 | 7 | 6 |
+| nh²/m=2 | 5 | 1 | 9 | 9 |
+| nh²/m=8 | 6 | 1 | 8 | 9 |
+| K=4, nh²/m=8 | 0 | 9 | 2 | 13 |
+
+The documented command now emits these first-failure counts in each arm's
+`decline_reasons` field and the fitted design condition number in
+`design_condition`; Table 12 is therefore reproducible from its JSON output.
+
+These results are conditional on the simulated data-generating mechanisms,
+which are also used to construct the fitted reference moments. They show
+that Estimator A can recover the stipulated LD-mixture coefficient at h²=0
+in these idealised designs: the information is correlated score noise, not
+polygenicity. Its raw form moves toward the high-LD reference at nh²/m ≳ 0.1.
+The exact Jordan-product absorber span does not guarantee a useful finite-
+sample decomposition: among accepted fits the absorber improved bias at ratio
+0.5 but not 0.1, while honestly declining 4/24 high-signal draws with no
+positive fitted linear component. Its two-parametric-SE activation rule is
+uncalibrated. Estimator B now
+declines most simulated datasets under fixed held-out-signal, design,
+positive-semidefinite and rank-one screens. The accepted-run means are
+selection-conditioned, not evidence of unconditional unbiasedness. The
+single realised-panel comparisons at n_ref 500 and 8000 do not evaluate
+reference-panel sampling uncertainty.
+
+The study does **not** establish unbiasedness for PC- or mixed-model-adjusted
+GWAS, logistic case-control statistics, variant-specific participant overlap
+or sample size, inverse-variance meta-analysis, recent admixture, an
+out-of-panel source, reference misspecification, or boundary inference. It
+also does not show that EAF projection weights, LD-mixture coefficients,
+participant fractions and local ancestry are the same estimand. Estimator A
+therefore remains experimental after the algebraic and identifiability fixes;
+Estimator B remains a research prototype. Neither is ready for SMARTpred
+integration before independent simulation and real-data validation. The
+implementation behaviour is pinned by `tests/test_ancestry.py` (34 tests),
+not thereby scientifically validated.
 
 Run: `python experiments/ancestry_ld_study.py [--reps 24 --il-reps 12]`.
