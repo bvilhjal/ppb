@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 import string
 import subprocess
 import sys
@@ -301,3 +302,38 @@ def test_list_is_runnable_without_repo_cwd_or_network(tmp_path):
     for study in benchmark.STUDIES:
         assert study.accession in completed.stdout
     assert "descriptive" in completed.stdout
+
+
+def test_checked_in_snapshot_retains_full_provenance_and_predeclared_verdict():
+    path = (
+        Path(benchmark.__file__).resolve().parents[1]
+        / "results" / "ancestry-frequency" / "yengo-height-2026-08-30.json"
+    )
+    text = path.read_text(encoding="utf-8")
+    snapshot = json.loads(text, parse_constant=lambda value: pytest.fail(
+        f"non-finite JSON constant {value}"))
+
+    assert snapshot["schema_version"] == 1
+    assert snapshot["estimand"] == "equal-marker EAF-profile projection weights"
+    assert snapshot["panel"]["semantic_sha256"] == benchmark.PANEL_SHA256
+    assert snapshot["software"]["ldpred3_acquisition_revision"] == (
+        benchmark.LDPRED3_REVISION)
+    assert len(snapshot["software"]["ppb_commit"]) == 40
+    assert snapshot["verdict"] == {
+        "n_controls": 5,
+        "n_passed": 5,
+        "failed_accessions": [],
+        "passed": True,
+    }
+    assert [row["study"]["key"] for row in snapshot["studies"]] == [
+        study.key for study in benchmark.STUDIES
+    ]
+    pins = {study.accession: study for study in benchmark.STUDIES}
+    for row in snapshot["studies"]:
+        study = pins[row["study"]["accession"]]
+        assert row["study"]["source_sha256"] == study.source_sha256
+        assert row["input"]["normalized_content_sha256"] == (
+            study.normalized_content_sha256)
+        assert row["decomposition"]["status"] == "estimated"
+        assert row["decomposition"]["matching"]["n_matched"] > 1_000_000
+    assert "C:\\" not in text and "/Users/" not in text

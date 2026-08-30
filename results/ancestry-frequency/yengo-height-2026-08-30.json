@@ -1,0 +1,1833 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-08-30T11:09:17.645730+00:00",
+  "estimand": "equal-marker EAF-profile projection weights",
+  "interpretation": "Projection of deposited effect-allele frequencies onto the fixed 1000 Genomes superpopulation panel; not automatically participant-ancestry fractions or meta-analysis weights.",
+  "benchmark": {
+    "name": "Yengo 2022 ancestry-stratified height EAF benchmark",
+    "publication": "Yengo et al., Nature 2022",
+    "doi": "10.1038/s41586-022-05275-y",
+    "pmid": "36224396",
+    "verdict_rule": "Each of the five ancestry-specific analyses must return status=estimated and rank its predeclared corresponding 1000G superpopulation first. The pooled analysis is excluded.",
+    "numeric_thresholds_tuned_on_these_data": false
+  },
+  "panel": {
+    "source": "1000 Genomes phase 3 (20130502) super-population ALT frequencies at HapMap3 sites",
+    "source_url": "https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502",
+    "genome_build": "hg19/GRCh37",
+    "semantic_sha256": "c91b6652671ceb373417e9d82c47db5048964923bf448801214e1f78b7291186",
+    "n_variants": 1054330,
+    "populations": [
+      "AFR",
+      "AMR",
+      "EAS",
+      "EUR",
+      "SAS"
+    ],
+    "n_samples": [
+      661,
+      347,
+      504,
+      503,
+      489
+    ]
+  },
+  "software": {
+    "ppb_version": "0.0.1.dev2",
+    "ppb_commit": "67fa91552d27e347f795f31ae0644449d766ed6c",
+    "python": "3.14.6",
+    "numpy": "2.4.6",
+    "ldpred3_acquisition_revision": "621a2c4dc10a225fd7abcddebc66fbdee33c9cf0",
+    "ldpred3_component": "benchmarks/gwas_catalog_harvest.py"
+  },
+  "studies": [
+    {
+      "study": {
+        "key": "AFR",
+        "accession": "GCST90245989",
+        "reported_sample": "African ancestry",
+        "reported_n": 168193,
+        "expected_superpopulation": "AFR",
+        "expectation_basis": "same-paper ancestry-specific analysis; AFR is the predeclared top rank",
+        "ftp_relative_path": "GCST90245001-GCST90246000/GCST90245989/harmonised/GCST90245989.h.tsv.gz",
+        "remote_bytes": 37029018,
+        "source_sha256": "c28fe7ecf786e1e5f3e0d658ce2d9a61d409f24b31aa429962b794afb6736a71",
+        "normalized_content_sha256": "80dcbb368e2295dc6ee37941784ced2175072d89ea256b16039e9d20a7a69d9a",
+        "trait": "height",
+        "publication": "Yengo et al., Nature 2022",
+        "publication_doi": "10.1038/s41586-022-05275-y",
+        "publication_pmid": "36224396",
+        "url": "https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90245001-GCST90246000/GCST90245989/harmonised/GCST90245989.h.tsv.gz"
+      },
+      "input": {
+        "normalized_filename": "GCST90245989.hm3.tsv.gz",
+        "n_rows": 1045292,
+        "mode": "verified_cache",
+        "raw_source_sha256_verified_this_run": false,
+        "normalized_content_sha256": "80dcbb368e2295dc6ee37941784ced2175072d89ea256b16039e9d20a7a69d9a"
+      },
+      "elapsed_seconds": 10.971180500026094,
+      "decomposition": {
+        "channel": "frequency",
+        "estimand": "af_projection_weights",
+        "populations": [
+          "AFR",
+          "AMR",
+          "EAS",
+          "EUR",
+          "SAS"
+        ],
+        "n_used": 1044682,
+        "proportions": [
+          0.8346521953753243,
+          0.01731214467244441,
+          0.006984596257602776,
+          0.13247724576197106,
+          0.008573817932657575
+        ],
+        "proportions_se": [
+          0.0006539677809612916,
+          0.0006305966697228998,
+          0.00041385074753754023,
+          0.0006590598204070854,
+          0.000513523787558062
+        ],
+        "af_corr": 0.9989053501317798,
+        "residual_rms": 0.01239551030462513,
+        "residual_max_abs": 0.2965433748294025,
+        "reference_sampling_rms": 0.009177501532547254,
+        "panel_confusability": {
+          "pairwise_af_correlation": {
+            "AFR-AMR": 0.7295194991253937,
+            "AFR-EAS": 0.6489281030562483,
+            "AFR-EUR": 0.6839637586545201,
+            "AFR-SAS": 0.7175591525865587,
+            "AMR-EAS": 0.853821287698819,
+            "AMR-EUR": 0.9356802952041885,
+            "AMR-SAS": 0.9185288441154758,
+            "EAS-EUR": 0.7695082514857307,
+            "EAS-SAS": 0.8614108864727504,
+            "EUR-SAS": 0.9115059768069611
+          },
+          "gram_condition_number": 3.19148703549992,
+          "effective_rank": 4,
+          "contrast_condition_number": 3.19148703549992,
+          "contrast_rank": 4,
+          "expected_contrast_rank": 4,
+          "contrast_rms": 0.10944011502422207,
+          "n_variants": 1044682,
+          "note": "identifiability is determined from population-frequency contrasts on the matched variants; raw pairwise AF correlations are descriptive because their shared baseline can be misleading"
+        },
+        "residual_rms_over_contrast": 0.1132629502617177,
+        "validity_thresholds": {
+          "minimum_matched_variants": 1000,
+          "minimum_distinct_autosomes": 10,
+          "maximum_chromosome_fraction": 0.25,
+          "max_contrast_condition_number": 1000.0,
+          "max_residual_rms": 0.05,
+          "max_residual_rms_over_contrast": 0.5
+        },
+        "jackknife_note": null,
+        "uncertainty_note": "delete-one-chromosome jackknife conditions on the fixed panel; it omits target and reference allele-frequency sampling uncertainty and model misspecification",
+        "boundary_note": null,
+        "acceptance_gate_note": "count, chromosome-coverage, contrast-rank, condition-number, and fit cutoffs are engineering gates, not calibrated statistical thresholds",
+        "chromosome_coverage": {
+          "n_distinct_autosomes": 22,
+          "largest_chromosome": "2",
+          "largest_chromosome_fraction": 0.08314970488627162
+        },
+        "leave_one_chromosome_identifiability": {
+          "all_identifiable": true,
+          "designs": [
+            {
+              "chromosome": "1",
+              "n_retained": 958352,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192683096383875,
+              "identifiable": true
+            },
+            {
+              "chromosome": "2",
+              "n_retained": 957817,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192645871266851,
+              "identifiable": true
+            },
+            {
+              "chromosome": "3",
+              "n_retained": 971859,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1801205235875214,
+              "identifiable": true
+            },
+            {
+              "chromosome": "4",
+              "n_retained": 979641,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.19064177914574,
+              "identifiable": true
+            },
+            {
+              "chromosome": "5",
+              "n_retained": 978903,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.186146901975751,
+              "identifiable": true
+            },
+            {
+              "chromosome": "6",
+              "n_retained": 974392,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.195376324981311,
+              "identifiable": true
+            },
+            {
+              "chromosome": "7",
+              "n_retained": 987303,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.187066458792336,
+              "identifiable": true
+            },
+            {
+              "chromosome": "8",
+              "n_retained": 988012,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1886323751595738,
+              "identifiable": true
+            },
+            {
+              "chromosome": "9",
+              "n_retained": 996610,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1912387138850473,
+              "identifiable": true
+            },
+            {
+              "chromosome": "10",
+              "n_retained": 988734,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.189019881583695,
+              "identifiable": true
+            },
+            {
+              "chromosome": "11",
+              "n_retained": 991209,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.197289574393992,
+              "identifiable": true
+            },
+            {
+              "chromosome": "12",
+              "n_retained": 993677,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.196401022681806,
+              "identifiable": true
+            },
+            {
+              "chromosome": "13",
+              "n_retained": 1004988,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1899029306126367,
+              "identifiable": true
+            },
+            {
+              "chromosome": "14",
+              "n_retained": 1009823,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.2037900371480124,
+              "identifiable": true
+            },
+            {
+              "chromosome": "15",
+              "n_retained": 1013304,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1918549870076194,
+              "identifiable": true
+            },
+            {
+              "chromosome": "16",
+              "n_retained": 1012517,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.194352207637543,
+              "identifiable": true
+            },
+            {
+              "chromosome": "17",
+              "n_retained": 1016284,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1906571588108625,
+              "identifiable": true
+            },
+            {
+              "chromosome": "18",
+              "n_retained": 1013497,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1880804102695732,
+              "identifiable": true
+            },
+            {
+              "chromosome": "19",
+              "n_retained": 1025159,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192400056808288,
+              "identifiable": true
+            },
+            {
+              "chromosome": "20",
+              "n_retained": 1017130,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.185212847674709,
+              "identifiable": true
+            },
+            {
+              "chromosome": "21",
+              "n_retained": 1029701,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190935474087225,
+              "identifiable": true
+            },
+            {
+              "chromosome": "22",
+              "n_retained": 1029410,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.198378690076228,
+              "identifiable": true
+            }
+          ]
+        },
+        "status": "estimated",
+        "warnings": [],
+        "matching": {
+          "n_input": 1045292,
+          "n_dropped_duplicate": 0,
+          "n_dropped_palindromic": 0,
+          "n_dropped_not_in_panel": 0,
+          "n_dropped_allele_mismatch": 610,
+          "n_dropped_nonfinite_eaf": 0,
+          "n_dropped_out_of_range_eaf": 0,
+          "n_matched": 1044682
+        }
+      },
+      "predeclared_control": {
+        "included_in_verdict": true,
+        "expected_top_population": "AFR",
+        "expected_weight": 0.8346521953753243,
+        "expected_rank": 1,
+        "passed": true
+      }
+    },
+    {
+      "study": {
+        "key": "AMR",
+        "accession": "GCST90245993",
+        "reported_sample": "Hispanic or Latin American",
+        "reported_n": 58709,
+        "expected_superpopulation": "AMR",
+        "expectation_basis": "predeclared proxy: the Catalog label maps imperfectly to 1000G AMR",
+        "ftp_relative_path": "GCST90245001-GCST90246000/GCST90245993/harmonised/GCST90245993.h.tsv.gz",
+        "remote_bytes": 36760742,
+        "source_sha256": "c83e01128edac04f7b680b61428fc5497070de4be8366c9618eadac2dd7658b4",
+        "normalized_content_sha256": "921ce260f3be4465f2f3692a19a865dd06e9bd9cd7a24b0dda3d0749c347a385",
+        "trait": "height",
+        "publication": "Yengo et al., Nature 2022",
+        "publication_doi": "10.1038/s41586-022-05275-y",
+        "publication_pmid": "36224396",
+        "url": "https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90245001-GCST90246000/GCST90245993/harmonised/GCST90245993.h.tsv.gz"
+      },
+      "input": {
+        "normalized_filename": "GCST90245993.hm3.tsv.gz",
+        "n_rows": 1045292,
+        "mode": "verified_cache",
+        "raw_source_sha256_verified_this_run": false,
+        "normalized_content_sha256": "921ce260f3be4465f2f3692a19a865dd06e9bd9cd7a24b0dda3d0749c347a385"
+      },
+      "elapsed_seconds": 10.955966099980287,
+      "decomposition": {
+        "channel": "frequency",
+        "estimand": "af_projection_weights",
+        "populations": [
+          "AFR",
+          "AMR",
+          "EAS",
+          "EUR",
+          "SAS"
+        ],
+        "n_used": 1044682,
+        "proportions": [
+          0.04020368787384629,
+          0.8187562547388381,
+          0.024869756933019006,
+          0.10265901274882701,
+          0.01351128770546955
+        ],
+        "proportions_se": [
+          0.0008813029946470016,
+          0.00393700188020654,
+          0.0007584086132294317,
+          0.0034420121115502247,
+          0.0014436624628522833
+        ],
+        "af_corr": 0.9971068899296318,
+        "residual_rms": 0.01950819540645243,
+        "residual_max_abs": 0.2233478080025888,
+        "reference_sampling_rms": 0.012724982529742841,
+        "panel_confusability": {
+          "pairwise_af_correlation": {
+            "AFR-AMR": 0.7295194991253937,
+            "AFR-EAS": 0.6489281030562483,
+            "AFR-EUR": 0.6839637586545201,
+            "AFR-SAS": 0.7175591525865587,
+            "AMR-EAS": 0.853821287698819,
+            "AMR-EUR": 0.9356802952041885,
+            "AMR-SAS": 0.9185288441154758,
+            "EAS-EUR": 0.7695082514857307,
+            "EAS-SAS": 0.8614108864727504,
+            "EUR-SAS": 0.9115059768069611
+          },
+          "gram_condition_number": 3.19148703549992,
+          "effective_rank": 4,
+          "contrast_condition_number": 3.19148703549992,
+          "contrast_rank": 4,
+          "expected_contrast_rank": 4,
+          "contrast_rms": 0.10944011502422207,
+          "n_variants": 1044682,
+          "note": "identifiability is determined from population-frequency contrasts on the matched variants; raw pairwise AF correlations are descriptive because their shared baseline can be misleading"
+        },
+        "residual_rms_over_contrast": 0.17825452213874898,
+        "validity_thresholds": {
+          "minimum_matched_variants": 1000,
+          "minimum_distinct_autosomes": 10,
+          "maximum_chromosome_fraction": 0.25,
+          "max_contrast_condition_number": 1000.0,
+          "max_residual_rms": 0.05,
+          "max_residual_rms_over_contrast": 0.5
+        },
+        "jackknife_note": null,
+        "uncertainty_note": "delete-one-chromosome jackknife conditions on the fixed panel; it omits target and reference allele-frequency sampling uncertainty and model misspecification",
+        "boundary_note": null,
+        "acceptance_gate_note": "count, chromosome-coverage, contrast-rank, condition-number, and fit cutoffs are engineering gates, not calibrated statistical thresholds",
+        "chromosome_coverage": {
+          "n_distinct_autosomes": 22,
+          "largest_chromosome": "2",
+          "largest_chromosome_fraction": 0.08314970488627162
+        },
+        "leave_one_chromosome_identifiability": {
+          "all_identifiable": true,
+          "designs": [
+            {
+              "chromosome": "1",
+              "n_retained": 958352,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192683096383875,
+              "identifiable": true
+            },
+            {
+              "chromosome": "2",
+              "n_retained": 957817,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192645871266851,
+              "identifiable": true
+            },
+            {
+              "chromosome": "3",
+              "n_retained": 971859,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1801205235875214,
+              "identifiable": true
+            },
+            {
+              "chromosome": "4",
+              "n_retained": 979641,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.19064177914574,
+              "identifiable": true
+            },
+            {
+              "chromosome": "5",
+              "n_retained": 978903,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.186146901975751,
+              "identifiable": true
+            },
+            {
+              "chromosome": "6",
+              "n_retained": 974392,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.195376324981311,
+              "identifiable": true
+            },
+            {
+              "chromosome": "7",
+              "n_retained": 987303,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.187066458792336,
+              "identifiable": true
+            },
+            {
+              "chromosome": "8",
+              "n_retained": 988012,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1886323751595738,
+              "identifiable": true
+            },
+            {
+              "chromosome": "9",
+              "n_retained": 996610,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1912387138850473,
+              "identifiable": true
+            },
+            {
+              "chromosome": "10",
+              "n_retained": 988734,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.189019881583695,
+              "identifiable": true
+            },
+            {
+              "chromosome": "11",
+              "n_retained": 991209,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.197289574393992,
+              "identifiable": true
+            },
+            {
+              "chromosome": "12",
+              "n_retained": 993677,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.196401022681806,
+              "identifiable": true
+            },
+            {
+              "chromosome": "13",
+              "n_retained": 1004988,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1899029306126367,
+              "identifiable": true
+            },
+            {
+              "chromosome": "14",
+              "n_retained": 1009823,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.2037900371480124,
+              "identifiable": true
+            },
+            {
+              "chromosome": "15",
+              "n_retained": 1013304,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1918549870076194,
+              "identifiable": true
+            },
+            {
+              "chromosome": "16",
+              "n_retained": 1012517,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.194352207637543,
+              "identifiable": true
+            },
+            {
+              "chromosome": "17",
+              "n_retained": 1016284,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1906571588108625,
+              "identifiable": true
+            },
+            {
+              "chromosome": "18",
+              "n_retained": 1013497,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1880804102695732,
+              "identifiable": true
+            },
+            {
+              "chromosome": "19",
+              "n_retained": 1025159,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192400056808288,
+              "identifiable": true
+            },
+            {
+              "chromosome": "20",
+              "n_retained": 1017130,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.185212847674709,
+              "identifiable": true
+            },
+            {
+              "chromosome": "21",
+              "n_retained": 1029701,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190935474087225,
+              "identifiable": true
+            },
+            {
+              "chromosome": "22",
+              "n_retained": 1029410,
+              "contrast_rank": 5,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.198378690076228,
+              "identifiable": true
+            }
+          ]
+        },
+        "status": "estimated",
+        "warnings": [],
+        "matching": {
+          "n_input": 1045292,
+          "n_dropped_duplicate": 0,
+          "n_dropped_palindromic": 0,
+          "n_dropped_not_in_panel": 0,
+          "n_dropped_allele_mismatch": 610,
+          "n_dropped_nonfinite_eaf": 0,
+          "n_dropped_out_of_range_eaf": 0,
+          "n_matched": 1044682
+        }
+      },
+      "predeclared_control": {
+        "included_in_verdict": true,
+        "expected_top_population": "AMR",
+        "expected_weight": 0.8187562547388381,
+        "expected_rank": 1,
+        "passed": true
+      }
+    },
+    {
+      "study": {
+        "key": "EAS",
+        "accession": "GCST90245991",
+        "reported_sample": "East Asian ancestry",
+        "reported_n": 363856,
+        "expected_superpopulation": "EAS",
+        "expectation_basis": "same-paper ancestry-specific analysis; EAS is the predeclared top rank",
+        "ftp_relative_path": "GCST90245001-GCST90246000/GCST90245991/harmonised/GCST90245991.h.tsv.gz",
+        "remote_bytes": 35940719,
+        "source_sha256": "dec82cdd1bb2ae4d0cfd695e6c57e51a02583e2a50a60ab487a22c12ae422195",
+        "normalized_content_sha256": "520f86b7795a8ad8301ef978f974c82d7ac6368f9eb7c2f0bf48d1743b53a494",
+        "trait": "height",
+        "publication": "Yengo et al., Nature 2022",
+        "publication_doi": "10.1038/s41586-022-05275-y",
+        "publication_pmid": "36224396",
+        "url": "https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90245001-GCST90246000/GCST90245991/harmonised/GCST90245991.h.tsv.gz"
+      },
+      "input": {
+        "normalized_filename": "GCST90245991.hm3.tsv.gz",
+        "n_rows": 1044006,
+        "mode": "verified_cache",
+        "raw_source_sha256_verified_this_run": false,
+        "normalized_content_sha256": "520f86b7795a8ad8301ef978f974c82d7ac6368f9eb7c2f0bf48d1743b53a494"
+      },
+      "elapsed_seconds": 11.01860619999934,
+      "decomposition": {
+        "channel": "frequency",
+        "estimand": "af_projection_weights",
+        "populations": [
+          "AFR",
+          "AMR",
+          "EAS",
+          "EUR",
+          "SAS"
+        ],
+        "n_used": 1043399,
+        "proportions": [
+          0.0,
+          0.03001022817406981,
+          0.9699897718259302,
+          0.0,
+          0.0
+        ],
+        "proportions_se": [
+          0.0,
+          0.0014139963666779853,
+          0.0014139963666779255,
+          0.0,
+          0.0
+        ],
+        "af_corr": 0.993680969811706,
+        "residual_rms": 0.033068952287713296,
+        "residual_max_abs": 0.22680991274509638,
+        "reference_sampling_rms": 0.011785824389143155,
+        "panel_confusability": {
+          "pairwise_af_correlation": {
+            "AFR-AMR": 0.7290545521542545,
+            "AFR-EAS": 0.6483160507026078,
+            "AFR-EUR": 0.683430033315022,
+            "AFR-SAS": 0.7170686605614023,
+            "AMR-EAS": 0.8534715291621219,
+            "AMR-EUR": 0.9355266233274465,
+            "AMR-SAS": 0.9183167772014599,
+            "EAS-EUR": 0.7689729715914401,
+            "EAS-SAS": 0.8610707092360761,
+            "EUR-SAS": 0.9112896217688506
+          },
+          "gram_condition_number": 3.1909987247347598,
+          "effective_rank": 4,
+          "contrast_condition_number": 3.1909987247347598,
+          "contrast_rank": 4,
+          "expected_contrast_rank": 4,
+          "contrast_rms": 0.10949546734437009,
+          "n_variants": 1043399,
+          "note": "identifiability is determined from population-frequency contrasts on the matched variants; raw pairwise AF correlations are descriptive because their shared baseline can be misleading"
+        },
+        "residual_rms_over_contrast": 0.3020120657936403,
+        "validity_thresholds": {
+          "minimum_matched_variants": 1000,
+          "minimum_distinct_autosomes": 10,
+          "maximum_chromosome_fraction": 0.25,
+          "max_contrast_condition_number": 1000.0,
+          "max_residual_rms": 0.05,
+          "max_residual_rms_over_contrast": 0.5
+        },
+        "jackknife_note": null,
+        "uncertainty_note": "delete-one-chromosome jackknife conditions on the fixed panel; it omits target and reference allele-frequency sampling uncertainty and model misspecification",
+        "boundary_note": "at least one fitted weight is on or near the simplex boundary; ordinary symmetric standard-error intervals are invalid",
+        "acceptance_gate_note": "count, chromosome-coverage, contrast-rank, condition-number, and fit cutoffs are engineering gates, not calibrated statistical thresholds",
+        "chromosome_coverage": {
+          "n_distinct_autosomes": 22,
+          "largest_chromosome": "2",
+          "largest_chromosome_fraction": 0.08311585500848669
+        },
+        "leave_one_chromosome_identifiability": {
+          "all_identifiable": true,
+          "designs": [
+            {
+              "chromosome": "1",
+              "n_retained": 957208,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192239754866388,
+              "identifiable": true
+            },
+            {
+              "chromosome": "2",
+              "n_retained": 956676,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1922021651088173,
+              "identifiable": true
+            },
+            {
+              "chromosome": "3",
+              "n_retained": 970632,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.17961777398982,
+              "identifiable": true
+            },
+            {
+              "chromosome": "4",
+              "n_retained": 978445,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1901478814841777,
+              "identifiable": true
+            },
+            {
+              "chromosome": "5",
+              "n_retained": 977688,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1856506466593006,
+              "identifiable": true
+            },
+            {
+              "chromosome": "6",
+              "n_retained": 973208,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1948617071328544,
+              "identifiable": true
+            },
+            {
+              "chromosome": "7",
+              "n_retained": 986070,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.186562084112752,
+              "identifiable": true
+            },
+            {
+              "chromosome": "8",
+              "n_retained": 986799,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.188144326677982,
+              "identifiable": true
+            },
+            {
+              "chromosome": "9",
+              "n_retained": 995376,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1907430645877293,
+              "identifiable": true
+            },
+            {
+              "chromosome": "10",
+              "n_retained": 987525,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1885410658123714,
+              "identifiable": true
+            },
+            {
+              "chromosome": "11",
+              "n_retained": 989965,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1967790998187113,
+              "identifiable": true
+            },
+            {
+              "chromosome": "12",
+              "n_retained": 992466,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.195916647660889,
+              "identifiable": true
+            },
+            {
+              "chromosome": "13",
+              "n_retained": 1003755,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1894248869600252,
+              "identifiable": true
+            },
+            {
+              "chromosome": "14",
+              "n_retained": 1008563,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.20328889548154,
+              "identifiable": true
+            },
+            {
+              "chromosome": "15",
+              "n_retained": 1012056,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1913607340792667,
+              "identifiable": true
+            },
+            {
+              "chromosome": "16",
+              "n_retained": 1011276,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1938639350927245,
+              "identifiable": true
+            },
+            {
+              "chromosome": "17",
+              "n_retained": 1015043,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1901733979018068,
+              "identifiable": true
+            },
+            {
+              "chromosome": "18",
+              "n_retained": 1012250,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1875995460084106,
+              "identifiable": true
+            },
+            {
+              "chromosome": "19",
+              "n_retained": 1023905,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1919133765116774,
+              "identifiable": true
+            },
+            {
+              "chromosome": "20",
+              "n_retained": 1015878,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.18472224960049,
+              "identifiable": true
+            },
+            {
+              "chromosome": "21",
+              "n_retained": 1028438,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190443974762873,
+              "identifiable": true
+            },
+            {
+              "chromosome": "22",
+              "n_retained": 1028157,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.197889801262569,
+              "identifiable": true
+            }
+          ]
+        },
+        "status": "estimated",
+        "warnings": [],
+        "matching": {
+          "n_input": 1044006,
+          "n_dropped_duplicate": 0,
+          "n_dropped_palindromic": 0,
+          "n_dropped_not_in_panel": 0,
+          "n_dropped_allele_mismatch": 607,
+          "n_dropped_nonfinite_eaf": 0,
+          "n_dropped_out_of_range_eaf": 0,
+          "n_matched": 1043399
+        }
+      },
+      "predeclared_control": {
+        "included_in_verdict": true,
+        "expected_top_population": "EAS",
+        "expected_weight": 0.9699897718259302,
+        "expected_rank": 1,
+        "passed": true
+      }
+    },
+    {
+      "study": {
+        "key": "EUR",
+        "accession": "GCST90245992",
+        "reported_sample": "European ancestry",
+        "reported_n": 1597374,
+        "expected_superpopulation": "EUR",
+        "expectation_basis": "same-paper ancestry-specific analysis; EUR is the predeclared top rank",
+        "ftp_relative_path": "GCST90245001-GCST90246000/GCST90245992/harmonised/GCST90245992.h.tsv.gz",
+        "remote_bytes": 39622810,
+        "source_sha256": "c771e1bb1ed2e859e487a8a63880f694e30e9e771843b2da3373dedbbea8c1a1",
+        "normalized_content_sha256": "eea3f4e81bc992b63725240448fb5557330d8e5864ca8f3b49115f24c2c78706",
+        "trait": "height",
+        "publication": "Yengo et al., Nature 2022",
+        "publication_doi": "10.1038/s41586-022-05275-y",
+        "publication_pmid": "36224396",
+        "url": "https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90245001-GCST90246000/GCST90245992/harmonised/GCST90245992.h.tsv.gz"
+      },
+      "input": {
+        "normalized_filename": "GCST90245992.hm3.tsv.gz",
+        "n_rows": 1045294,
+        "mode": "verified_cache",
+        "raw_source_sha256_verified_this_run": false,
+        "normalized_content_sha256": "eea3f4e81bc992b63725240448fb5557330d8e5864ca8f3b49115f24c2c78706"
+      },
+      "elapsed_seconds": 11.128047900012461,
+      "decomposition": {
+        "channel": "frequency",
+        "estimand": "af_projection_weights",
+        "populations": [
+          "AFR",
+          "AMR",
+          "EAS",
+          "EUR",
+          "SAS"
+        ],
+        "n_used": 1044683,
+        "proportions": [
+          0.0,
+          0.007508477051197391,
+          0.0,
+          0.9888572932714167,
+          0.0036342296773858
+        ],
+        "proportions_se": [
+          0.0,
+          0.0011079216495762918,
+          0.0,
+          0.0012361824046286292,
+          0.0008283582484745199
+        ],
+        "af_corr": 0.9978832834465335,
+        "residual_rms": 0.017129765647276807,
+        "residual_max_abs": 0.1765949920099722,
+        "reference_sampling_rms": 0.01262212257539409,
+        "panel_confusability": {
+          "pairwise_af_correlation": {
+            "AFR-AMR": 0.7295196291595446,
+            "AFR-EAS": 0.6489282599528688,
+            "AFR-EUR": 0.6839639172983368,
+            "AFR-SAS": 0.7175592838794421,
+            "AMR-EAS": 0.8538213421401587,
+            "AMR-EUR": 0.9356803214185285,
+            "AMR-SAS": 0.9185288764427019,
+            "EAS-EUR": 0.7695083380863319,
+            "EAS-SAS": 0.861410937366382,
+            "EUR-SAS": 0.9115060120084085
+          },
+          "gram_condition_number": 3.1914872819309332,
+          "effective_rank": 4,
+          "contrast_condition_number": 3.1914872819309332,
+          "contrast_rank": 4,
+          "expected_contrast_rank": 4,
+          "contrast_rms": 0.1094400682202452,
+          "n_variants": 1044683,
+          "note": "identifiability is determined from population-frequency contrasts on the matched variants; raw pairwise AF correlations are descriptive because their shared baseline can be misleading"
+        },
+        "residual_rms_over_contrast": 0.15652188385704963,
+        "validity_thresholds": {
+          "minimum_matched_variants": 1000,
+          "minimum_distinct_autosomes": 10,
+          "maximum_chromosome_fraction": 0.25,
+          "max_contrast_condition_number": 1000.0,
+          "max_residual_rms": 0.05,
+          "max_residual_rms_over_contrast": 0.5
+        },
+        "jackknife_note": null,
+        "uncertainty_note": "delete-one-chromosome jackknife conditions on the fixed panel; it omits target and reference allele-frequency sampling uncertainty and model misspecification",
+        "boundary_note": "at least one fitted weight is on or near the simplex boundary; ordinary symmetric standard-error intervals are invalid",
+        "acceptance_gate_note": "count, chromosome-coverage, contrast-rank, condition-number, and fit cutoffs are engineering gates, not calibrated statistical thresholds",
+        "chromosome_coverage": {
+          "n_distinct_autosomes": 22,
+          "largest_chromosome": "2",
+          "largest_chromosome_fraction": 0.08314962529303148
+        },
+        "leave_one_chromosome_identifiability": {
+          "all_identifiable": true,
+          "designs": [
+            {
+              "chromosome": "1",
+              "n_retained": 958353,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1926833650518356,
+              "identifiable": true
+            },
+            {
+              "chromosome": "2",
+              "n_retained": 957818,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1926461418358083,
+              "identifiable": true
+            },
+            {
+              "chromosome": "3",
+              "n_retained": 971860,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1801207893319483,
+              "identifiable": true
+            },
+            {
+              "chromosome": "4",
+              "n_retained": 979642,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190642041821229,
+              "identifiable": true
+            },
+            {
+              "chromosome": "5",
+              "n_retained": 978904,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1861471641627586,
+              "identifiable": true
+            },
+            {
+              "chromosome": "6",
+              "n_retained": 974392,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1953763249813143,
+              "identifiable": true
+            },
+            {
+              "chromosome": "7",
+              "n_retained": 987304,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.187066718822394,
+              "identifiable": true
+            },
+            {
+              "chromosome": "8",
+              "n_retained": 988013,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.188632636336215,
+              "identifiable": true
+            },
+            {
+              "chromosome": "9",
+              "n_retained": 996611,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.191238971835173,
+              "identifiable": true
+            },
+            {
+              "chromosome": "10",
+              "n_retained": 988735,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1890201417364445,
+              "identifiable": true
+            },
+            {
+              "chromosome": "11",
+              "n_retained": 991210,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.197289833349206,
+              "identifiable": true
+            },
+            {
+              "chromosome": "12",
+              "n_retained": 993678,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1964012813195537,
+              "identifiable": true
+            },
+            {
+              "chromosome": "13",
+              "n_retained": 1004989,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1899031862407394,
+              "identifiable": true
+            },
+            {
+              "chromosome": "14",
+              "n_retained": 1009824,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.2037902923786366,
+              "identifiable": true
+            },
+            {
+              "chromosome": "15",
+              "n_retained": 1013305,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.19185524104393,
+              "identifiable": true
+            },
+            {
+              "chromosome": "16",
+              "n_retained": 1012518,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1943524620759094,
+              "identifiable": true
+            },
+            {
+              "chromosome": "17",
+              "n_retained": 1016285,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190657412839063,
+              "identifiable": true
+            },
+            {
+              "chromosome": "18",
+              "n_retained": 1013498,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1880806639745556,
+              "identifiable": true
+            },
+            {
+              "chromosome": "19",
+              "n_retained": 1025160,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1924003080510377,
+              "identifiable": true
+            },
+            {
+              "chromosome": "20",
+              "n_retained": 1017131,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.185213100851777,
+              "identifiable": true
+            },
+            {
+              "chromosome": "21",
+              "n_retained": 1029702,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1909357239907465,
+              "identifiable": true
+            },
+            {
+              "chromosome": "22",
+              "n_retained": 1029411,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.198378940404439,
+              "identifiable": true
+            }
+          ]
+        },
+        "status": "estimated",
+        "warnings": [],
+        "matching": {
+          "n_input": 1045294,
+          "n_dropped_duplicate": 0,
+          "n_dropped_palindromic": 0,
+          "n_dropped_not_in_panel": 0,
+          "n_dropped_allele_mismatch": 611,
+          "n_dropped_nonfinite_eaf": 0,
+          "n_dropped_out_of_range_eaf": 0,
+          "n_matched": 1044683
+        }
+      },
+      "predeclared_control": {
+        "included_in_verdict": true,
+        "expected_top_population": "EUR",
+        "expected_weight": 0.9888572932714167,
+        "expected_rank": 1,
+        "passed": true
+      }
+    },
+    {
+      "study": {
+        "key": "SAS",
+        "accession": "GCST90245994",
+        "reported_sample": "South Asian ancestry",
+        "reported_n": 60939,
+        "expected_superpopulation": "SAS",
+        "expectation_basis": "same-paper ancestry-specific analysis; SAS is the predeclared top rank",
+        "ftp_relative_path": "GCST90245001-GCST90246000/GCST90245994/harmonised/GCST90245994.h.tsv.gz",
+        "remote_bytes": 35445178,
+        "source_sha256": "e54809498df59e218c6b252d1346be527e20adb1e1b20ee69396aa587cba80b3",
+        "normalized_content_sha256": "c8cee189a1ffb1feb9427e03693db9e797caad38344aa9b1143a31867dc07e09",
+        "trait": "height",
+        "publication": "Yengo et al., Nature 2022",
+        "publication_doi": "10.1038/s41586-022-05275-y",
+        "publication_pmid": "36224396",
+        "url": "https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90245001-GCST90246000/GCST90245994/harmonised/GCST90245994.h.tsv.gz"
+      },
+      "input": {
+        "normalized_filename": "GCST90245994.hm3.tsv.gz",
+        "n_rows": 1045284,
+        "mode": "verified_cache",
+        "raw_source_sha256_verified_this_run": false,
+        "normalized_content_sha256": "c8cee189a1ffb1feb9427e03693db9e797caad38344aa9b1143a31867dc07e09"
+      },
+      "elapsed_seconds": 10.973422900016885,
+      "decomposition": {
+        "channel": "frequency",
+        "estimand": "af_projection_weights",
+        "populations": [
+          "AFR",
+          "AMR",
+          "EAS",
+          "EUR",
+          "SAS"
+        ],
+        "n_used": 1044674,
+        "proportions": [
+          0.00046903501426828726,
+          0.022858948301138656,
+          0.0,
+          0.17578837720495757,
+          0.8008836394796355
+        ],
+        "proportions_se": [
+          0.00039471449283966643,
+          0.0009652674511865595,
+          0.0,
+          0.0011193846797124384,
+          0.0009864473047014777
+        ],
+        "af_corr": 0.9978435074652242,
+        "residual_rms": 0.017126209816096104,
+        "residual_max_abs": 0.18246758337369545,
+        "reference_sampling_rms": 0.010618687244175704,
+        "panel_confusability": {
+          "pairwise_af_correlation": {
+            "AFR-AMR": 0.7295199001630179,
+            "AFR-EAS": 0.6489281872542372,
+            "AFR-EUR": 0.6839649838714074,
+            "AFR-SAS": 0.7175591614035928,
+            "AMR-EAS": 0.8538209442448063,
+            "AMR-EUR": 0.9356804436527277,
+            "AMR-SAS": 0.9185288726364088,
+            "EAS-EUR": 0.7695071316348455,
+            "EAS-SAS": 0.8614108962603041,
+            "EUR-SAS": 0.9115057798359221
+          },
+          "gram_condition_number": 3.1914902045519575,
+          "effective_rank": 4,
+          "contrast_condition_number": 3.1914902045519575,
+          "contrast_rank": 4,
+          "expected_contrast_rank": 4,
+          "contrast_rms": 0.10944007928636303,
+          "n_variants": 1044674,
+          "note": "identifiability is determined from population-frequency contrasts on the matched variants; raw pairwise AF correlations are descriptive because their shared baseline can be misleading"
+        },
+        "residual_rms_over_contrast": 0.15648937690627335,
+        "validity_thresholds": {
+          "minimum_matched_variants": 1000,
+          "minimum_distinct_autosomes": 10,
+          "maximum_chromosome_fraction": 0.25,
+          "max_contrast_condition_number": 1000.0,
+          "max_residual_rms": 0.05,
+          "max_residual_rms_over_contrast": 0.5
+        },
+        "jackknife_note": null,
+        "uncertainty_note": "delete-one-chromosome jackknife conditions on the fixed panel; it omits target and reference allele-frequency sampling uncertainty and model misspecification",
+        "boundary_note": "at least one fitted weight is on or near the simplex boundary; ordinary symmetric standard-error intervals are invalid",
+        "acceptance_gate_note": "count, chromosome-coverage, contrast-rank, condition-number, and fit cutoffs are engineering gates, not calibrated statistical thresholds",
+        "chromosome_coverage": {
+          "n_distinct_autosomes": 22,
+          "largest_chromosome": "2",
+          "largest_chromosome_fraction": 0.08314938440125819
+        },
+        "leave_one_chromosome_identifiability": {
+          "all_identifiable": true,
+          "designs": [
+            {
+              "chromosome": "1",
+              "n_retained": 958346,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192688936289607,
+              "identifiable": true
+            },
+            {
+              "chromosome": "2",
+              "n_retained": 957810,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192651227817191,
+              "identifiable": true
+            },
+            {
+              "chromosome": "3",
+              "n_retained": 971851,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1801237460226632,
+              "identifiable": true
+            },
+            {
+              "chromosome": "4",
+              "n_retained": 979633,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1906451722228963,
+              "identifiable": true
+            },
+            {
+              "chromosome": "5",
+              "n_retained": 978895,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1861501684816327,
+              "identifiable": true
+            },
+            {
+              "chromosome": "6",
+              "n_retained": 974384,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1953797425776713,
+              "identifiable": true
+            },
+            {
+              "chromosome": "7",
+              "n_retained": 987295,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.187069755885834,
+              "identifiable": true
+            },
+            {
+              "chromosome": "8",
+              "n_retained": 988004,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1886356934104114,
+              "identifiable": true
+            },
+            {
+              "chromosome": "9",
+              "n_retained": 996604,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1912392849623332,
+              "identifiable": true
+            },
+            {
+              "chromosome": "10",
+              "n_retained": 988727,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.189018959447254,
+              "identifiable": true
+            },
+            {
+              "chromosome": "11",
+              "n_retained": 991201,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1972929440673967,
+              "identifiable": true
+            },
+            {
+              "chromosome": "12",
+              "n_retained": 993669,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1964044228882527,
+              "identifiable": true
+            },
+            {
+              "chromosome": "13",
+              "n_retained": 1004980,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1899062033972987,
+              "identifiable": true
+            },
+            {
+              "chromosome": "14",
+              "n_retained": 1009815,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.2037935633610117,
+              "identifiable": true
+            },
+            {
+              "chromosome": "15",
+              "n_retained": 1013298,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1918577513580857,
+              "identifiable": true
+            },
+            {
+              "chromosome": "16",
+              "n_retained": 1012509,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1943555110436073,
+              "identifiable": true
+            },
+            {
+              "chromosome": "17",
+              "n_retained": 1016276,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1906604022718854,
+              "identifiable": true
+            },
+            {
+              "chromosome": "18",
+              "n_retained": 1013489,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1880836629552425,
+              "identifiable": true
+            },
+            {
+              "chromosome": "19",
+              "n_retained": 1025151,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.192403311332827,
+              "identifiable": true
+            },
+            {
+              "chromosome": "20",
+              "n_retained": 1017122,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.185216011266535,
+              "identifiable": true
+            },
+            {
+              "chromosome": "21",
+              "n_retained": 1029693,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190938691583111,
+              "identifiable": true
+            },
+            {
+              "chromosome": "22",
+              "n_retained": 1029402,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1983819919660768,
+              "identifiable": true
+            }
+          ]
+        },
+        "status": "estimated",
+        "warnings": [],
+        "matching": {
+          "n_input": 1045284,
+          "n_dropped_duplicate": 0,
+          "n_dropped_palindromic": 0,
+          "n_dropped_not_in_panel": 0,
+          "n_dropped_allele_mismatch": 610,
+          "n_dropped_nonfinite_eaf": 0,
+          "n_dropped_out_of_range_eaf": 0,
+          "n_matched": 1044674
+        }
+      },
+      "predeclared_control": {
+        "included_in_verdict": true,
+        "expected_top_population": "SAS",
+        "expected_weight": 0.8008836394796355,
+        "expected_rank": 1,
+        "passed": true
+      }
+    },
+    {
+      "study": {
+        "key": "POOLED",
+        "accession": "GCST90245990",
+        "reported_sample": "five-ancestry pooled meta-analysis",
+        "reported_n": 2200007,
+        "expected_superpopulation": null,
+        "expectation_basis": "descriptive stress test; headcounts are not an EAF-mixture truth target",
+        "ftp_relative_path": "GCST90245001-GCST90246000/GCST90245990/harmonised/GCST90245990.h.tsv.gz",
+        "remote_bytes": 39600155,
+        "source_sha256": "9e807eaef46b6e1af06710defd64a8276689950ed0f73a3cdea682f6e0fe3e88",
+        "normalized_content_sha256": "43dd8f1ad7efa7d7a16dc16f3e5bb773f3d2c510982cba0570de917ddcf207b4",
+        "trait": "height",
+        "publication": "Yengo et al., Nature 2022",
+        "publication_doi": "10.1038/s41586-022-05275-y",
+        "publication_pmid": "36224396",
+        "url": "https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90245001-GCST90246000/GCST90245990/harmonised/GCST90245990.h.tsv.gz"
+      },
+      "input": {
+        "normalized_filename": "GCST90245990.hm3.tsv.gz",
+        "n_rows": 1045294,
+        "mode": "verified_cache",
+        "raw_source_sha256_verified_this_run": false,
+        "normalized_content_sha256": "43dd8f1ad7efa7d7a16dc16f3e5bb773f3d2c510982cba0570de917ddcf207b4"
+      },
+      "elapsed_seconds": 11.057633799995529,
+      "decomposition": {
+        "channel": "frequency",
+        "estimand": "af_projection_weights",
+        "populations": [
+          "AFR",
+          "AMR",
+          "EAS",
+          "EUR",
+          "SAS"
+        ],
+        "n_used": 1044683,
+        "proportions": [
+          0.04631189691165973,
+          0.04662226093869781,
+          0.11151086371178709,
+          0.7660473043388953,
+          0.02950767409895999
+        ],
+        "proportions_se": [
+          0.0012681702822505045,
+          0.0011328333013053337,
+          0.0015545393695161997,
+          0.0019193060946367236,
+          0.0012919059367619288
+        ],
+        "af_corr": 0.9983383634514279,
+        "residual_rms": 0.014702742810022236,
+        "residual_max_abs": 0.14798173876268392,
+        "reference_sampling_rms": 0.00991701725160887,
+        "panel_confusability": {
+          "pairwise_af_correlation": {
+            "AFR-AMR": 0.7295196291595446,
+            "AFR-EAS": 0.6489282599528688,
+            "AFR-EUR": 0.6839639172983368,
+            "AFR-SAS": 0.7175592838794421,
+            "AMR-EAS": 0.8538213421401587,
+            "AMR-EUR": 0.9356803214185285,
+            "AMR-SAS": 0.9185288764427019,
+            "EAS-EUR": 0.7695083380863319,
+            "EAS-SAS": 0.861410937366382,
+            "EUR-SAS": 0.9115060120084085
+          },
+          "gram_condition_number": 3.1914872819309332,
+          "effective_rank": 4,
+          "contrast_condition_number": 3.1914872819309332,
+          "contrast_rank": 4,
+          "expected_contrast_rank": 4,
+          "contrast_rms": 0.1094400682202452,
+          "n_variants": 1044683,
+          "note": "identifiability is determined from population-frequency contrasts on the matched variants; raw pairwise AF correlations are descriptive because their shared baseline can be misleading"
+        },
+        "residual_rms_over_contrast": 0.1343451539196171,
+        "validity_thresholds": {
+          "minimum_matched_variants": 1000,
+          "minimum_distinct_autosomes": 10,
+          "maximum_chromosome_fraction": 0.25,
+          "max_contrast_condition_number": 1000.0,
+          "max_residual_rms": 0.05,
+          "max_residual_rms_over_contrast": 0.5
+        },
+        "jackknife_note": null,
+        "uncertainty_note": "delete-one-chromosome jackknife conditions on the fixed panel; it omits target and reference allele-frequency sampling uncertainty and model misspecification",
+        "boundary_note": null,
+        "acceptance_gate_note": "count, chromosome-coverage, contrast-rank, condition-number, and fit cutoffs are engineering gates, not calibrated statistical thresholds",
+        "chromosome_coverage": {
+          "n_distinct_autosomes": 22,
+          "largest_chromosome": "2",
+          "largest_chromosome_fraction": 0.08314962529303148
+        },
+        "leave_one_chromosome_identifiability": {
+          "all_identifiable": true,
+          "designs": [
+            {
+              "chromosome": "1",
+              "n_retained": 958353,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1926833650518356,
+              "identifiable": true
+            },
+            {
+              "chromosome": "2",
+              "n_retained": 957818,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1926461418358083,
+              "identifiable": true
+            },
+            {
+              "chromosome": "3",
+              "n_retained": 971860,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1801207893319483,
+              "identifiable": true
+            },
+            {
+              "chromosome": "4",
+              "n_retained": 979642,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190642041821229,
+              "identifiable": true
+            },
+            {
+              "chromosome": "5",
+              "n_retained": 978904,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1861471641627586,
+              "identifiable": true
+            },
+            {
+              "chromosome": "6",
+              "n_retained": 974392,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1953763249813143,
+              "identifiable": true
+            },
+            {
+              "chromosome": "7",
+              "n_retained": 987304,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.187066718822394,
+              "identifiable": true
+            },
+            {
+              "chromosome": "8",
+              "n_retained": 988013,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.188632636336215,
+              "identifiable": true
+            },
+            {
+              "chromosome": "9",
+              "n_retained": 996611,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.191238971835173,
+              "identifiable": true
+            },
+            {
+              "chromosome": "10",
+              "n_retained": 988735,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1890201417364445,
+              "identifiable": true
+            },
+            {
+              "chromosome": "11",
+              "n_retained": 991210,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.197289833349206,
+              "identifiable": true
+            },
+            {
+              "chromosome": "12",
+              "n_retained": 993678,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1964012813195537,
+              "identifiable": true
+            },
+            {
+              "chromosome": "13",
+              "n_retained": 1004989,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1899031862407394,
+              "identifiable": true
+            },
+            {
+              "chromosome": "14",
+              "n_retained": 1009824,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.2037902923786366,
+              "identifiable": true
+            },
+            {
+              "chromosome": "15",
+              "n_retained": 1013305,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.19185524104393,
+              "identifiable": true
+            },
+            {
+              "chromosome": "16",
+              "n_retained": 1012518,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1943524620759094,
+              "identifiable": true
+            },
+            {
+              "chromosome": "17",
+              "n_retained": 1016285,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.190657412839063,
+              "identifiable": true
+            },
+            {
+              "chromosome": "18",
+              "n_retained": 1013498,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1880806639745556,
+              "identifiable": true
+            },
+            {
+              "chromosome": "19",
+              "n_retained": 1025160,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1924003080510377,
+              "identifiable": true
+            },
+            {
+              "chromosome": "20",
+              "n_retained": 1017131,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.185213100851777,
+              "identifiable": true
+            },
+            {
+              "chromosome": "21",
+              "n_retained": 1029702,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.1909357239907465,
+              "identifiable": true
+            },
+            {
+              "chromosome": "22",
+              "n_retained": 1029411,
+              "contrast_rank": 4,
+              "expected_contrast_rank": 4,
+              "contrast_condition_number": 3.198378940404439,
+              "identifiable": true
+            }
+          ]
+        },
+        "status": "estimated",
+        "warnings": [],
+        "matching": {
+          "n_input": 1045294,
+          "n_dropped_duplicate": 0,
+          "n_dropped_palindromic": 0,
+          "n_dropped_not_in_panel": 0,
+          "n_dropped_allele_mismatch": 611,
+          "n_dropped_nonfinite_eaf": 0,
+          "n_dropped_out_of_range_eaf": 0,
+          "n_matched": 1044683
+        }
+      },
+      "predeclared_control": {
+        "included_in_verdict": false,
+        "expected_top_population": null,
+        "expected_weight": null,
+        "expected_rank": null,
+        "passed": true
+      }
+    }
+  ],
+  "verdict": {
+    "n_controls": 5,
+    "n_passed": 5,
+    "failed_accessions": [],
+    "passed": true
+  }
+}
