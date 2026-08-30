@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gzip
+import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -239,3 +240,36 @@ def test_fetch_uses_full_hm3_panel_not_pruned_design_ids(monkeypatch):
         "--fetch",
     ]) == 0
     assert captured["ids"] == {"full-1", "full-2"}
+
+
+def test_checked_in_snapshot_pins_design_nulls_and_qualitative_verdict():
+    path = (
+        Path(benchmark.__file__).resolve().parents[1]
+        / "results" / "ancestry-ld" / "yengo-height-2026-08-30.json"
+    )
+    text = path.read_text(encoding="utf-8")
+    snapshot = json.loads(text, parse_constant=lambda value: pytest.fail(
+        f"non-finite JSON constant {value}"))
+    assert snapshot["schema_version"] == 1
+    assert snapshot["design"]["file_sha256"] == (
+        benchmark.DEFAULT_DESIGN_SHA256)
+    assert snapshot["software"]["ppb_commit"] == (
+        "5dca2f8320d0991f949926dfaac1a30f61a9a128")
+    assert snapshot["verdict"] == {
+        "n_controls": 5, "n_passed": 5,
+        "failed_accessions": [], "passed": True,
+    }
+    diagnostic = snapshot["sign_flip_diagnostic_verdict"]
+    assert diagnostic["n_scaled_contrast_passed"] == 5
+    assert diagnostic["n_normalized_contrast_passed"] == 0
+    expected = {
+        study.key: study.expected_superpopulation for study in benchmark.STUDIES
+    }
+    for row in snapshot["studies"]:
+        assert row["input"]["n_harmonized_variants"] > 21_500
+        null = row["independent_sign_flip_diagnostic"]
+        assert null["n_replicates"] == benchmark.SIGN_FLIP_REPLICATES
+        if expected[row["study"]["key"]] is not None:
+            assert null["scaled_contrast_empirical_p"] == pytest.approx(1 / 201)
+            assert null["normalized_contrast_empirical_p"] > 0.05
+    assert "C:\\" not in text and "/Users/" not in text

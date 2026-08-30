@@ -297,6 +297,63 @@ reference-derived rather than cohort-derived deposited EAFs can change the
 projection. A refusal remains a benchmark result; the fixed estimator gates
 are not retuned on this cohort.
 
+## LD-moment ancestry compatibility
+
+When EAF is unavailable, PPB can instead fit summary-statistic pair moments to
+ancestry-specific LD references. The primary experimental channel solves
+
+**(A2) Pair-product LD projection**
+
+```text
+z_i z_j ~= sum_k u_k R^(k)_ij + quadratic tagging terms,
+pi_k = u_k / sum_l u_l.
+```
+
+The `pi_k` are best-fitting **LD-covariance reference weights**. They are not
+automatically participant-ancestry fractions: covariate adjustment,
+variant-specific overlap, meta-analysis weighting, admixture LD, heterogeneous
+effects, omitted variants, and finite-reference error can all change the
+moment. `estimate_pair_products_from_design` and
+`estimate_bilinear_from_design` consume compact sufficient statistics, so a
+builder can discard each dense genotype-LD block immediately.
+
+**Table 4. Fixed sparse 1000G LD design.**
+
+| Quantity | Fixed value |
+|---|---:|
+| Full-panel common rule | MAF >=5% in each AFR/AMR/EAS/EUR/SAS AF panel |
+| Common HM3 variants before pruning | 714,078 |
+| Minimum edge-to-edge retained-block gap | 5 Mb |
+| Retained blocks / variants / pairs | 177 / 21,892 / 44,250 |
+| Maximum variants / selected pairs per block | 128 / 250 |
+| LD samples, AFR/AMR/EAS/EUR/SAS | 652 / 347 / 504 / 503 / 484 |
+
+The compact 4.7 MB design is tracked and hash-pinned. Rebuild it from the
+checksum-pinned 1000G PLINK archive and pinned LDpred3 block geometry, then run
+the six-study benchmark:
+
+```bash
+python scripts/build_ancestry_ld_design.py
+python scripts/ancestry_ld_gwas_benchmark.py --fetch \
+  --out results/ancestry-ld/yengo-height-<date>.json
+```
+
+**Table 5. Interpretation of the real Yengo LD benchmark.**
+
+| Result | What it establishes | What it does not establish |
+|---|---|---|
+| 5/5 declared references rank first | broad-label LD compatibility | calibrated mixture fractions |
+| 5/5 scaled sign-flip contrasts have empirical p=0.005 | a non-negligible correctly directed LD-covariance component | a valid participant-ancestry estimand |
+| 0/5 normalized-weight contrasts have p<=0.05 | null fits can have arbitrary simplex vertices when scale is near zero | stable inference from normalized weights alone |
+| Estimator B declines in 6/6 studies | its guards refuse this sparse design | a genome-scale verdict on Estimator B |
+
+Every fitted vector is on a simplex boundary, so ordinary symmetric jackknife
+interpretation is invalid there. Pair selection and LD estimation also reuse
+the same finite reference samples; the reported chromosome jackknife omits
+that selection and errors-in-variables uncertainty. Full weights and null
+replicates are recorded in
+[`results/ancestry-ld/`](results/ancestry-ld/README.md).
+
 ## Cross-ancestry targets: FinnGen
 
 Two scripts set up summary-statistics-based evaluation against non-UKB
