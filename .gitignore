@@ -125,8 +125,18 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# Downloaded data (LD references etc.) — not versioned
-data/
+# Downloaded data (LD references etc.) — not versioned, with one
+# deliberate exception: the ancestry LD design is a 4.5 MB reference
+# artifact the benchmarks hash-verify at load, so it is versioned
+# alongside the code that pins its SHA-256 rather than re-downloaded.
+# Without the negation a regenerated design would be silently skipped
+# by `git add`, since the rest of data/ is ignored.
+# `data/*` rather than `data/`: git never descends into an excluded
+# directory, so a negation under a wholesale `data/` exclusion can never
+# re-include anything. Excluding the entries instead leaves the negation
+# below able to take effect.
+data/*
+!data/ancestry_ld/
 .work/
 
 # Generated leaderboard site — built by the leaderboard workflow

@@ -253,8 +253,12 @@ def test_checked_in_snapshot_pins_design_nulls_and_qualitative_verdict():
     assert snapshot["schema_version"] == 1
     assert snapshot["design"]["file_sha256"] == (
         benchmark.DEFAULT_DESIGN_SHA256)
-    assert snapshot["software"]["ppb_commit"] == (
-        "5dca2f8320d0991f949926dfaac1a30f61a9a128")
+    # Shape, not identity: pinning the exact generating commit breaks this
+    # test on the next legitimate re-run of the benchmark. This matches the
+    # policy in tests/test_ancestry_frequency_gwas_benchmark.py; the snapshot's
+    # scientific content is pinned by the design and input hashes below.
+    assert len(snapshot["software"]["ppb_commit"]) == 40
+    assert set(snapshot["software"]["ppb_commit"]) <= set("0123456789abcdef")
     assert snapshot["verdict"] == {
         "n_controls": 5, "n_passed": 5,
         "failed_accessions": [], "passed": True,

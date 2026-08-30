@@ -41,7 +41,11 @@ the validation anchor.
 > the cross-ancestry method are validated **in simulation** against
 > individual-level truth; the within-ancestry anchor is demonstrated **on real
 > data** ([`docs/REAL_DATA.md`](docs/REAL_DATA.md)). It has **not** been run on
-> real cross-ancestry data. Roadmap: [`FINISHING_PLAN.md`](FINISHING_PLAN.md).
+> real cross-ancestry data. The two experimental ancestry-composition channels
+> — (A1) frequency and (A2) LD-moment — *have* been run on real GWAS
+> (`results/ancestry-frequency/`, `results/ancestry-ld/`); that is a stress
+> test of those channels, not of the portability estimator.
+> Roadmap: [`FINISHING_PLAN.md`](FINISHING_PLAN.md).
 > Scope and failure modes: [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 ## Documentation

@@ -312,6 +312,7 @@ def build_panel(ldref: Path, vcfs: list[Path], samples: Path,
     n_invalid_genotypes = 0
     n_allele_mismatch = 0
     n_ambiguous = 0
+    n_duplicate = 0
     for vcf in vcfs:
         opener = gzip.open if str(vcf).endswith(".gz") else open
         with opener(vcf, "rt", encoding="utf-8") as fh:
@@ -358,6 +359,10 @@ def build_panel(ldref: Path, vcfs: list[Path], samples: Path,
                     continue
                 row = matches[0]
                 if row in found:
+                    # A repeated record for a row already captured. Counted
+                    # like its sibling discards rather than dropped silently,
+                    # so the reconciliation below accounts for every record.
+                    n_duplicate += 1
                     continue
                 if sample_names is None:
                     raise SystemExit(f"{vcf} has records before #CHROM")
@@ -411,7 +416,8 @@ def build_panel(ldref: Path, vcfs: list[Path], samples: Path,
     print(f"scanned {n_scanned:,} VCF records; kept {len(rows):,} of "
           f"{m:,} reference variants (INFO AF: {n_info:,}; genotype AF: "
           f"{n_genotypes:,}; allele mismatches: {n_allele_mismatch:,}; "
-          f"ambiguous matches: {n_ambiguous:,}; invalid genotype records: "
+          f"ambiguous matches: {n_ambiguous:,}; duplicate records: "
+          f"{n_duplicate:,}; invalid genotype records: "
           f"{n_invalid_genotypes:,})", file=sys.stderr)
     return {"ids": ids, "chrom": chroms, "pos": positions,
             "counted_allele": counted, "other_allele": other,
@@ -421,6 +427,7 @@ def build_panel(ldref: Path, vcfs: list[Path], samples: Path,
             "join_diagnostics": {
                 "allele_mismatch": n_allele_mismatch,
                 "ambiguous": n_ambiguous,
+                "duplicate": n_duplicate,
                 "invalid_genotypes": n_invalid_genotypes}}
 
 

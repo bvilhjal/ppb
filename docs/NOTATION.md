@@ -199,6 +199,9 @@ it to account.
 | (G4) | trait-swap negative control | `scripts/negative_controls.py` | `tests/test_negative_controls.py` |
 | (G5) | external check against published individual-level accuracy | `scripts/anchor_validation.py` | `tests/test_anchor_validation.py` |
 | (R1) | registry score metric | `scripts/regenerate_results.py` | `tests/test_results_registry.py` |
+| (A1) | reference-frequency projection `f_i ≈ Σ_k π_k p_ik` on the simplex | `ppb.ancestry_frequency.estimate_frequency_composition` | `tests/test_ancestry_frequency.py` |
+| (A2) | pair-product LD projection `z_i z_j ≈ Σ_k u_k R^(k)_ij` (Estimator A) | `ppb.ancestry.estimate_pair_products` | `tests/test_ancestry.py` |
+| (A3) | correct-reference coefficient contrast, the scaled sign-flip statistic | `scripts/ancestry_ld_gwas_benchmark.py` | `tests/test_ancestry_ld_gwas_benchmark.py` |
 | (E1) | PUMAS moment covariance `V = var_y D + z zᵀ` | `experiments/pumas_agreement.py` | `tests/test_pumas.py` |
 | (E2) | per-variant LD concordance `s_j = cos(D_A row_j, D_B row_j)` | `experiments/transferability.py` (`ld_concordance`) | `tests/test_transferability.py` |
 | (E3) | target-informed optimum `argmax_w (wᵀz_B)²/(wᵀD_Bw) ∝ D_B⁻¹z_B` | — (algebra; its consequence is demonstrated) | `tests/test_transferability.py` |

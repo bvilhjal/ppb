@@ -23,7 +23,7 @@ literal fraction of participants or meta-analysis weight.
 
 The scaled statistic is
 
-**(R1) Correct-reference coefficient contrast**
+**(A3) Correct-reference coefficient contrast**
 
 ```text
 s * (pi_expected - max_{k != expected} pi_k).
@@ -31,9 +31,19 @@ s * (pi_expected - max_{k != expected} pi_k).
 
 It distinguishes a large correctly directed covariance component from a
 near-zero-scale null fit whose normalized weights happen to land on a simplex
-vertex. All five scaled contrasts exceeded all 200 sign flips, giving the
+vertex. No scaled contrast was exceeded by any sign-flip replicate, giving the
 plus-one empirical value `1/201 = 0.004975`. The normalized contrasts did not
 clear `p <= 0.05`; normalized mixture magnitudes are therefore not validated.
+
+Read that `1/201` with its convention in mind. Only 112-132 of the 200 flips
+per study produced a fitted contrast at all (the "Null fits" column above); the
+rest declined, and a declined replicate cannot exceed the observation, so it
+counts toward the denominator but never the numerator. That is the permissive
+reading and it favours significance. The stricter reading treats a decline as
+unknown rather than as a non-exceedance, which for AFR would put the
+denominator at 118 rather than 201 and the p-value at `1/118 = 0.008`. Both
+readings clear `0.05` here, so the qualitative verdict is unchanged, but the
+exact value is convention-dependent.
 
 **Table 3. Model and uncertainty diagnostics.**
 

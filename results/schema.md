@@ -255,3 +255,26 @@ Catalog performance fetch behind Tables 3–4 of `docs/REAL_DATA.md`, with the
 fetch date recorded inside the file. They are provenance objects, not result
 packs — the leaderboard loader and the schema tests skip them, and they carry
 no evaluation records.
+
+## Ancestry benchmark snapshots
+
+`results/ancestry-frequency/` and `results/ancestry-ld/` hold dated snapshots of
+the experimental ancestry-composition channels — (A1) the effect-allele-frequency
+projection and (A2) the pair-product LD projection — written by
+`scripts/ancestry_frequency_gwas_benchmark.py` and
+`scripts/ancestry_ld_gwas_benchmark.py`. Each records the fitted mixtures, the
+sign-flip null replicates, input hashes, the reference design, and the software
+revision, and each directory carries a `README.md` reporting the run.
+
+Like anchor snapshots these are provenance objects rather than result packs:
+they carry no evaluation records, so no leaderboard entry derives from them.
+Unlike anchor snapshots they are excluded **by location, not by name** — the
+loader globs `results/*.json` non-recursively (`result_packs` in
+`scripts/build_leaderboard.py`), so anything in a subdirectory is outside the
+registry by construction. Keep new snapshot classes in their own subdirectory
+for that reason; a file dropped directly in `results/` is parsed as a pack and
+will fail the schema tests.
+
+These channels are experimental and their estimand is the best-fitting
+reference mixture, not a fraction of participants. Neither is a registry
+contract, and neither feeds (R1).

@@ -668,7 +668,16 @@ def estimate_bilinear_from_design(
     Acceptance requires a full-rank centred design with scale-normalised
     condition number no larger than 1,000 by default;
     reproducible signal in held-out block groups; and a fitted coefficient
-    matrix sufficiently close to positive-semidefinite rank one. Failed
+    matrix sufficiently close to positive-semidefinite rank one.
+
+    ``min_signal_z`` keeps its name for backwards compatibility, but the
+    quantity it gates is **not** a z-statistic. It is the block
+    cross-validated statistic from :func:`_block_cross_validated_signal`: the
+    mean held-out correlation between observed and predicted chi-square,
+    divided by its between-group standard error. That ratio is uncalibrated,
+    so the ``4.0`` default is a heuristic threshold on a heuristic statistic,
+    not a 4-sigma test, and the reported ``signal_z`` diagnostic carries the
+    same caveat. Failed
     checks leave the raw diagnostics in the result but set ``proportions``
     to ``None``. The default model checks allow at most 0.25 relative
     Frobenius distance from rank one and negative-eigenvalue magnitude no

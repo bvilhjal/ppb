@@ -52,3 +52,15 @@ icd10-E11-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: T2D	https://pan-ukb-us-east-1
 icd10-F32-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: MDD	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-F32-both_sexes.tsv.bgz	869c7f5c85bff350acc2524b64f9257b	2026-08-16
 icd10-I25-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: IHD (CAD target)	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-I25-both_sexes.tsv.bgz	6d2c168640a02b336ecf19358021b3ad	2026-08-16
 icd10-J45-both_sexes.tsv.bgz	Pan-UKB EUR sumstats: asthma	https://pan-ukb-us-east-1.s3.amazonaws.com/sumstats_flat_files/icd10-J45-both_sexes.tsv.bgz	93ef78eae918ef0d26ddb4f44f2f6c4b	2026-08-16
+# The eight rows below are pinned by SHA-256 in code rather than by MD5 here:
+# the six GWAS Catalog files in scripts/ancestry_frequency_gwas_benchmark.py
+# (STUDIES), and the 1000G/IGSR sources in scripts/build_ancestry_panels.py,
+# which fails closed unless a download matches IGSR's published size and MD5.
+GCST90245989.h.tsv.gz	Yengo 2022 height GWAS, AFR ancestry-specific (ancestry benchmarks)	GCST90245989	unrecorded	2026-08-30
+GCST90245990.h.tsv.gz	Yengo 2022 height GWAS, five-ancestry pooled meta-analysis (ancestry benchmarks)	GCST90245990	unrecorded	2026-08-30
+GCST90245991.h.tsv.gz	Yengo 2022 height GWAS, EAS ancestry-specific (ancestry benchmarks)	GCST90245991	unrecorded	2026-08-30
+GCST90245992.h.tsv.gz	Yengo 2022 height GWAS, EUR ancestry-specific (ancestry benchmarks)	GCST90245992	unrecorded	2026-08-30
+GCST90245993.h.tsv.gz	Yengo 2022 height GWAS, Hispanic/Latin American (ancestry benchmarks)	GCST90245993	unrecorded	2026-08-30
+GCST90245994.h.tsv.gz	Yengo 2022 height GWAS, SAS ancestry-specific (ancestry benchmarks)	GCST90245994	unrecorded	2026-08-30
+ALL.chr*.phase3_*.genotypes.vcf.gz	1000G phase-3 release VCFs: per-super-population allele frequencies and LD (IGSR)	https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502	unrecorded	2026-08-30
+current.tree	IGSR checksum index pinning size and MD5 of each release VCF	https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/current.tree	unrecorded	2026-08-30

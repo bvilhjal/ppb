@@ -198,7 +198,8 @@ def test_coordinate_allele_join_reports_duplicates_and_mismatch(tmp_path):
     built = module.build_panel(ldref, [vcf], samples, ("AFR", "EUR"))
     assert built["ids"].tolist() == ["rs_ag"]
     assert built["join_diagnostics"] == {
-        "allele_mismatch": 1, "ambiguous": 1, "invalid_genotypes": 0}
+        "allele_mismatch": 1, "ambiguous": 1, "duplicate": 0,
+        "invalid_genotypes": 0}
 
 
 def test_gt_fallback_skips_invalid_allele_codes(tmp_path):
@@ -247,3 +248,31 @@ def test_sites_vcf_skips_incomplete_or_nonfinite_info(tmp_path):
     built = module.build_panel(ldref, [vcf], samples, ("AFR", "EUR"))
     assert built["ids"].tolist() == ["rs_complete"]
     assert built["frequency_source_counts"] == {"info": 1, "genotypes": 0}
+
+
+def test_repeated_vcf_record_is_counted_not_silently_dropped(tmp_path):
+    # A second VCF record for a row already captured is discarded, but the
+    # discard has to be visible: its sibling reasons (allele mismatch,
+    # ambiguous match) are counted, and an uncounted third reason would make
+    # the reconciliation in the printed summary fail to add up.
+    module = _builder("ppb_builder_dup")
+    ldref = tmp_path / "ldref.npz"
+    np.savez_compressed(
+        ldref, ids=np.array(["rs_one"]), chrom=np.array(["22"]),
+        pos=np.array([101]), counted_allele=np.array(["G"]),
+        other_allele=np.array(["A"]))
+    samples = tmp_path / "samples.panel"
+    samples.write_text(
+        "sample\tpop\tsuper_pop\tgender\n"
+        "S1\tYRI\tAFR\tmale\nS2\tCEU\tEUR\tfemale\n")
+    vcf = tmp_path / "variants.vcf"
+    vcf.write_text(
+        "##fileformat=VCFv4.2\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\n"
+        "22\t101\t.\tA\tG\t.\tPASS\tAFR_AF=0.1;EUR_AF=0.2\tGT\t0|0\t0|1\n"
+        "22\t101\t.\tA\tG\t.\tPASS\tAFR_AF=0.9;EUR_AF=0.8\tGT\t1|1\t1|1\n")
+    built = module.build_panel(ldref, [vcf], samples, ("AFR", "EUR"))
+    assert built["ids"].tolist() == ["rs_one"]
+    assert built["join_diagnostics"]["duplicate"] == 1
+    # First record wins; the repeat must not overwrite the retained frequency.
+    assert built["af"][0][0] == pytest.approx(0.1)
