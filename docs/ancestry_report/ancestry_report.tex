@@ -21,6 +21,14 @@
     unicode=true
 ]{hyperref}
 
+% Set provenance before the PDF catalogue is written.
+\hypersetup{
+    pdftitle={Estimating Ancestry Composition from GWAS Summary Statistics},
+    pdfauthor={Bjarni J. Vilhjalmsson},
+    pdfsubject={Statistical genetics: ancestry estimation from summary statistics},
+    pdfkeywords={ancestry composition, GWAS summary statistics, LD score, admixture, polygenic scores}
+}
+
 \geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
 \widowpenalty=10000
 \clubpenalty=10000
@@ -38,33 +46,53 @@
 
 \section{Summary}\label{sec:summary}
 
-This report derives and compares methods for estimating the ancestry
-composition of a GWAS summary-statistics dataset from reference data alone.
-Two families of estimators are considered. The first regresses the
-per-variant effect-allele frequencies (EAF) reported in the summary
-statistics on per-population reference frequencies; this channel is
-implemented in the SMARTpred service and follows Summix
+This report derives and compares working models for ancestry-related
+composition in a GWAS summary-statistics dataset. There is no universal
+``ancestry proportion'' estimand. The frequency channel estimates the
+simplex projection of the reported effect-allele frequencies (EAF) onto
+reference-population frequencies. Under additional sampling assumptions,
+that projection may approximate allele-count or participant fractions. The
+LD channels estimate coefficients in a model for the covariance of GWAS
+$z$-statistics. Only under a restrictive discrete cohort-mixture model do
+those coefficients approximate the same source-population fractions.
+Neither target is a person's local-ancestry mosaic, and neither generally
+equals the variant-specific contribution of each study to a meta-analysis.
+
+The frequency channel is implemented in SMARTpred and follows Summix
 \citep{arriaga2021summix,stoneman2025summix2} and the bigsnpr ancestry
-resources \citep{prive2018bigsnpr,privefl_vignette}. The second family,
-which is the focus of this report, uses no allele frequencies at all: it
-extracts the ancestry composition from the \emph{second moments of the
-association statistics} --- products $z_i z_j$ and squared statistics
-$\chi^2_i$ --- against per-ancestry LD reference panels. This is the channel
-pioneered by DISTMIX \citep{lee2015distmix} and ZMIX
-\citep{dennis2024zmix}, and it is grounded in the same moment identity that
-underlies LD-score regression \citep{bulik2015ldsc}.
+resources \citep{prive2018bigsnpr,privefl_vignette}. The LD family uses no
+allele frequencies: it compares products $z_i z_j$ or squared statistics
+$\chi^2_i$ with per-population LD references. Z-score-based ancestry
+estimation was introduced within DISTMIX2 \citep{chatzinakos2021distmix2}
+and refined as the standalone ZMIX estimator \citep{dennis2024zmix}; the
+moment calculation is related to LD-score regression
+\citep{bulik2015ldsc}. The original DISTMIX method
+\citep{lee2015distmix} instead estimated weights from cohort allele
+frequencies (or accepted user-specified weights) before constructing an
+ancestry-informed LD matrix for summary-statistic imputation.
 
 The practical motivation is threefold. First, some summary statistics ship
 without a usable frequency column, or with one that cannot be trusted; the
-LD channel needs only $\hat\beta_i$ and $\mathrm{SE}_i$. Second, the two
-channels are statistically independent summaries --- the first moment of the
-frequencies versus the second moment of the effects --- so their agreement
-is itself a strong data-quality diagnostic, in the spirit of the
-misspecification checks of \citet{prive2022identifying}. Third, for
+LD statistics can be formed from $\hat\beta_i$ and $\mathrm{SE}_i$, although
+valid interpretation also needs sample-overlap, test-construction and
+reference metadata. Second, the two
+channels interrogate different summaries, but they are not statistically
+independent: they can share participants, genotypes, reference error and
+selection. Agreement is therefore a useful descriptive diagnostic only
+after checking that they target comparable weights; disagreement is not by
+itself evidence that either channel is correct. Third, for
 cross-ancestry polygenic-score work such as the portability measurements of
-this repository, an estimate of the ancestry composition of every input
-dataset is a prerequisite for asserting that a ``target ancestry'' dataset
-is what it claims to be.
+this repository, a calibrated compatibility check between each input and its
+declared reference population would be useful.
+
+The evidential status is deliberately modest. Estimator~A is an
+experimental prototype. Its implementation now uses symmetrised matrix
+products and declines rank-deficient or ill-conditioned raw and
+absorber-conditioned designs, but its activation threshold and operating
+characteristics remain uncalibrated. Estimator~B is a research prototype
+with explicit signal, design-identifiability, positive-semidefinite and
+rank-one screens. Neither LD channel should be integrated into SMARTpred
+before independent simulation and real-data validation.
 
 The report is organised as follows. Section~\ref{sec:setting} fixes
 notation. Section~\ref{sec:af} states the frequency-based estimator for
@@ -93,36 +121,54 @@ ecosystem, UK~Biobank references of the LDpred2 family
   \chi^2_i \;=\; z_i^2,
 \end{equation}
 with effective sample size $n$ (per-variant $n_i$ where available), and
-optionally a reported effect-allele frequency $f_i$. The unknown ancestry
-composition is
+optionally a reported effect-allele frequency $f_i$. A generic vector of
+non-negative reference weights lies on the simplex
 \begin{equation}\label{eq:simplex}
-  \pi \;=\; (\pi_1, \dots, \pi_K) \;\in\; \simplex
-  \;=\; \Bigl\{ \pi : \pi_k \ge 0, \; \textstyle\sum_k \pi_k = 1 \Bigr\}.
+  w \;=\; (w_1, \dots, w_K) \;\in\; \simplex
+  \;=\; \Bigl\{ w : w_k \ge 0, \; \textstyle\sum_k w_k = 1 \Bigr\}.
 \end{equation}
+The symbol must carry its estimand. We use $\pi^{\mathrm{AF}}$ for EAF
+projection weights and $\pi^{\mathrm{LD}}$ for coefficients in the LD
+working model. A participant fraction counts people assigned to each
+source; a genome-wide ancestry fraction averages inherited ancestry tracts;
+and local ancestry varies by locus and haplotype. Meta-analysis
+contributions are yet another object, because study and sample weights can
+vary by variant. These quantities coincide only in special designs and are
+not silently interchanged below.
 
 \section{The frequency channel (implemented)}\label{sec:af}
 
-If the analysed population is a mixture of the reference populations with
-little drift since admixture, its allele frequencies satisfy to first order
+Let $f=(f_1,\ldots,f_m)$ denote the \emph{reported} EAF vector after allele
+harmonisation. The frequency-channel working model is
 \begin{equation}\label{eq:afmix}
-  f_i \;\approx\; \sum_{k=1}^{K} \pi_k \, p^{(k)}_i \;+\; \varepsilon_i,
+  f_i \;\approx\; \sum_{k=1}^{K} \pi^{\mathrm{AF}}_k \, p^{(k)}_i
+  \;+\; \varepsilon_i,
 \end{equation}
 with $p^{(k)}_i$ the panel frequency of variant $i$'s counted allele in
 ancestry $k$. The estimator minimises the residual sum of squares over the
 simplex,
 \begin{equation}\label{eq:afls}
-  \hat\pi \;=\;
-  \argmin_{\pi \in \simplex}
-  \; \sum_{i=1}^{m} \Bigl( f_i - \sum_k \pi_k p^{(k)}_i \Bigr)^{2},
+  \hat\pi^{\mathrm{AF}} \;=\;
+  \argmin_{w \in \simplex}
+  \; \sum_{i=1}^{m} \Bigl( f_i - \sum_k w_k p^{(k)}_i \Bigr)^{2},
 \end{equation}
-after matching variants by identifier and allele pair (swapped alleles flip
-$f_i$; strand-ambiguous variants are excluded, since frequency-based strand
+after matching variants by identifier and allele pair (swapped alleles map
+$f_i$ to $1-f_i$; strand-ambiguous variants are excluded, since
+frequency-based strand
 resolution is unreliable exactly where ancestries differ). This is the
 Summix estimator \citep{arriaga2021summix} up to optimisation details, and
 it is what the SMARTpred ancestry mode implements with chromosome
 jackknife standard errors and panel-confusability diagnostics. Its
-requirement --- a trustworthy EAF column --- is precisely what the channels
-of Sections~\ref{sec:pairwise}--\ref{sec:bilinear} dispense with.
+requirement --- a trustworthy EAF column with known provenance --- is
+precisely what the channels of Sections~\ref{sec:pairwise}--\ref{sec:bilinear}
+dispense with. Equation~\eqref{eq:afls} estimates a geometric projection,
+not automatically a participant fraction. The stronger interpretation
+requires that $f_i$ estimates the pooled allele frequency of a common sample,
+that the reference populations span that sample, and that drift, relatedness,
+participation or survival selection, case ascertainment and variant-specific
+missingness do not change the
+weights. A case-only EAF, a case--control average, or a meta-analytic EAF can
+target different and variant-specific mixtures.
 
 \section{What the association statistics know}\label{sec:moments}
 
@@ -157,91 +203,156 @@ the analysed population,
 \end{equation}
 the LD-score-regression identity \citep{bulik2015ldsc}: the intercept $a$
 absorbs $1 - h^2$ plus any confounding inflation, and the slope
-$b = n h^2 / m$ is the polygenic signal. Equations
-\eqref{eq:pairmoment}--\eqref{eq:ldscoreidentity} state that the first two
-moments of the association statistics are proportional to the LD structure
-of the population that was analysed. That structure --- not the effect
-sizes --- is what identifies the ancestry.
+$b = n h^2 / m$ is the polygenic signal. Under the particular model in
+Equation~\eqref{eq:model}, Equations~\eqref{eq:pairmoment}--
+\eqref{eq:ldscoreidentity} link second moments of the association statistics
+to the analysed sample's test-statistic covariance. Inferring source weights
+then requires the additional reference-mixture approximation in
+Section~\ref{sec:mixture}; the moment identities alone identify no ancestry
+quantity.
 
-Two quantitative remarks. First, for a pair of variants in LD, both terms
-of \eqref{eq:pairmoment} scale with the analysed population's own
-correlation; for unlinked pairs both terms vanish, so unlinked pairs carry
-no ancestry information. Second, the noise-covariance term dominates the
-tagging term by roughly
+Two quantitative remarks. First, the noise term for a pair is proportional
+to $\Rho^{(A)}_{ij}$, whereas the tagging term
+$(R^{(A)2})_{ij}=\sum_r\Rho^{(A)}_{ir}\Rho^{(A)}_{rj}$ accumulates shared LD
+paths and need not be proportional to the pair's direct correlation. Both
+terms vanish for pairs in independent LD blocks; arbitrary nominally
+``unlinked'' pairs are not guaranteed to do so. Second, under the rough
+within-block heuristic
+$|(R^{(A)2})_{ij}|\approx\bar\ell|\Rho^{(A)}_{ij}|$, the noise term
+dominates the tagging term by
 \begin{equation}\label{eq:sigratio}
-  \frac{(1 - h^2)}{(n h^2 / m)\,\bar\ell \cdot \Rho}
-  \;\longleftrightarrow\;
+  \frac{(1-h^2)|\Rho^{(A)}_{ij}|}
+       {(nh^2/m)|(R^{(A)2})_{ij}|}
+  \;\approx\;
   \frac{1 - h^2}{n h^2 \bar\ell / m}
   \;\approx\; \frac{0.75}{0.05}
   \quad \text{at } n = 10^5,\; h^2 = 0.25,\; m = 10^6,\; \bar\ell \approx 2:
 \end{equation}
-the pair-product moment is driven by correlated estimation noise, which is
-present for \emph{any} trait with correct standard errors, including ones
-with negligible polygenic signal. The $\chi^2$ moment, by contrast,
+the pair-product moment is driven by correlated estimation noise under
+Equation~\eqref{eq:model}, including at negligible polygenic signal. Correct
+marginal standard errors are necessary but not sufficient for arbitrary GWAS
+test constructions to have this covariance. The $\chi^2$ moment, by contrast,
 requires genuine signal ($h^2 > 0$), since at $h^2 = 0$ the expectation in
 \eqref{eq:ldscoreidentity} is flat in $\ell$.
 
 \section{Mixture model for the analysed population's LD}\label{sec:mixture}
 
-Assume the analysed population is a random mating of the $K$ source
-populations and that, for the variant separations used below, the haplotype
-segment spanning a pair carries a single ancestry, drawn with probability
-$\pi_k$ (admixture-LD is deferred to Section~\ref{sec:failure}). Then the
-standardized-genotype correlation in $A$ is, to first order, the
-ancestry-weighted mixture
+The linear LD mixture is a working model, not a generic identity for a pooled
+or admixed cohort. If $S$ denotes a discrete source label with participant
+fractions $q_k$, the law of total covariance gives
+\begin{equation}\label{eq:totalcov}
+  \operatorname{Cov}(G_i,G_j)
+  = \sum_k q_k\operatorname{Cov}(G_i,G_j\mid S=k)
+  + \sum_k q_k(\mu_{ik}-\mu_i)(\mu_{jk}-\mu_j),
+\end{equation}
+where $\mu_{ik}=\mathbb{E}(G_i\mid S=k)$. The second term is the
+between-source or Wahlund component; conversion from covariance to
+correlation also introduces source- and mixture-specific genotype
+variances. Recent admixture adds covariance between local-ancestry tracts.
+Consequently participant fractions, mean local-ancestry fractions and LD
+mixture coefficients need not agree.
+
+For linked pairs, suppose instead that the GWAS test covariance is well
+approximated by a convex combination of the harmonised reference
+correlations. Define $\pi^{\mathrm{LD}}$ as the coefficients of that
+approximation,
 \begin{equation}\label{eq:ldmix}
-  \Rho^{(A)}_{ij} \;\approx\; \sum_{k=1}^{K} \pi_k\, \Rho^{(k)}_{ij}
+  \Rho^{(A)}_{ij} \;\approx\;
+  \sum_{k=1}^{K} \pi^{\mathrm{LD}}_k\, \Rho^{(k)}_{ij}
   \qquad\text{for linked } (i,j).
 \end{equation}
-Substituting \eqref{eq:ldmix} into the dominant term of
-\eqref{eq:pairmoment} keeps the pair moment \emph{linear in $\pi$}. The
-$\chi^2$ route is different: the LD score squares the correlation, so
+This approximation is most plausible for a discrete mixture of source-group
+participants analysed with a common, unadjusted score-test construction,
+after within-source standardisation, and when the extra term in
+\eqref{eq:totalcov} is negligible or modelled. It is not a claim that
+$\pi^{\mathrm{LD}}$ equals an individual-level admixture fraction.
+
+Substituting \eqref{eq:ldmix} into the noise term of
+\eqref{eq:pairmoment} keeps that component linear in
+$\pi^{\mathrm{LD}}$. The $\chi^2$ route is different: the LD score squares
+the correlation, so
 \begin{equation}\label{eq:quadmix}
   \ell^{(A)}_i
-  \;=\; \sum_j \Bigl( \sum_k \pi_k \Rho^{(k)}_{ij} \Bigr)^{2}
-  \;=\; \sum_{k} \sum_{k'} \pi_k \pi_{k'} \, \ell^{(kk')}_i,
+  \;=\; \sum_j \Bigl( \sum_k \pi^{\mathrm{LD}}_k
+                         \Rho^{(k)}_{ij} \Bigr)^{2}
+  \;=\; \sum_k (\pi^{\mathrm{LD}}_k)^2\ell^{(kk)}_i
+       + 2\sum_{k<k'}\pi^{\mathrm{LD}}_k\pi^{\mathrm{LD}}_{k'}
+         \ell^{(kk')}_i,
   \qquad
   \ell^{(kk')}_i \;:=\; \sum_j \Rho^{(k)}_{ij} \Rho^{(k')}_{ij},
 \end{equation}
-which is linear in the \emph{products} $\pi_k \pi_{k'}$, not in $\pi$
-itself. The bilinear scores $\ell^{(kk')}_i$ --- computable once from each
-ordered pair of reference panels --- are the design variables of
+which is linear in products of the coefficients, not in the coefficients
+themselves. The factor two in the off-diagonal terms is essential when only
+the $K(K+1)/2$ unique bilinear scores are used. These scores are computable
+once from each unordered pair of reference panels and form the design in
 Section~\ref{sec:bilinear}. Note that regressing $\chi^2$ on the plain
 per-ancestry scores $\ell^{(k)}_i = \ell^{(kk)}_i$ instead is misspecified
-whenever the cross-ancestry correlation vectors overlap, which they always
-do; the cross terms $\pi_k \pi_{k'} \sum_j \Rho^{(k)}_{ij} \Rho^{(k')}_{ij}$
-are exactly what that shortcut drops.
+whenever the cross-ancestry correlation vectors overlap, as they generally
+do in real panels; the cross terms in Equation~\eqref{eq:quadmix} are what
+that shortcut drops.
 
-\section{Estimator A: pair products (linear in $\pi$)}\label{sec:pairwise}
+\section{Estimator A: pair products (linear LD channel)}\label{sec:pairwise}
 
 For a set $P$ of sampled variant pairs with non-trivial reference LD, use
-the dominant term of \eqref{eq:pairmoment}--\eqref{eq:ldmix} with an
-unconstrained scale $s > 0$ absorbing $(1 - h^2)$ and the tagging term:
+the noise term of Equations~\eqref{eq:pairmoment} and~\eqref{eq:ldmix}.
+When the polygenic tagging term is negligible, the raw working model is
 \begin{equation}\label{eq:paireq}
   \mathbb{E}\!\left[ z_i z_j \right]
-  \;\approx\; s \sum_{k=1}^{K} \pi_k \Rho^{(k)}_{ij},
+  \;\approx\; s_0 \sum_{k=1}^{K} \pi^{\mathrm{LD}}_k
+                        \Rho^{(k)}_{ij},
   \qquad (i,j) \in P .
 \end{equation}
-Estimate the composition by constrained least squares over the simplex,
-profiling out the scale:
-\begin{equation}\label{eq:pairls}
-  (\hat\pi, \hat s)
-  \;=\;
-  \argmin_{\pi \in \simplex,\; s \ge 0}
-  \; \sum_{(i,j) \in P}
-  \Bigl( z_i z_j - s \sum_k \pi_k \Rho^{(k)}_{ij} \Bigr)^{2}.
+At truth $s_0=1-h^2$. A single scale cannot in general absorb the tagging
+term $(nh^2/m)(R^{(A)2})_{ij}$: $R^{(A)2}$ is not proportional to
+$R^{(A)}$. Expanding the square of the LD mixture gives
+\begin{align}\label{eq:qexpand}
+  R^{(A)2}
+  &\approx \sum_k (\pi^{\mathrm{LD}}_k)^2 R^{(k)}R^{(k)}
+  + \sum_{k<k'}2\pi^{\mathrm{LD}}_k\pi^{\mathrm{LD}}_{k'}Q^{(kk')}.
+\end{align}
+For $k\leq k'$, define the quadratic absorber matrices
+\begin{equation}\label{eq:qdef}
+  Q^{(kk)}=R^{(k)}R^{(k)}, \qquad
+  Q^{(kk')}=\frac{R^{(k)}R^{(k')}+R^{(k')}R^{(k)}}{2}
+  \quad (k<k').
 \end{equation}
-For fixed $\pi$, the optimal $s$ is the least-squares ratio
-$\langle zz, L\pi \rangle / \lVert L\pi \rVert^2$ with $L$ the pair-by-ancestry
-design matrix, so \eqref{eq:pairls} reduces to a one-dimensional search
-over a simplex-constrained least-squares problem --- the same numerical
-problem, in fact, that the frequency channel solves, and solvable by a
-pure-NumPy active-set method. Requirements and properties:
+The order of the two cross-products matters because symmetric LD matrices
+need not commute. Using only $R^{(k)}R^{(k')}$ for $k<k'$ therefore does not
+span the tagging term exactly. An absorbed linear fit uses
+\begin{equation}\label{eq:pairls}
+  z_i z_j \;\approx\;
+  \sum_k a_k\Rho^{(k)}_{ij}
+  + \sum_{k\leq k'}c_{kk'}Q^{(kk')}_{ij},
+  \qquad (i,j)\in P,
+\end{equation}
+with non-negative coefficients. Under the full working model, write
+$q=nh^2/m$. Then $a_k=(1-h^2)\pi^{\mathrm{LD}}_k$,
+$c_{kk}=q(\pi^{\mathrm{LD}}_k)^2$, and
+$c_{kk'}=2q\pi^{\mathrm{LD}}_k\pi^{\mathrm{LD}}_{k'}$ for $k<k'$.
+The composition estimate comes from the linear coefficients,
+\begin{equation}\label{eq:pairrecover}
+  \hat\pi^{\mathrm{LD}}_k
+  = \frac{\hat a_k}{\sum_{r=1}^{K}\hat a_r}.
+\end{equation}
+Equation~\eqref{eq:pairrecover} is defined only when
+$\sum_r\hat a_r>0$. If the linear component vanishes, Estimator~A declines;
+the row sums of the quadratic nuisance coefficients are not substituted as
+the target composition.
+Treating the $c_{kk'}$ as nuisance coefficients protects the linear channel
+from tagging-term bias, but does not repair a false LD-mixture model and can
+worsen collinearity. The implementation retains these absorbers only when
+their fitted total exceeds twice a naive parametric standard error. Because
+pair residuals are LD-correlated, this is an uncalibrated activation
+heuristic, not evidence of ``real signal''; a reported zero signal means
+only that the absorber was not retained. Requirements and properties are
+therefore:
 \begin{enumerate}[itemsep=2pt]
-  \item \textbf{No EAF column, no $h^2$ required.} The dominant noise term
-        exists for any trait with correctly calibrated standard errors
-        (Section~\ref{sec:moments}); what it needs is adequate $n$ and
-        honest SEs.
+  \item \textbf{No EAF column and no known $h^2$.} At $h^2=0$, the
+        correlated-noise term remains under the eligible score-test model.
+        Conversely, the linear channel weakens as residual variance
+        $1-h^2$ approaches zero.
+        This statement does not extend automatically to arbitrary adjusted,
+        case--control or meta-analytic $z$-statistics.
   \item \textbf{Pairs must be linked.} Unlinked pairs have
         $\Rho^{(k)}_{ij} \approx 0$ for every $k$ and contribute only
         noise; take pairs within LD blocks, e.g.\ all pairs with
@@ -250,45 +361,79 @@ pure-NumPy active-set method. Requirements and properties:
   \item \textbf{Genome-wide $z$'s.} Because each pair is weakly
         informative, the estimator needs statistics across all chromosomes;
         a single region does not suffice.
+  \item \textbf{The linear design must be identifiable after conditioning
+        on the absorbers.} Boundary solutions and nearly collinear reference
+        columns are failure diagnostics, not precise ancestry calls.
 \end{enumerate}
-This is the estimator family of ZMIX \citep{dennis2024zmix}; DISTMIX
-\citep{lee2015distmix} uses the same information indirectly, scoring each
-ancestry by how well its LD imputes the observed $z$-pattern.
+The raw pair-product idea is the estimator family of ZMIX
+\citep{dennis2024zmix}, following its use inside DISTMIX2
+\citep{chatzinakos2021distmix2}. The quadratic absorber is an extension
+studied here. The original DISTMIX \citep{lee2015distmix} is not a
+Z-score-based ancestry estimator.
 
 \section{Estimator B: bilinear LD-score regression}\label{sec:bilinear}
 
-Regress the LDSC-style truncated statistic on the $K(K+1)/2$ bilinear
-score vectors of \eqref{eq:quadmix}:
+For a common sample size, the uncapped moment implied by
+Equations~\eqref{eq:ldscoreidentity} and~\eqref{eq:quadmix} is
 \begin{equation}\label{eq:bireg}
-  \mathbb{E}\!\left[ \min(\chi^2_i,\, c) \right]
+  \mathbb{E}\!\left[ \chi^2_i \right]
   \;=\;
-  a \;+\; \sum_{k \le k'} b_{kk'} \, \ell^{(kk')}_i,
-  \qquad c \approx 30,
+  a + \sum_k b_{kk}\ell^{(kk)}_i
+    + \sum_{k<k'}b_{kk'}\ell^{(kk')}_i.
 \end{equation}
-with non-negativity constraints $b_{kk'} \ge 0$ (they equal
-$s\,\pi_k\pi_{k'}$ at truth) and an unconstrained intercept. Under
-\eqref{eq:ldscoreidentity}--\eqref{eq:quadmix} the population values are
+With $s=nh^2/m$, the population coefficients under the working model are
 \begin{equation}\label{eq:bcoef}
-  b_{kk'} \;=\; \frac{n h^2}{m}\; \pi_k \pi_{k'},
+  b_{kk}=s(\pi^{\mathrm{LD}}_k)^2,
+  \qquad
+  b_{kk'}=2s\pi^{\mathrm{LD}}_k\pi^{\mathrm{LD}}_{k'}
+  \quad (k<k').
 \end{equation}
-so the composition is recovered from the row sums of the estimated
-coefficient matrix, normalised:
+Define a symmetric matrix $B$ by $B_{kk}=b_{kk}$ and
+$B_{kk'}=B_{k'k}=b_{kk'}/2$ for $k<k'$. At truth,
+$B=s\pi^{\mathrm{LD}}\pi^{\mathrm{LD}\top}$, so the composition can be
+recovered from its normalised row sums:
 \begin{equation}\label{eq:pirecover}
-  \hat\pi_k
+  \hat\pi^{\mathrm{LD}}_k
   \;=\;
-  \frac{\sum_{k'} \hat b_{kk'}}
-       {\sum_{k}\sum_{k'} \hat b_{kk'}} .
+  \frac{\sum_{k'} \hat B_{kk'}}
+       {\sum_{k}\sum_{k'} \hat B_{kk'}} .
 \end{equation}
-The overall scale $n h^2/m$ cancels; $\hat\pi$ is then projected onto
-$\simplex$ if needed, and the projection distance is itself a
-specification diagnostic, since at truth $\hat B \approx \hat s\,
-\hat\pi\hat\pi^{\top}$ is a scaled rank-one matrix. Per-variant sample
-sizes enter multiplicatively in \eqref{eq:bcoef}: either restrict to
-variants with comparable $n_i$ or fit with signal term $\ell_i / n_i$.
-Estimator B needs genuine polygenic signal (flat $\chi^2$ at $h^2 = 0$
-carries no LD profile) and well-powered statistics, but it is a single
-per-variant regression over $m$ rows --- cheaper than the pair sampler of
-Estimator A once the bilinear scores are precomputed.
+The scale $s$ is not separately needed for Equation~\eqref{eq:pirecover},
+but it must be positive and estimable: at $h^2=0$ the composition is
+unidentified. Non-negativity alone is insufficient. The fitted design must
+have adequate rank and conditioning, and $\hat B$ must be close to positive
+semidefinite and rank one; otherwise row-sum normalisation can manufacture a
+composition from a misspecified coefficient pattern. For $K=4$ there are
+$K(K+1)/2=10$ signal columns, or 11 regression columns including the
+intercept.
+
+The implementation uses the uncapped response by default. A caller may
+request $\min(\chi_i^2,c)$ as an exploratory robustness diagnostic, but if
+any observation is actually truncated the implementation withholds the
+composition. This is necessary because
+$\mathbb{E}\{\min(\chi_i^2,c)\}$ is nonlinear in
+$\mathbb{E}(\chi_i^2)$. Filtering exceptional loci, a two-stage LDSC-style
+fit, or a robust loss should be compared and calibrated before any such fit
+is used inferentially.
+
+The current acceptance screen requires the centred bilinear design to have
+full rank and scale-normalised condition number at most $1000$; at least four
+usable held-out block groups; a mean held-out correlation divided by its
+between-group standard error of at least $4$; relative rank-one distance at
+most $0.25$; negative-eigenvalue magnitude at most $0.10$ of the fitted
+matrix's spectral scale; and no actual response truncation. These are fixed
+engineering thresholds, not calibrated hypothesis tests.
+
+Per-variant sample sizes enter the signal multiplicatively:
+\begin{equation}\label{eq:variableN}
+  \mathbb{E}(\chi_i^2)
+  \approx a + \frac{h^2}{m}\,n_i\ell^{(A)}_i.
+\end{equation}
+Thus the signal design uses $n_i\ell^{(kk')}_i$, not
+$\ell^{(kk')}_i/n_i$. Dividing the response by $n_i$ is not equivalent
+unless the resulting variant-specific intercept is modelled. Estimator~B is
+a cheap per-variant regression after precomputation, but its stronger signal
+and specification requirements leave it a research prototype.
 
 \section{Uncertainty}\label{sec:uncertainty}
 
@@ -297,54 +442,79 @@ pairs through LD, so i.i.d.\ standard-error formulas are wrong. Use the
 delete-one-chromosome (or delete-one-LD-block) jackknife: refit on all but
 one chromosome's variants (pairs), and form
 \begin{equation}\label{eq:jackknife}
-  \operatorname{SE}(\hat\pi_k)
+  \operatorname{SE}(\hat\theta_k)
   \;=\;
   \sqrt{ \frac{g-1}{g} \sum_{g'=1}^{g}
-         \bigl( \hat\pi_k^{(-g')} - \bar{\hat\pi}_k \bigr)^{2} },
+         \bigl( \hat\theta_k^{(-g')} - \bar{\hat\theta}_k \bigr)^{2} },
 \end{equation}
-with $g$ informative groups; the same construction the frequency channel
-uses. For Estimator A, $\operatorname{Var}(z_i z_j) \approx
+where $\theta$ denotes the channel-specific target and $g$ is the number of
+informative groups; the same construction the frequency channel
+uses. Chromosomes contain unequal numbers of informative variants and pairs,
+so the equal-group formula in Equation~\eqref{eq:jackknife} is approximate;
+approximately equal-information LD blocks or a weighted delete-group
+jackknife should be included in calibration studies. For Estimator A,
+$\operatorname{Var}(z_i z_j) \approx
 1 + \{\mathbb{E}[z_i z_j]\}^2$ under approximate normality suggests weights
 $1/(1 + \hat\rho^2_{\text{fit},ij})$; the unweighted fit with jackknife is
-the simpler default. For Estimator B the LDSC truncation already tames the
-worst heteroskedasticity.
+the simpler default. Estimator~B reports a delete-group SE only when every
+leave-group refit passes the same design, held-out-signal, positive-
+semidefinite and rank-one screens as the full fit; otherwise the SE is
+withheld. This is still only block-aware uncertainty under its uncapped
+default, not calibration of the fixed acceptance thresholds. Exploratory
+capped or robust alternatives require separate uncertainty work.
+
+Simplex boundaries are non-regular. A point estimate of zero does not prove
+absence of that source, symmetric normal intervals can leave the simplex,
+and delete-group replicates may pile up at zero. Boundary-aware confidence
+sets or calibrated one-sided limits are preferable when a scientific claim
+depends on a small component.
 
 \section{Identifiability}\label{sec:identifiability}
 
-In all three channels only the \emph{relative} proportions are identified:
-the frequency channel is exact only up to the noise scale, and the LD
-channels carry an unknown slope ($s$, or $n h^2/m$) that is not separable
-from $\pi$ without external knowledge of $h^2$. This is the same target as
-Summix and ZMIX --- a composition vector, not an heritability estimate.
-The deeper identifiability constraint is geometric: the ancestry design
-columns (frequencies $p^{(k)}$, pair correlations $\Rho^{(k)}_{ij}$, or
-bilinear scores $\ell^{(kk')}$) can be severely collinear across
-continents. LD patterns in particular decay with distance similarly
-everywhere, so the LD design is worse conditioned than the frequency
-design; the pairwise-column correlations and the Gram condition number
-should be reported alongside any estimate (the confusability diagnostics
-already implemented for the frequency panel generalise verbatim), and
-near-collinear ancestries should be pooled rather than reported
-separately.
+The simplex constraint identifies frequency-projection weights only if the
+reference-frequency contrasts have adequate rank on the matched variants.
+Estimator~A identifies the relative linear coefficients $a_k$ in
+Equation~\eqref{eq:pairls}; its nuisance absorber can remove directions that
+would otherwise distinguish sources. Estimator~B identifies a composition
+only through a non-zero, scaled rank-one matrix. Under that model its overall
+scale is $s=\mathbf{1}^{\top}B\mathbf{1}$ and is algebraically separable from
+the normalised composition; this does not by itself validate $s$ as the
+biological quantity $nh^2/m$. The composition is undefined when $s=0$.
+
+The deeper constraint is geometric. The ancestry design columns
+(frequencies $p^{(k)}$, pair correlations $\Rho^{(k)}_{ij}$, or bilinear
+scores $\ell^{(kk')}$) can be severely collinear. LD patterns in particular
+often decay with distance similarly across sources, so the LD design can be
+worse conditioned than the frequency design. Rank and condition numbers
+must be computed on the \emph{matched, fitted contrast design}, after
+including nuisance columns, rather than on the full unfiltered panel.
+Pairwise-column correlations, effective rank, boundary status and, for
+Estimator~B, distance from the positive-semidefinite rank-one cone should be
+reported. Near-collinear sources should be pooled or the analysis should
+decline; returning an arbitrary simplex vertex is not identification.
 
 \section{Assumptions and failure modes}\label{sec:failure}
 
-\begin{assumption}[Random mating, segment-wise LD]\label{ass:mixture}
-The mixture approximation \eqref{eq:ldmix} holds for linked pairs.
-Admixture-LD violates it: the admixture process creates long-range
-covariance of the form
-$\pi_k (1 - \pi_k)\, d^{(k)}_i d^{(k)}_j$,
-with $d^{(k)}_i$ the ancestry-informative frequency contrast, inflating
-pair products at ancestry-informative markers and biasing $\hat\pi$. The
-bias decays with admixture age; recent admixture is the hard case.
+\begin{assumption}[Eligible LD-mixture design]\label{ass:mixture}
+The approximation in Equation~\eqref{eq:ldmix} holds for the covariance of
+the GWAS test statistics on the fitted linked pairs. This is an assumption
+about the analysed cohort and its test construction, not merely about the
+reference panels. Equation~\eqref{eq:totalcov} shows the omitted
+between-source term. Admixture LD adds long-range covariance proportional to
+ancestry-frequency contrasts and local-ancestry correlation; recent
+admixture is the hard case. In these settings
+$\pi^{\mathrm{LD}}$ is at most a best-fitting reference coefficient, not an
+identified participant or local-ancestry fraction.
 \end{assumption}
 
 \begin{assumption}[Infinitesimal effects]\label{ass:infinitesimal}
 $\operatorname{Var}(\gamma_j) = h^2/m$ with exchangeable effects on the
 admixed-genotype scale. A trait driven by a few large loci violates the
-moment structure of \eqref{eq:pairmoment}--\eqref{eq:bcoef}; the
-truncation in \eqref{eq:bireg} mitigates this for Estimator B, less so for
-Estimator A.
+moment structure of \eqref{eq:pairmoment}--\eqref{eq:bcoef}; the uncapped
+default can be dominated by such loci. Opt-in response capping limits
+influence but changes the expectation and causes the implementation to
+withhold proportions. It is not a general correction for sparse or
+source-heterogeneous genetic architecture.
 \end{assumption}
 
 \begin{assumption}[Honest standard errors]\label{ass:se}
@@ -353,11 +523,48 @@ miscalibrated, winsorised, or meta-analysis-heterogeneity-distorted SEs
 contaminate it directly. This is the channel's greatest sensitivity.
 \end{assumption}
 
-\begin{assumption}[No confounding beyond the intercept]\label{ass:confound}
+\begin{assumption}[Compatible GWAS adjustment]\label{ass:confound}
 Stratification and uncontrolled confounding add LD-score-shaped and
 pair-product-shaped components (the LDSC intercept story of
-\citet{bulik2015ldsc}). Free intercepts absorb only the mean part;
-$\hat\pi$ drifts toward the LD profile of the confounding structure.
+\citet{bulik2015ldsc}). Estimator~B's free intercept absorbs only their mean
+component; Estimator~A has no intercept.
+Conversely, adjustment for principal components, other genetic covariates,
+or a mixed model changes the score covariance. If $M_C$ residualises the
+GWAS covariates, the relevant reference object is proportional to
+\begin{equation}\label{eq:covadjustedld}
+  R_C
+  = D_C^{-1/2}X^{\top}M_CX D_C^{-1/2},
+  \qquad
+  D_C=\operatorname{diag}(X^{\top}M_CX),
+\end{equation}
+not generally the raw-genotype LD $R$. Covariate-adjusted LDSC likewise uses
+adjusted, preferably in-sample LD \citep{luo2021covldsc}. Without matching
+the target test construction, either estimator can mistake adjustment or
+confounding for source composition.
+\end{assumption}
+
+\begin{assumption}[Stable participants and overlap]\label{ass:overlap}
+Equations~\eqref{eq:pairmoment}--\eqref{eq:ldscoreidentity} assume a common
+participant set. With variant-specific missingness, the noise covariance for
+a pair is attenuated by its participant overlap, approximately
+$n_{ij}/\sqrt{n_i n_j}$ under simple sampling. A single per-variant $n_i$
+does not determine $n_{ij}$. Unknown overlap patterns can therefore mimic an
+LD difference and invalidate both the fit and its jackknife.
+\end{assumption}
+
+\begin{assumption}[Single-cohort quantitative-trait score model]\label{ass:gwas}
+The derivation uses marginal linear scores for a standardised quantitative
+trait. Logistic case--control statistics depend on ascertainment, case
+fraction and covariate adjustment; their accompanying EAF may describe
+cases, controls or a pooled sample. Meta-analysis statistics combine
+study-specific scores with variant-specific weights, sample overlap and
+heterogeneity. In either setting, a single constant
+$\pi^{\mathrm{LD}}$ or $\pi^{\mathrm{AF}}$ requires an explicit derivation
+for that construction. Otherwise the estimator should decline rather than
+silently attach a cohort-fraction interpretation.
+Selection into participation, survival or analysis can also change EAF and
+LD relative to both the source population and the external panel; the
+result then describes the selected analysed sample at best.
 \end{assumption}
 
 \begin{assumption}[Harmonised references]\label{ass:refs}
@@ -366,6 +573,15 @@ allele orientation, so pair correlations and bilinear scores are
 comparable across ancestries. Panel construction from 1000~Genomes
 \citep{auton20151000g} or UK~Biobank references \citep{prive2020ldpred2}
 must pass through the same harmonisation as the target statistics.
+Finite reference samples add correlated measurement error to every design
+column. A target that includes an unrepresented source is projected onto the
+nearest available convex combination. Raw EAF correlation can remain high
+because all populations share a large baseline, so it does not rule out such
+misspecification; goodness-of-fit should be evaluated in contrast space.
+Reference-panel
+resampling, held-out variants, contrast-space goodness-of-fit and explicit
+out-of-panel simulations are needed. The GWAS block jackknife alone does not
+include reference uncertainty.
 \end{assumption}
 
 \section{Relation to prior work}\label{sec:prior}
@@ -378,20 +594,24 @@ bigsnpr ancestry resources \citep{prive2018bigsnpr, privefl_vignette}
 implement the same idea through projection onto reference PCs followed by
 simplex-constrained quadratic programming, with a worldwide 21-group
 reference. \emph{DISTMIX} \citep{lee2015distmix} infers mixing proportions
-in order to build ancestry-informed LD matrices for imputing summary
-statistics; \emph{ZMIX} \citep{dennis2024zmix} regresses $z$-score products
-on per-population genotype correlations by constrained least squares ---
-Estimator A of Section~\ref{sec:pairwise} --- and reports, in simulation,
-frequency-based methods near-perfect while the $z$-channel runs a few
-percentage points off, worse for admixed targets: association statistics
-simply carry less ancestry information than frequencies. The misspecification
-checks of \citet{prive2022identifying} are the binary special case of all
-of this --- ``does the reference match the statistics?'' --- where the
-estimators here answer ``in what proportions?''. Estimator B's bilinear
-scores are, to the best of our knowledge, new as an ancestry estimator; as
-a construction they are the multi-ancestry generalisation of LD-score
-regression \citep{bulik2015ldsc}, and nothing in this report claims
-priority over methods we have not surveyed exhaustively.
+from cohort allele frequencies, or accepts prespecified weights, in order to
+build ancestry-informed LD matrices for imputing summary statistics.
+\emph{DISTMIX2} \citep{chatzinakos2021distmix2} introduced a Z-score-only
+weight estimator within an expanded direct-imputation workflow.
+\emph{ZMIX} \citep{dennis2024zmix} made that task standalone and uses
+$z$-score products with constrained optimisation; it reports less accurate
+estimation for the $z$ channel than for frequency-based methods, especially
+for admixed targets. Estimator~A is in this family, with the symmetrised
+quadratic absorber in Equation~\eqref{eq:qdef} an extension evaluated here.
+
+The misspecification checks of \citet{prive2022identifying} ask whether a
+reference is compatible with summary statistics. Composition estimation is
+a stronger inverse problem: it additionally assumes that incompatibility
+can be represented by the supplied convex mixture. Estimator~B's bilinear
+scores are, to the best of our knowledge, a new exploratory ancestry
+estimator related to LD-score regression \citep{bulik2015ldsc}. That is not
+a priority claim over methods not surveyed exhaustively, nor evidence of
+identification in real GWAS designs.
 
 \begin{table}[htbp]
 \centering
@@ -406,7 +626,7 @@ Frequency & EAF column $f_i$ & first, \eqref{eq:afmix} &
   Summix \citep{arriaga2021summix}, \citep{stoneman2025summix2}, \\
  & & & bigsnpr \citep{privefl_vignette} \\
 Pair products & $z_i z_j$, linked pairs & second, \eqref{eq:paireq} &
-  ZMIX \citep{dennis2024zmix}, DISTMIX \citep{lee2015distmix} \\
+  DISTMIX2 \citep{chatzinakos2021distmix2}, ZMIX \citep{dennis2024zmix} \\
 Bilinear LD scores & $\chi^2_i$, all variants & second, \eqref{eq:bireg} &
   LDSC generalisation \citep{bulik2015ldsc}; new here \\
 \bottomrule
@@ -415,31 +635,32 @@ Bilinear LD scores & $\chi^2_i$, all variants & second, \eqref{eq:bireg} &
 
 \section{Implementation mapping and recommendation}\label{sec:implementation}
 
-In the SMARTpred service, the frequency channel is implemented
-(\texttt{smartpred/ancestry.py}) with hash-pinned 1000~Genomes panels,
-chromosome jackknife standard errors, and confusability reporting. Of the
-LD channels, we recommend Estimator~A as the second channel to implement:
-it needs no EAF column and no $h^2$, it reduces to the same
-simplex-constrained least-squares solver already in place, and the
-per-ancestry LD references and their LD-score sidecars already exist in
-the service's registry. The pair set $P$ should be built from the
-registered references' blocks (pairs within blocks with
-$\max_k |\Rho^{(k)}_{ij}|$ above a floor, capped per block), with
-delete-one-chromosome jackknife standard errors
-\eqref{eq:jackknife}. Estimator~B is one further step once bilinear scores
-$\ell^{(kk')}$ are precomputed per reference pair, and is the natural
-benchmark arm against Estimator~A in a simulation study before either is
-exposed on the public service; a block-wise Gaussian likelihood on the
-full $z$-covariance remains research-grade (per-block cubic cost, plus
-every misspecification of Assumptions~\ref{ass:mixture}--\ref{ass:confound}
-at once).
+In SMARTpred, the frequency channel is implemented in
+\texttt{smartpred/ancestry.py} with registered reference panels,
+chromosome-jackknife standard errors and confusability reporting. Its next
+scientific milestone is not another estimator: it is end-to-end construction
+of a real panel followed by positive controls, out-of-panel controls and
+real-data validation with known EAF provenance.
 
-For this repository, the estimators slot into the cross-ancestry
-portability pipeline as a preflight check: estimate the composition of
-every ``target ancestry'' dataset, verify it against the dataset's
-declared ancestry, and refuse or flag measurements whose target is a
-mixture the reference cannot separate --- the quantitative generalisation
-of the reference-matching requirement stated by \citet{prive2022identifying}.
+Estimator~A's block-native implementation now uses the Jordan-product
+absorber in Equation~\eqref{eq:qdef}; refuses rank-deficient or
+ill-conditioned raw and absorber-conditioned linear designs; and reports
+block-jackknife uncertainty. It should nevertheless remain experimental
+until the activation rule and uncertainty are independently calibrated,
+residual acceptance gates are added and calibrated, and real-data controls
+cover the GWAS constructions in
+Section~\ref{sec:failure}. Estimator~B should remain a research prototype:
+its present signal, design, positive-semidefinite and rank-one screens are
+heuristic tolerances, not validation. Neither LD estimator should be wired
+into SMARTpred before real-data validation.
+
+For this repository, a validated estimator could eventually serve as a
+preflight compatibility check in the cross-ancestry portability pipeline.
+It could flag a dataset whose summary-statistic covariance is incompatible
+with its declared reference. It cannot by itself verify self-identified
+ancestry, infer individual local ancestry, or prove a particular participant
+mixture. Those claims require participant-level labels or an independently
+validated design.
 
 \section*{Acknowledgements}
 
@@ -449,7 +670,7 @@ channel's implementation there served as the numerical template. All
 citations were verified against the published records; any error in them
 is ours.
 
-\begin{thebibliography}{12}
+\begin{thebibliography}{14}
 \providecommand{\natexlab}[1]{#1}
 
 \bibitem[Auton et~al.(2015)]{auton20151000g}
@@ -479,6 +700,15 @@ LD Score regression distinguishes confounding from polygenicity in
 genome-wide association studies.
 \emph{Nature Genetics}, 47(3):291--295.
 
+\bibitem[Chatzinakos et~al.(2021)]{chatzinakos2021distmix2}
+Chatzinakos, C., Lee, D., Cai, N., et~al. (2021).
+Increasing the resolution and precision of psychiatric genome-wide
+association studies by re-imputing summary statistics using a large,
+diverse reference panel.
+\emph{American Journal of Medical Genetics Part B: Neuropsychiatric
+Genetics}, 186(1):16--27.
+\url{https://doi.org/10.1002/ajmg.b.32834}
+
 \bibitem[Dennis and Lee(2024)]{dennis2024zmix}
 Dennis, T. and Lee, D. (2024).
 ZMIX: estimating ancestry proportions using GWAS association Z-scores.
@@ -490,6 +720,13 @@ Bacanu, S.-A. (2015).
 DISTMIX: direct imputation of summary statistics for unmeasured SNPs from
 mixed ethnicity cohorts.
 \emph{Bioinformatics}, 31(19):3099--3105.
+
+\bibitem[Luo et~al.(2021)]{luo2021covldsc}
+Luo, Y., Li, X., Wang, X., et~al. (2021).
+Estimating heritability and its enrichment in tissue-specific gene sets in
+admixed populations.
+\emph{Human Molecular Genetics}, 30(16):1521--1534.
+\url{https://doi.org/10.1093/hmg/ddab130}
 
 \bibitem[Priv\'e et~al.(2018)]{prive2018bigsnpr}
 Priv\'e, F., Luu, K., Blum, M.~G.~B., McGrath, J.~J., and
@@ -524,12 +761,5 @@ summary data.
 \url{https://www.cell.com/ajhg/fulltext/S0002-9297(24)00449-X}
 
 \end{thebibliography}
-
-\hypersetup{
-    pdftitle={Estimating Ancestry Composition from GWAS Summary Statistics},
-    pdfauthor={Bjarni J. Vilhjalmsson},
-    pdfsubject={Statistical genetics: ancestry estimation from summary statistics},
-    pdfkeywords={ancestry composition, GWAS summary statistics, LD score, admixture, polygenic scores}
-}
 
 \end{document}
