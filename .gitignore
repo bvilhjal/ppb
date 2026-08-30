@@ -127,6 +127,7 @@ dmypy.json
 
 # Downloaded data (LD references etc.) — not versioned
 data/
+.work/
 
 # Generated leaderboard site — built by the leaderboard workflow
 site/

@@ -254,6 +254,49 @@ tests. Build a schema-2, hash-pinned 1000 Genomes panel with
 `scripts/build_ancestry_panels.py`; the canonical digest remains compatible
 with the original SMARTpred panel format.
 
+### Real GWAS Catalog benchmark
+
+`scripts/ancestry_frequency_gwas_benchmark.py` evaluates a matched family of
+ancestry-stratified height GWAS from Yengo et al. (Nature 2022,
+[doi:10.1038/s41586-022-05275-y](https://doi.org/10.1038/s41586-022-05275-y)).
+Using one phenotype and publication avoids confusing phenotype differences
+with ancestry differences. The five ancestry-specific analyses are
+predeclared qualitative controls: the corresponding 1000 Genomes
+superpopulation must rank first and the core estimator must return
+`estimated`. The pooled analysis is descriptive and excluded from the verdict.
+
+**Table 3. Fixed real-data benchmark cohort.**
+
+| Key | GWAS Catalog accession | Reported sample | N | Predeclared top component |
+|---|---|---|---:|---|
+| AFR | `GCST90245989` | African ancestry | 168,193 | AFR |
+| AMR | `GCST90245993` | Hispanic or Latin American | 58,709 | AMR (imperfect label proxy) |
+| EAS | `GCST90245991` | East Asian ancestry | 363,856 | EAS |
+| EUR | `GCST90245992` | European ancestry | 1,597,374 | EUR |
+| SAS | `GCST90245994` | South Asian ancestry | 60,939 | SAS |
+| POOLED | `GCST90245990` | five-ancestry pooled meta-analysis | 2,200,007 | descriptive only |
+
+The optional acquisition path loads LDpred3's GWAS Catalog harvester from an
+exact source revision, verifies each official compressed-file SHA-256, filters
+to the panel variants, and pins the decompressed normalized content. Cached
+benchmark runs require neither LDpred3 nor network access:
+
+```bash
+# Either fetch from the Catalog, or normalize already downloaded official files.
+python scripts/ancestry_frequency_gwas_benchmark.py --fetch
+python scripts/ancestry_frequency_gwas_benchmark.py --raw-dir <download-dir>
+
+# Re-run only from verified cached inputs and write a strict JSON snapshot.
+python scripts/ancestry_frequency_gwas_benchmark.py \
+  --out results/ancestry-frequency/yengo-height-<date>.json
+```
+
+The target is the deposited **EAF profile**, not literal participant fractions.
+Variant-specific meta-analysis weights, missingness, ascertainment, drift, or
+reference-derived rather than cohort-derived deposited EAFs can change the
+projection. A refusal remains a benchmark result; the fixed estimator gates
+are not retuned on this cohort.
+
 ## Cross-ancestry targets: FinnGen
 
 Two scripts set up summary-statistics-based evaluation against non-UKB
