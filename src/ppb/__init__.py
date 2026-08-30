@@ -13,6 +13,15 @@ The estimator is ancestry-agnostic in form; supplying target-ancestry ``z`` and
 
 from .diagnostics import block_diagnostics, r2_block_jackknife, sign_flip_null
 from .ancestry import estimate_bilinear, estimate_pair_products
+from .ancestry_frequency import (
+    FrequencyPanel,
+    MatchedFrequencies,
+    decompose_effect_allele_frequencies,
+    estimate_frequency_composition,
+    load_frequency_panel,
+    match_effect_allele_frequencies,
+    write_frequency_panel,
+)
 from .estimator import corrected_r2, frozen_to_dosage, mse, r2
 from .evaluate import EvaluationResult, evaluate
 from .score_distribution import score_distribution
@@ -58,5 +67,9 @@ __all__ = [
     "OverlapBasis",
     "standardized_marginal",
     "estimate_pair_products", "estimate_bilinear",
+    "FrequencyPanel", "MatchedFrequencies",
+    "write_frequency_panel", "load_frequency_panel",
+    "match_effect_allele_frequencies", "estimate_frequency_composition",
+    "decompose_effect_allele_frequencies",
 ]
-__version__ = "0.0.1.dev1"
+__version__ = "0.0.1.dev2"

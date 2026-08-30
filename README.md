@@ -208,6 +208,52 @@ liability-scale `R²`.
 into `ldref_chr*.npz`. LR8, memory-mapped, and pre-shrunk caches are
 refused. The Phase-4 entry point is `scripts/cross_ancestry_eval.py`.
 
+## Allele-frequency ancestry decomposition
+
+PPB can project a GWAS effect-allele-frequency (EAF) profile onto a pinned
+reference panel. For aligned variants it solves
+
+**(A1) Reference-frequency projection**
+
+```text
+f_i ~= sum_k pi_k p_ik,    pi_k >= 0,    sum_k pi_k = 1.
+```
+
+The `pi_k` are **equal-marker EAF-profile projection weights**, not
+automatically fractions of study participants. Case/control ascertainment,
+per-variant sample changes, meta-analysis, drift, or an omitted source
+population can all break that interpretation. The method therefore reports
+matched-contrast rank and conditioning, fixed model-fit gates, and a
+chromosome-jackknife locus-stability diagnostic.
+
+```python
+from ppb import decompose_effect_allele_frequencies, load_frequency_panel
+
+panel = load_frequency_panel(
+    "kgp_superpops_hm3.npz", expected_sha256=trusted_content_digest)
+result = decompose_effect_allele_frequencies(
+    rsid, effect_allele, other_allele, eaf, panel)
+```
+
+**Table 2. Frequency-decomposition status gates.**
+
+| Status | Interpretation |
+|---|---|
+| `estimated` | Projection passed the implemented match, rank, condition, and heuristic fit gates |
+| `insufficient` | Fewer than 1,000 aligned variants, fewer than 10 autosomes, or one chromosome supplies more than 25%; weights are returned but quarantined |
+| `nonidentifiable` | Full or leave-one-chromosome population contrasts are rank deficient or have condition number above 1,000 |
+| `poor_fit` | The chosen panel does not adequately represent the observed EAF profile under fixed heuristic thresholds |
+| `invalid_input` / `unavailable` | Invalid EAF values were found, or no variants matched |
+
+`reference_sampling_rms` quantifies the binomial reference-panel frequency
+noise expected at the fitted weights. It is a diagnostic, not an
+errors-in-variables correction. The jackknife conditions on the fixed panel
+and omits target/reference frequency sampling uncertainty and model
+misspecification. All acceptance cutoffs are engineering gates, not calibrated
+tests. Build a schema-2, hash-pinned 1000 Genomes panel with
+`scripts/build_ancestry_panels.py`; the canonical digest remains compatible
+with the original SMARTpred panel format.
+
 ## Cross-ancestry targets: FinnGen
 
 Two scripts set up summary-statistics-based evaluation against non-UKB
