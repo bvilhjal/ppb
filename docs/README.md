@@ -76,7 +76,7 @@ numbered result to its module and its test, then the module.
 | [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2), controls (G3–G4), and the external check against published individual-level accuracy (G5) |
 | [`LIMITATIONS.md`](LIMITATIONS.md) | scope | what PPB does and does not establish; every known failure mode |
 | [`TRANSFERABILITY.md`](TRANSFERABILITY.md) | scope | a negative result: why PPB measures portability but does not construct scores |
-| [`ancestry_report/ancestry_report.pdf`](ancestry_report/ancestry_report.pdf) | record | technical report: estimating the ancestry composition of a GWAS from summary statistics — the allele-frequency channel and the two LD-moment channels (pair products; bilinear LD scores), with derivations, estimators, and failure modes; LaTeX source alongside, simulation benchmark in `../experiments/ancestry_ld_study.py` |
+| [`ancestry_report/ancestry_report.pdf`](ancestry_report/ancestry_report.pdf) | record | technical report: estimating the ancestry composition of a GWAS from summary statistics — frequency projection and two LD-moment channels, with derivations, encoded simulation gates, and the Yengo 2022 height snapshots; LaTeX source alongside |
 | [`../results/schema.md`](../results/schema.md) | specification | the result-pack format (R1) and the rules CI enforces |
 | [`../experiments/README.md`](../experiments/README.md) | record | each simulation, what it demonstrates, and the numbers it produces |
 | [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md) | intent | objective, gates, delivery plan, claims discipline |
