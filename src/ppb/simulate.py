@@ -137,8 +137,9 @@ def bn_freqs(rng, m, fst):
 def bn_freqs_multi(rng, m, fst, k):
     """Balding-Nichols frequencies for ``k`` populations ``fst`` apart.
 
-    Returns a ``(k, m)`` array; row 0 is the shared ancestral draw's first
-    descendant. Each population marginalises to the same ancestral mean, so
+    Returns a ``(k, m)`` array. All ``k`` rows are i.i.d. Balding--Nichols
+    draws from the same ancestral frequencies; no row is special. Each
+    population marginalises to the same ancestral mean, so
     ancestry-informative variants arise from drift, not ascertainment.
     """
     if not 0.0 < fst < 1.0:
@@ -273,7 +274,13 @@ def simulate_admixture_references(n_ref, block_sizes, maf_pops, ld_paths, rng):
         hap = _hap_segment_paths(2 * n_ref, block_sizes, maf_pops[k], paths, rng)
         G = _standardize_cols(
             hap.reshape(n_ref, 2, -1).sum(axis=1, dtype=np.float64))
-        refs.append(np.corrcoef(G, rowvar=False))
+        R = np.corrcoef(G, rowvar=False)
+        # Finite n_ref can still produce a monomorphic column; corrcoef then
+        # writes NaN. Treat those variants as uninformative (identity).
+        if not np.all(np.isfinite(R)):
+            R = np.where(np.isfinite(R), R, 0.0)
+            np.fill_diagonal(R, 1.0)
+        refs.append(R)
     return refs
 
 

@@ -90,6 +90,8 @@ def test_loader_verifies_hash_shapes_and_selection(tmp_path):
     assert design["bilinear_design"].shape == (4, 3)
     assert len(design["semantic_sha256"]) == 64
     assert design["selection"]["maf_threshold"] == pytest.approx(0.05)
+    zero = _write_design(tmp_path / "zero-floor.npz", ld_floor=np.asarray(0.0))
+    assert benchmark.load_ld_design(zero)["selection"]["ld_floor"] == 0.0
     with pytest.raises(ValueError, match="file hash"):
         benchmark.load_ld_design(path, "0" * 64)
 
@@ -200,9 +202,11 @@ def test_primary_control_fails_when_a_declines(monkeypatch):
     }
     monkeypatch.setattr(benchmark, "benchmark_study", lambda *args: {
         "study": {**study.__dict__},
+        # Real decline path: Estimator A left the sign-flip p-values None.
         "independent_sign_flip_diagnostic": {
-            "descriptive_threshold_passed": False,
-            "normalized_contrast_empirical_p": 1.0,
+            "descriptive_threshold_passed": None,
+            "normalized_contrast_empirical_p": None,
+            "scaled_contrast_empirical_p": None,
         },
         "predeclared_control": {
             "included_in_verdict": True, "passed": False,
@@ -212,6 +216,10 @@ def test_primary_control_fails_when_a_declines(monkeypatch):
         [study], design, {study.key: (Path("unused"), {})})
     assert result["verdict"]["passed"] is False
     assert result["verdict"]["failed_accessions"] == [study.accession]
+    assert result["sign_flip_diagnostic_verdict"][
+        "n_normalized_contrast_passed"] == 0
+    assert result["sign_flip_diagnostic_verdict"][
+        "n_scaled_contrast_passed"] == 0
 
 
 def test_fetch_uses_full_hm3_panel_not_pruned_design_ids(monkeypatch):
@@ -240,6 +248,15 @@ def test_fetch_uses_full_hm3_panel_not_pruned_design_ids(monkeypatch):
         "--fetch",
     ]) == 0
     assert captured["ids"] == {"full-1", "full-2"}
+
+
+def test_custom_design_without_hash_pin_is_unsupported(tmp_path, capsys):
+    custom = tmp_path / "custom.npz"
+    custom.write_bytes(b"not-used")
+    with pytest.raises(SystemExit) as exc:
+        benchmark.main(["--design", str(custom)])
+    assert exc.value.code == 2
+    assert "design-sha256" in capsys.readouterr().err
 
 
 def test_checked_in_snapshot_pins_design_nulls_and_qualitative_verdict():

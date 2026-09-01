@@ -1,5 +1,6 @@
-"""Simulation study for the LD-moment ancestry estimators (the benchmark arm
-recommended in ``docs/ancestry_report/ancestry_report.tex``, Section 12).
+"""Simulation study for the LD-moment ancestry estimators (the harness
+described in ``docs/ancestry_report/ancestry_report.tex``,
+Sections 12--13).
 
 Pits Estimator A (pair products, with and without the quadratic signal
 absorbers) and Estimator B (bilinear LD-score regression) against simulated

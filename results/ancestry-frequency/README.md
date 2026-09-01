@@ -16,7 +16,18 @@ Genomes superpopulation to rank first. The pooled analysis is descriptive and
 excluded. This evaluates deposited EAF-profile projection, not literal
 participant-ancestry fractions.
 
-Reproduce from the locally cached, hash-verified normalized inputs:
+Leave-one-chromosome `contrast_rank` values in this snapshot can read `5`
+against `expected_contrast_rank: 4` for a five-population panel. That was a
+rounding artifact of the Gram diagnostic (the 1-vector null lifted above
+tolerance). The rank half of the identifiability gate did not fire; the
+condition half did the work. Current code counts rank in the \(K-1\)
+contrast subspace. Do not re-read those recorded ranks as \(K\) independent
+frequency axes.
+
+Reproduce from the locally cached, hash-verified normalized inputs.
+The snapshot's acquisition mode is `verified_cache`: raw source bytes were
+verified at first download; each recorded run re-verifies the normalized-content
+hash (`raw_source_sha256_verified_this_run: false`).
 
 ```bash
 python scripts/ancestry_frequency_gwas_benchmark.py \

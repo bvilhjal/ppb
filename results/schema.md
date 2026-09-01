@@ -262,9 +262,11 @@ no evaluation records.
 the experimental ancestry-composition channels — (A1) the effect-allele-frequency
 projection and (A2) the pair-product LD projection — written by
 `scripts/ancestry_frequency_gwas_benchmark.py` and
-`scripts/ancestry_ld_gwas_benchmark.py`. Each records the fitted mixtures, the
-sign-flip null replicates, input hashes, the reference design, and the software
-revision, and each directory carries a `README.md` reporting the run.
+`scripts/ancestry_ld_gwas_benchmark.py`. Each records the fitted mixtures, input
+hashes, the reference design, and the software revision, and each directory
+carries a `README.md` reporting the run. Sign-flip null replicates are present
+in the LD snapshot where that diagnostic applies; the frequency snapshot does
+not carry them.
 
 Like anchor snapshots these are provenance objects rather than result packs:
 they carry no evaluation records, so no leaderboard entry derives from them.

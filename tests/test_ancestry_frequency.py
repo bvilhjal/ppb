@@ -60,6 +60,11 @@ def test_frequency_panel_round_trip_integrity_and_external_pin(tmp_path):
     with pytest.raises(ValueError, match="externally registered"):
         load_frequency_panel(replacement, expected_sha256=panel.panel_sha256)
 
+    truncated = tmp_path / "truncated.npz"
+    truncated.write_bytes(b"PK\x03\x04not-a-zip")
+    with pytest.raises(ValueError, match="cannot read ancestry panel"):
+        load_frequency_panel(truncated)
+
 
 def test_frequency_panel_rejects_strand_ambiguous_variants(tmp_path):
     with pytest.raises(ValueError, match="strand-ambiguous"):
@@ -203,6 +208,39 @@ def test_every_leave_one_chromosome_design_must_be_identifiable(tmp_path):
             "designs"] if not item["identifiable"]]
     assert [item["chromosome"] for item in failures] == ["1"]
     assert result["status"] == "nonidentifiable"
+    assert result["proportions_se"] is None
+    for item in result["leave_one_chromosome_identifiability"]["designs"]:
+        if item["chromosome"] == "1":
+            continue
+        assert item["contrast_rank"] == item["expected_contrast_rank"]
+
+
+def test_leave_one_chromosome_rank_is_k_minus_one_on_a_balanced_panel(tmp_path):
+    rng = np.random.default_rng(13)
+    m = 2000
+    chrom = np.array([str(i % 10 + 1) for i in range(m)])
+    base = rng.uniform(0.15, 0.85, m)
+    af = np.clip(np.column_stack([
+        base + rng.normal(0.0, 0.08, m),
+        base + rng.normal(0.0, 0.08, m),
+        base + rng.normal(0.0, 0.08, m),
+    ]), 0.01, 0.99)
+    ids = np.array([f"rs-bal-{i}" for i in range(m)])
+    path = write_frequency_panel(
+        tmp_path / "balanced.npz", ids=ids, chrom=chrom, pos=np.arange(m),
+        counted_allele=np.full(m, "A"), other_allele=np.full(m, "C"),
+        pops=["P1", "P2", "P3"], af=af, n_samples=[200, 200, 200],
+        source="balanced leave-one-chromosome test")
+    panel = load_frequency_panel(path)
+    result = decompose_effect_allele_frequencies(
+        ids, np.full(m, "A"), np.full(m, "C"),
+        af @ np.array([0.5, 0.3, 0.2]), panel)
+    assert result["status"] == "estimated"
+    designs = result["leave_one_chromosome_identifiability"]["designs"]
+    assert designs
+    for item in designs:
+        assert item["contrast_rank"] == item["expected_contrast_rank"] == 2
+        assert item["identifiable"] is True
 
 
 def test_rank_deficient_panel_is_nonidentifiable(tmp_path):

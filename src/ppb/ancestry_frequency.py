@@ -26,6 +26,7 @@ import hashlib
 import hmac
 import json
 import os
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -229,7 +230,7 @@ def load_frequency_panel(path, *, expected_sha256=None) -> FrequencyPanel:
             source = str(_scalar(archive, "source", path)).strip()
             source_url = str(_scalar(archive, "source_url", path)).strip()
             genome_build = str(_scalar(archive, "genome_build", path)).strip()
-    except (OSError, EOFError) as exc:
+    except (OSError, EOFError, KeyError, zipfile.BadZipFile) as exc:
         raise ValueError(f"cannot read ancestry panel {path}: {exc}") from exc
     ids = np.char.strip(ids.astype(str))
     palindromic = ((counted == "A") & (other == "T")
@@ -426,10 +427,23 @@ def _autosome_label(chrom):
 
 
 def _contrast_rank_condition_from_gram(gram, n_rows, n_populations):
-    """Rank and condition of row-centred population contrasts."""
+    """Rank and condition of row-centred population contrasts.
+
+    Each variant row lives in 1-perp, so the Gram has a structural null along
+    the all-ones vector. Rounding can lift that eigenvalue just above a
+    machine-eps cutoff and report rank K for a K-population design. Count
+    rank in the (K-1)-dimensional contrast subspace by discarding the
+    smallest eigenvalue before applying the tolerance.
+    """
     expected_rank = max(n_populations - 1, 0)
-    eigenvalues = np.linalg.eigvalsh(gram)
+    gram = np.asarray(gram, dtype=np.float64)
+    k = int(gram.shape[0])
+    if k == 0:
+        return 0, expected_rank, None if expected_rank else 1.0
+    eigenvalues = np.linalg.eigvalsh(0.5 * (gram + gram.T))
     singular = np.sqrt(np.maximum(eigenvalues[::-1], 0.0))
+    if k >= 1:
+        singular = singular[: k - 1]
     largest = float(singular[0]) if len(singular) else 0.0
     tolerance = max(n_rows, n_populations, 1) * np.finfo(float).eps * largest
     rank = int(np.sum(singular > tolerance)) if largest > 0 else 0
@@ -543,12 +557,17 @@ def estimate_frequency_composition(
     }
 
     centered = P - P.mean(axis=1, keepdims=True)
-    full_gram = centered.T @ centered
     leave_one = []
     for chrom, indices in by_chrom.items():
-        kept = n - len(indices)
-        removed = centered[np.asarray(indices, dtype=np.int64)]
-        gram = full_gram - removed.T @ removed
+        keep = np.ones(n, dtype=bool)
+        keep[np.asarray(indices, dtype=np.int64)] = False
+        kept = int(keep.sum())
+        # Form the kept Gram directly. Downdating ``C.T @ C`` by the
+        # dropped rows is algebraically exact but summation-order rounding
+        # lifts the exact 1-vector null of a row-centred contrast by ~1e-6,
+        # so a K-population design was recorded as rank K rather than K-1.
+        kept_centered = centered[keep]
+        gram = kept_centered.T @ kept_centered
         rank, expected_rank, condition = _contrast_rank_condition_from_gram(
             gram, kept, len(pops))
         identifiable = (rank >= expected_rank
@@ -567,19 +586,31 @@ def estimate_frequency_composition(
         "designs": leave_one,
     }
 
+    identifiable_by_chrom = {
+        item["chromosome"]: item["identifiable"] for item in leave_one}
     if len(usable) >= 2:
         leave_out = np.zeros(n, dtype=bool)
         estimates = []
-        for indices in usable:
+        for chrom, indices in by_chrom.items():
+            if len(indices) >= n:
+                continue
+            if not identifiable_by_chrom.get(str(chrom), False):
+                continue
             leave_out[:] = False
             leave_out[indices] = True
             keep = ~leave_out
             estimates.append(_simplex_least_squares(P[keep], f[keep]))
-        estimates = np.asarray(estimates)
-        g = len(estimates)
-        se = np.sqrt((g - 1) / g * np.sum((estimates - estimates.mean(0)) ** 2,
-                                          axis=0))
-        result["proportions_se"] = [float(value) for value in se]
+        if len(estimates) >= 2:
+            estimates = np.asarray(estimates)
+            g = len(estimates)
+            se = np.sqrt((g - 1) / g * np.sum(
+                (estimates - estimates.mean(0)) ** 2, axis=0))
+            result["proportions_se"] = [float(value) for value in se]
+        else:
+            result["jackknife_note"] = (
+                "fewer than two leave-one-chromosome designs passed the "
+                "rank/condition gate; jackknife standard errors were not "
+                "computed")
     else:
         result["jackknife_note"] = (
             "fewer than two chromosomes carried matched variants; "
@@ -643,6 +674,11 @@ def estimate_frequency_composition(
             "after leaving out chromosome(s): " + failed_labels)
         if result["status"] == "estimated":
             result["status"] = "nonidentifiable"
+        result["proportions_se"] = None
+        if "jackknife_note" not in result:
+            result["jackknife_note"] = (
+                "leave-one-chromosome designs failed identifiability; "
+                "jackknife standard errors are withheld")
     relative_residual = result["residual_rms_over_contrast"]
     poor_absolute_fit = result["residual_rms"] > _MAX_RESIDUAL_RMS
     poor_relative_fit = (relative_residual is None

@@ -16,7 +16,12 @@ candidate ancestry -- no allele-frequency column, no individual-level data.
   fit as non-negative absorbers -- they span the tagging term ``(n h^2 / m)
   (R^(A))^2`` exactly. Their fitted total exceeding twice its parametric SE is
   an uncalibrated activation heuristic, not evidence of real polygenic signal;
-  ``signal = 0`` means only that the absorber was not retained.
+  ``signal = 0`` means only that the absorber was not retained. At
+  ``h^2 ~ 0`` the same heuristic can still retain the absorber on a
+  minority of model-consistent null draws; those draws typically land on a
+  simplex vertex with an inflated jackknife SE, so they are flagged rather
+  than silent. The encoded null gate uses a fixed seed window and is not an
+  operating-characteristic estimate.
 * **Estimator B, bilinear LD-score regression** -- eqs. (17)--(20).
   Chi-square statistics are regressed on the ``K(K+1)/2`` bilinear scores
   ``l^(kk')_i = sum_j R^(k)_ij R^(k')_ij``; the coefficient matrix is

@@ -74,14 +74,14 @@ LD-score model for $\chi^2$ statistics. Only under additional sampling
 assumptions do any of these coincide with participant fractions, mean
 local ancestry, or meta-analysis weights.
 
-The frequency channel, implemented in SMARTpred, recovers a known
-three-population mixture to within $0.01$ in a unit-test panel after
-random allele swaps, and on a predeclared Yengo et~al.\ (2022) height
-control set it ranks the corresponding 1000~Genomes super-population
+The frequency channel, implemented in PPB and deployed from SMARTpred,
+recovers a known three-population mixture to within $0.01$ in a unit-test
+panel after random allele swaps, and on a predeclared Yengo et~al.\ (2022)
+height control set it ranks the corresponding 1000~Genomes super-population
 first in all five ancestry-stratified analyses (snapshot
 \texttt{yengo-height-2026-08-30}). The pair-product LD channel recovers
 a known two-population composition under a model-consistent null
-simulation (mean absolute error $<0.05$) and ranks the declared
+simulation (error of the replicate mean $<0.05$) and ranks the declared
 reference first on the same five real studies, but its normalised
 simplex weights are not validated by a sign-flip diagnostic and every
 real fit sits on the simplex boundary. The bilinear $\chi^2$ channel
@@ -111,7 +111,9 @@ those coefficients approximate the same source-population fractions.
 Neither target is a person's local-ancestry mosaic, and neither generally
 equals the variant-specific contribution of each study to a meta-analysis.
 
-The frequency channel is implemented in SMARTpred and follows Summix
+The frequency channel is implemented in PPB
+(\texttt{src/ppb/ancestry\_frequency.py}) and deployed from SMARTpred
+as a hash-pinned panel registry. It follows Summix
 \citep{arriaga2021summix,stoneman2025summix2} and the bigsnpr ancestry
 resources \citep{prive2018bigsnpr,privefl_vignette}. The LD family uses no
 allele frequencies: it compares products $z_i z_j$ or squared statistics
@@ -399,7 +401,13 @@ worsen collinearity. The implementation retains these absorbers only when
 their fitted total exceeds twice a naive parametric standard error. Because
 pair residuals are LD-correlated, this is an uncalibrated activation
 heuristic, not evidence of ``real signal''; a reported zero signal means
-only that the absorber was not retained. Requirements and properties are
+only that the absorber was not retained. At $h^2\approx 0$ the same
+heuristic can still retain the absorber on a minority of
+model-consistent null draws; those draws typically land on a simplex
+vertex with an inflated jackknife standard error, so they are flagged
+rather than silent. The encoded null gate in
+\texttt{tests/test\_ancestry.py} uses a fixed seed window and is not an
+operating-characteristic estimate. Requirements and properties are
 therefore:
 \begin{enumerate}[itemsep=2pt]
   \item \textbf{No EAF column and no known $h^2$.} At $h^2=0$, the
@@ -690,9 +698,10 @@ Bilinear LD scores & $\chi^2_i$, all variants & second, \eqref{eq:bireg} &
 
 \section{Implementation mapping and recommendation}\label{sec:implementation}
 
-In SMARTpred, the frequency channel is implemented in
-\texttt{smartpred/ancestry.py} with registered, hash-pinned 1000~Genomes
-panels, chromosome-jackknife standard errors and confusability reporting.
+The frequency channel lives in \texttt{src/ppb/ancestry\_frequency.py}.
+SMARTpred's \texttt{smartpred/ancestry.py} is the deployment registry for
+hash-pinned 1000~Genomes panels; chromosome-jackknife standard errors and
+confusability reporting are computed in PPB.
 The Yengo controls in Section~\ref{sec:realdata} are the present real-data
 positive-control record for that channel. They do not replace
 out-of-panel negative controls or a case/control EAF provenance study.
@@ -743,26 +752,30 @@ rank is refused.
 Under model-consistent multivariate-normal $z$-draws with true
 composition $\pi^{\mathrm{LD}}=(0.65,0.35)$, $h^2=0$ and $n=1000$,
 eight replicates on a $400$-block landscape recover $\pi$ with
-mean absolute error below $0.05$, and the chromosome-jackknife
+error of the replicate mean below $0.05$, and the chromosome-jackknife
 standard errors lie within a factor of two of the empirical
-replicate standard deviation. At the tagging-dominated regime
-$nh^2/m=0.5$, the raw (unabsorbed) fit has mean absolute error
-above $0.25$ and saturates on the high-LD ancestry; retaining the
-quadratic absorber in Equation~\eqref{eq:qdef} reduces the error
-below $0.20$ on the accepted replicates (at least nine of twelve
-draws; the rest decline because the linear component is not
-positive). At the report's more realistic $nh^2/m=0.025$, both raw
-and absorbed fits have mean absolute error below $0.14$. A
+replicate standard deviation. That gate is
+$\max_k\lvert\overline{\hat\pi}_k-\pi_k\rvert$, not per-replicate
+mean absolute error. At the tagging-dominated regime
+$nh^2/m=0.5$, the raw (unabsorbed) fit has error of the replicate
+mean above $0.25$ and the high-LD ancestry's mean weight exceeds
+the truth; retaining the quadratic absorber in
+Equation~\eqref{eq:qdef} reduces that error below $0.20$ on the
+accepted replicates (at least nine of twelve draws; the rest
+decline because the linear component is not positive). At the
+report's more realistic $nh^2/m=0.025$, both raw and absorbed
+fits have error of the replicate mean below $0.14$. A
 four-population composition $(0.4,0.3,0.2,0.1)$ is recovered with
-mean absolute error below $0.10$. When the linear component
-vanishes, the fit declines rather than substituting quadratic
-nuisance coefficients as the composition.
+error of the replicate mean below $0.10$. When the linear
+component vanishes, the fit declines rather than substituting
+quadratic nuisance coefficients as the composition.
 
 On individual-level mosaic genotypes (not the moment model),
-replicate-averaged recovery of $(0.65,0.35)$ has mean absolute
-error below $0.15$ at $F_{\mathrm{ST}}=0.05$ and below $0.17$ at
-$F_{\mathrm{ST}}=0.2$. Boundary estimates, when they occur, carry
-a warning rather than a confident zero standard error.
+replicate-averaged recovery of $(0.65,0.35)$ has error of the
+replicate mean below $0.15$ at $F_{\mathrm{ST}}=0.05$ and below
+$0.17$ at $F_{\mathrm{ST}}=0.2$. Boundary estimates, when they
+occur, carry a warning rather than a confident zero standard
+error.
 
 \paragraph{Bilinear channel (Estimator~B).}
 When $\chi^2$ statistics are generated from the bilinear scores
@@ -805,7 +818,7 @@ Table~\ref{tab:yengo-af} reports the EAF-projection weights. All
 five controls returned status \texttt{estimated} and ranked the
 predeclared 1000~Genomes super-population first ($5/5$). Matched
 variant counts are about $1.04$ million. Observed-versus-fitted
-frequency correlations are $0.994$--$0.999$. Residual RMS values
+frequency correlations are $0.993$--$0.999$. Residual RMS values
 lie between $0.012$ and $0.033$, below the engineering gate of
 $0.05$. The Hispanic/Latin American analysis is a predeclared
 imperfect proxy for 1000~Genomes AMR; it still ranked AMR first,
@@ -831,7 +844,17 @@ was never exceeded by any of $200$ sign-flip replicates per study
 declined replicate as a non-exceedance). The corresponding
 normalised-weight contrasts did not clear $p\le 0.05$. Scaled
 correct-reference direction is therefore supported; normalised
-mixture magnitudes are not. Estimator~B declined on all six studies
+mixture magnitudes are not.
+The fitted linear scales are not $1-h^2$. Under the working model
+$s_0=1-h^2\le 1$; the recorded scales are AFR $2.03$, AMR $1.88$,
+EAS $3.19$, EUR $25.29$, SAS $1.26$, Pooled $27.46$, and EUR and
+Pooled ran without the quadratic absorber. Those values are a
+diagnostic that the real pair moments are not quantitatively
+model-consistent --- tagging leakage into the linear channel,
+uncalibrated $z$'s in a large height meta-analysis
+(Assumption~\ref{ass:se}), or both. Ranking-first remains a
+compatibility statement.
+Estimator~B declined on all six studies
 for insufficient reproducible LD-dependent $\chi^2$ signal. Sparse
 marker pruning also omits genome-wide tagging paths, so this is
 not a fair genome-scale verdict on~B.
@@ -896,7 +919,8 @@ Pooled$^*$ & 2\,200\,007
 \end{tabular}}\\[0.4em]
 {\footnotesize $N$ is the reported GWAS sample size. $r$ is the
 observed-versus-fitted EAF correlation. $^*$Descriptive; not a
-control. Jackknife SEs condition on the fixed panel.}
+control. Jackknife SEs condition on the fixed panel. Exact $0.000$
+SEs are boundary artifacts of a vertex weight, not certainty.}
 \end{table}
 
 \begin{table}[htbp]

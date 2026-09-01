@@ -214,7 +214,7 @@ def load_ld_design(path: Path, expected_sha256: str | None = None):
             int(selection["min_variants_per_block"]) < 2 or
             int(selection["max_variants_per_block"]) <
             int(selection["min_variants_per_block"]) or
-            not 0.0 < float(selection["ld_floor"]) <= 1.0 or
+            not 0.0 <= float(selection["ld_floor"]) <= 1.0 or
             int(selection["max_pairs_per_block"]) < 1):
         raise ValueError("LD design selection settings are invalid")
     return {
@@ -484,12 +484,15 @@ def run_benchmark(studies, design, inputs):
                 if not row["predeclared_control"]["passed"]]
     scaled_flip_passes = [
         row["independent_sign_flip_diagnostic"]["descriptive_threshold_passed"]
+        is True
         for row in controls
     ]
     normalized_flip_passes = [
-        row["independent_sign_flip_diagnostic"]
-        ["normalized_contrast_empirical_p"] <= 0.05
-        for row in controls
+        p is not None and p <= 0.05
+        for p in (
+            row["independent_sign_flip_diagnostic"]
+            ["normalized_contrast_empirical_p"]
+            for row in controls)
     ]
     return {
         "schema_version": 1,
@@ -680,6 +683,10 @@ def main(argv=None):
         if (expected_design_sha256 is None and
                 args.design.resolve() == DEFAULT_DESIGN.resolve()):
             expected_design_sha256 = DEFAULT_DESIGN_SHA256
+        if expected_design_sha256 is None:
+            parser.error(
+                "--design-sha256 is required unless --design is the bundled "
+                "default (an unpinned custom design is unsupported)")
         design = load_ld_design(args.design, expected_design_sha256)
         if args.fetch or args.raw_dir:
             acquisition_panel = load_frequency_panel(

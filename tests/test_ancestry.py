@@ -354,6 +354,7 @@ def test_pair_products_absorber_removes_tagging_bias(large):
     raw_err = np.abs(raw.mean(axis=0) - PI).max()
     cor_err = np.abs(cor.mean(axis=0) - PI).max()
     assert raw_err > 0.25                   # raw fit saturates on the high-LD ancestry
+    assert raw.mean(axis=0)[0] > PI[0]      # index 0 is the high-LD landscape
     assert cor_err < 0.20
     assert cor_err < raw_err
 

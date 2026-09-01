@@ -59,6 +59,16 @@ exact value is convention-dependent.
 AMR's zero symmetric SE is a boundary artifact, not certainty. All six fits
 touch a simplex boundary, so ordinary symmetric intervals are invalid. The
 SAS quadratic absorber was retained by an explicitly uncalibrated heuristic.
+
+The fitted linear scales are not interpretable as \(1-h^2\). Under Estimator
+A's working model the linear scale is \(s_0=1-h^2\le 1\); every recorded
+scale here is larger than 1, and EUR / Pooled (25.3 / 27.5) ran without the
+quadratic absorber. Those numbers are a diagnostic that the real pair
+moments are not quantitatively model-consistent — tagging-term leakage into
+the linear channel, uncalibrated \(z\)'s in a large height meta-analysis
+(Assumption 3), or both. Ranking-first remains a compatibility statement,
+not a calibrated \(1-h^2\) or participant-fraction estimate.
+
 Estimator B declined for insufficient reproducible LD-dependent chi-square
 signal; sparse marker pruning also omits genome-wide tagging paths, so this is
 not a fair genome-scale verdict on B.
@@ -82,7 +92,10 @@ subset. Pair selection and LD estimation reuse those same finite samples, so
 reference winner's-curse and errors-in-variables uncertainty are absent from
 the chromosome jackknife.
 
-Reproduce from the tracked design and hash-verified cached summary statistics:
+Reproduce from the tracked design and hash-verified cached summary statistics.
+The snapshot's acquisition mode is `verified_cache`: raw source bytes were
+verified at first download; each recorded run re-verifies the normalized-content
+hash (`raw_source_sha256_verified_this_run: false`).
 
 ```bash
 python scripts/ancestry_ld_gwas_benchmark.py \
