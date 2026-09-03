@@ -3,9 +3,9 @@
 Figure 1 (simulation operating characteristics) reads the JSON dumped by
 ``python experiments/ancestry_ld_study.py --out <path>`` (default
 ``/tmp/ld_study.json``; study output does not belong in ``results/``).
-Figures 2--3 read the committed historical Yengo snapshots and label them
-as such in their captions; regenerate the snapshots first (see their
-READMEs' migration records) before re-reading these figures as current.
+Figures 2--3 read the committed Yengo snapshots and label them with the
+snapshot date in their captions; point them at the newest dated file
+after a benchmark rerun.
 
 Outputs: ``fig1_operating_characteristics.pdf``,
 ``fig2_projection_weights.pdf``, ``fig3_ld_diagnostics.pdf`` in this
@@ -27,10 +27,10 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 FREQUENCY_SNAPSHOT = (ROOT / "results" / "ancestry-frequency"
-                      / "yengo-height-2026-08-30.json")
+                      / "yengo-height-2026-09-03.json")
 LD_SNAPSHOT = (ROOT / "results" / "ancestry-ld"
-               / "yengo-height-2026-08-30.json")
-HISTORICAL_TAG = "historical snapshots yengo-height-2026-08-30"
+               / "yengo-height-2026-09-03.json")
+SNAPSHOT_TAG = "snapshots yengo-height-2026-09-03"
 
 
 def _load(path):
@@ -120,7 +120,7 @@ def fig2(freq, ld, out):
         ax.set_xticks(x)
         ax.set_xticklabels(studies, fontsize=8)
         ax.set_ylabel("weight")
-        ax.set_title(title + " -- " + HISTORICAL_TAG, fontsize=9)
+        ax.set_title(title + " -- " + SNAPSHOT_TAG, fontsize=9)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].legend(fontsize=7, frameon=False, ncol=5, loc="upper right")
     axes[0].set_ylim(-0.05, 1.05)
@@ -173,7 +173,7 @@ def fig3(ld, out):
                          fontsize=9)
     for ax in axes.ravel():
         ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("LD-channel diagnostics -- " + HISTORICAL_TAG, fontsize=10)
+    fig.suptitle("LD-channel diagnostics -- " + SNAPSHOT_TAG, fontsize=10)
     fig.tight_layout()
     fig.savefig(out)
     plt.close(fig)

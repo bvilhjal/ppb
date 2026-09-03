@@ -138,9 +138,10 @@ specification above, the specification wins.
   dosage→standardized multiply is stated correctly with proposed-vs-implemented
   separated; correlation validation is tiled; panels are read-only after load;
   duplicate IDs are validated before marking seen; the sdist ships the
-  checkout-only test drivers (22 collection errors → 0). Remaining artifact
-  work: the Yengo snapshots are labelled historical with migration records
-  (inputs unavailable in this checkout) and the ancestry report is revised
+  checkout-only test drivers (22 collection errors → 0). Artifact status:
+  the Yengo snapshots were regenerated on 2026-09-03 from current code
+  (inputs re-fetched and hash-verified; the 2026-08-30 files remain as
+  history) and the ancestry report is revised
   and rebuilt with `tectonic` (retitle, calibrated abstract, provenance
   table, operating-characteristics survey, diagnostics-forward display, three
   generated figures). Tagged PDF remains future work: the available engine

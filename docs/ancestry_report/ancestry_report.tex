@@ -83,7 +83,7 @@ $0.01$ in a synthetic panel after a $30\%$ random allele swap the matcher
 must reverse. On a repository-declared Yengo et~al.\ (2022) height control
 set it ranks the corresponding 1000~Genomes super-population first in all
 five ancestry-stratified analyses from one publication (snapshot
-\texttt{yengo-height-2026-08-30}). The pair-product LD channel, across
+\texttt{yengo-height-2026-09-03}). The pair-product LD channel, across
 eight fixed replicates of a model-consistent null simulation, has error
 of the replicate mean $<0.05$, and ranks the declared reference first on
 the same five analyses, but its normalised simplex weights are not
@@ -173,28 +173,31 @@ artifact provenance behind every number in those two sections.
 \small
 \caption{Artifact provenance for the evidence in
 Sections~\ref{sec:simulation}--\ref{sec:realdata}. The Yengo snapshots
-are historical archives (code semantics moved on afterward); the
-simulations were re-run from the current tree for this revision.}
+are the 3~September~2026 runs of the current tree, which reproduce every
+August point estimate exactly; the 30~August archives remain committed
+as history. The simulations were re-run from the current tree for this
+revision.}
 \label{tab:provenance}
 \begin{tabularx}{\textwidth}{@{}l >{\raggedright\arraybackslash}X@{}}
 \toprule
 Artifact & Provenance \\
 \midrule
 Frequency snapshot &
-\url{results/ancestry-frequency/yengo-height-2026-08-30.json} \\
-Produced by & \texttt{ppb} commit \texttt{67fa915} (30~Aug~2026),
+\url{results/ancestry-frequency/yengo-height-2026-09-03.json} \\
+Produced by & \texttt{ppb} commit \texttt{0ed294a} (3~Sep~2026),
 \texttt{ppb} 0.0.1.dev2, Python 3.14.6, numpy 2.4.6 \\
 Frequency inputs & six Yengo et~al.\ height GWAS (Table~\ref{tab:yengo-af}),
-mode \texttt{verified\_cache}; per-study
+re-fetched this run from the Catalog, mode
+\texttt{ldpred3\_stream\_filter}; per-study
 \texttt{normalized\_content\_sha256} in the snapshot;
-\texttt{raw\_source\_sha256\_verified\_this\_run: false} \\
+\texttt{raw\_source\_sha256\_verified\_this\_run: true} \\
 Frequency panel & 1000~Genomes phase-3 super-population ALT frequencies,
 $1{,}054{,}330$ variants,
 semantic SHA-256 \texttt{c91b6652$\ldots$b7291186} \\
 LD snapshot &
-\url{results/ancestry-ld/yengo-height-2026-08-30.json} \\
-Produced by & \texttt{ppb} commit \texttt{5dca2f8} (30~Aug~2026),
-\texttt{ppb} 0.0.1.dev2, Python 3.11.15, numpy 2.4.6 \\
+\url{results/ancestry-ld/yengo-height-2026-09-03.json} \\
+Produced by & \texttt{ppb} commit \texttt{0ed294a} (3~Sep~2026),
+\texttt{ppb} 0.0.1.dev2, Python 3.14.6, numpy 2.4.6 \\
 LD design & $21{,}892$ variants / $44{,}250$ pairs / $177$ blocks,
 semantic SHA-256 \texttt{7c332f45$\ldots$679297c}
 (file SHA-256 \texttt{1ce09d4c$\ldots$b93114e}) \\
@@ -207,11 +210,15 @@ Estimator~B declined $6/6$ \\
 Simulation study & \texttt{experiments/ancestry\_ld\_study.py},
 re-run for this revision (16 MVN + 8 individual-level replicates per
 arm); Figure~\ref{fig:operating} \\
-Reproducibility & historical: regeneration needs the gitignored
-\texttt{.work/} input cache (absent) or \texttt{--fetch} (LDpred3 pin
-drifted); migration records are in the snapshot READMEs \\
+Reproducibility & normalized inputs cached under gitignored
+\texttt{.work/} and re-verified by content hash each run; \texttt{--fetch}
+re-acquires them through the pinned LDpred3 harvester (a detached
+worktree satisfies the pin without moving the sibling checkout);
+the recipe is in the snapshot READMEs \\
 Environment & BLAS threads pinned to one
-(\texttt{OPENBLAS/OMP/MKL\_NUM\_THREADS=1}), as in CI \\
+(\texttt{OPENBLAS/OMP/MKL\_NUM\_THREADS=1}) for the simulation study,
+as in CI; the 3~September snapshot runs used the default thread count
+and agree with the pinned August archives to $<10^{-9}$ relative \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -959,8 +966,13 @@ bound, linear-channel collinearity, channel agreement, and the null fit
 rate. The declared reference ranked first in all five
 controls ($5/5$). AMR sat at a vertex. Every fit, including the
 pooled analysis, touched a simplex boundary, so ordinary symmetric
-jackknife intervals are not a valid confidence statement; AMR's
-reported zero SE is a boundary artifact. The sign-flip calculation is
+jackknife intervals are not a valid confidence statement; the current
+recording contract therefore withholds AMR's SE ($\mathrm{null}$)
+instead of publishing a spurious zero. The channel-agreement
+diagnostic flags SAS at $0.500$, five times the $0.10$ engineering
+threshold: its linear and quadratic compositions disagree, so the SAS
+weights are read as a misspecification signal, not calibrated
+fractions. The sign-flip calculation is
 descriptive, not a calibrated randomization test: independent per-block
 sign flips destroy the LD covariance the estimator reads, and only
 112--132 of the 200 null replicates per study fitted at all. With that
@@ -990,7 +1002,7 @@ not a fair genome-scale verdict on~B.
 \includegraphics[width=\textwidth]{fig2_projection_weights}
 \caption{Projection weights with boundary markers ($\times$) and
 conditional delete-one-chromosome jackknife intervals, from the
-historical snapshots of Table~\ref{tab:provenance}. (a)~Frequency
+snapshots of Table~\ref{tab:provenance}. (a)~Frequency
 projection. (b)~LD pair-product weights. Symmetric intervals at a
 boundary weight are invalid; the markers show where that caveat bites.
 Figure~\ref{fig:ld-diagnostics} carries the diagnostics that govern
@@ -1005,7 +1017,7 @@ these weights.}
 analyses. Entries are $\hat\pi^{\mathrm{AF}}$ (delete-one-chromosome
 jackknife SE). The five labelled studies are repository-declared
 controls; the pooled analysis is excluded from the $5/5$ verdict.
-Historical snapshot \texttt{yengo-height-2026-08-30}
+Snapshot \texttt{yengo-height-2026-09-03}
 (Table~\ref{tab:provenance}).}
 \label{tab:yengo-af}
 \resizebox{\textwidth}{!}{%
@@ -1069,10 +1081,11 @@ SEs are boundary artifacts of a vertex weight, not certainty.}
 \centering
 \includegraphics[width=\textwidth]{fig3_ld_diagnostics}
 \caption{LD-channel diagnostics that govern Table~\ref{tab:yengo-ld},
-from the historical snapshot of Table~\ref{tab:provenance}.
+from the snapshot of Table~\ref{tab:provenance}.
 (a)~Fitted scale against the working-model bound $s_0 = 1-h^2 \le 1$
 (dashed). (b)~Maximum absolute linear-channel design correlation.
-(c)~Linear/quadratic channel agreement (warn above $0.10$, dashed).
+(c)~Linear/quadratic channel agreement (warn above $0.10$, dashed;
+SAS reaches $0.50$ in this snapshot).
 (d)~Sign-flip null fit rate: fitted replicates out of 200, a
 descriptive calculation, not a calibrated test.}
 \label{fig:ld-diagnostics}
@@ -1083,8 +1096,8 @@ descriptive calculation, not a calibrated test.}
 \small
 \caption{Estimator~A LD-mixture weights on the same Yengo analyses.
 All five controls ranked the declared reference first. Every fit
-is on the simplex boundary. Historical snapshot
-\texttt{yengo-height-2026-08-30} (Table~\ref{tab:provenance}).}
+is on the simplex boundary. Snapshot
+\texttt{yengo-height-2026-09-03} (Table~\ref{tab:provenance}).}
 \label{tab:yengo-ld}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}l r r r r r c r r@{}}
@@ -1121,8 +1134,9 @@ simulation gates are those of \texttt{tests/test\_ancestry.py} and
 \texttt{tests/test\_ancestry\_frequency.py}; the operating survey is
 \url{experiments/ancestry_ld_study.py} with figures from
 \url{docs/ancestry_report/make_figures.py}. The real-data numbers are
-the committed snapshots of 30~August~2026 (Table~\ref{tab:provenance}),
-read as historical archives. References give DOIs or stable URLs; no
+the committed snapshots of 3~September~2026 (Table~\ref{tab:provenance}),
+which reproduce the 30~August~2026 archives exactly; the August files
+remain committed as history. References give DOIs or stable URLs; no
 citation-verification manifest is claimed (a manifest is future work),
 and any error in them is ours.
 

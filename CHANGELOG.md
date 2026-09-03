@@ -16,6 +16,13 @@ single-sourced from `ppb.__version__`; the package is pre-release
   re-fetched from the GWAS Catalog with the pinned LDpred3 harvester supplied
   via a detached worktree; both channel READMEs now document that regeneration
   path and record the new snapshots.
+- Ancestry report revised and rebuilt for the new snapshots (provenance
+  table now records producing commit `0ed294a`, the re-fetch acquisition
+  mode, the resolved regeneration path, and the default-thread environment
+  of the snapshot runs; AMR's withheld SE, the SAS channel-agreement 0.500
+  flag, and the K−1 contrast-rank contract are stated in prose and figures;
+  `make_figures.py` re-points at the dated snapshots). Rebuilt with the same
+  Tectonic 0.17.0 toolchain as the previous revision.
 
 ### Fixed
 
