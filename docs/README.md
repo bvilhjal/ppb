@@ -105,7 +105,8 @@ specification above, the specification wins.
   2026-09-02. Covers the ~24,400 lines added since `5d2d680`: both ancestry
   channels and their builders, benchmarks, snapshots and technical report; the
   FinnGen target path; the simulator expansion. **3 Critical · 19 Major · 46 Minor
-  · 16 Nit, none yet addressed.** All three Criticals are on the FinnGen path
+  · 16 Nit** (all resolved 2026-09-03; see below). All three Criticals are on
+  the FinnGen path
   (wrong `--weight-scale` in the README's own worked example; the (H2) independence
   screen failing open on absent cohort annotation; `ref`/`alt` swapped in the
   emitted table). The estimator algebra re-verified clean to machine precision; the
@@ -121,13 +122,13 @@ specification above, the specification wins.
   reconciled (the per-block check now reports an indefinite block instead of
   disagreeing with the write gate by 10¹¹); the gauge remap is exercised, not
   tautological; `test_gauge.py` is cross-seed mean±SE; and CI runs `ruff` with the
-  BLAS threads pinned. The one exception is the published
-  `ancestry_report.pdf`, which is stale against the `.tex` and needs a manual
-  LaTeX rebuild (no toolchain in the repo).
-- **Follow-up review, 2026-09-03** (uncommitted when received; review of
-  `70e8d2d..cceb245`, 51 files). Withheld release-readiness: five P0
-  correctness/documentation findings plus P1 artifact drift. Remediated in the
-  working tree: the simplex face solver is now centred/SVD with direct residual
+  BLAS threads pinned. The one exception at the time was the published
+  `ancestry_report.pdf`, then stale against its `.tex`; it was rebuilt in
+  `7272408` (see the follow-up entry below).
+- **Follow-up review, 2026-09-03** (review of `70e8d2d..cceb245`, 51 files;
+  uncommitted when received, remediated in `0ed294a`). Withheld
+  release-readiness: five P0 correctness/documentation findings plus P1 artifact
+  drift. The simplex face solver is now centred/SVD with direct residual
   evaluation (plus an exact-mixture regression test); rejected frequency fits
   publish `proportions: null` with `proportions_raw` retained (Estimator B's
   contract, extended to the frequency channel); `r2()`/`mse()`/`evaluate()`

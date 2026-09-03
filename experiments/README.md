@@ -538,7 +538,7 @@ participant fractions and local ancestry are the same estimand. Estimator A
 therefore remains experimental after the algebraic and identifiability fixes;
 Estimator B remains a research prototype. Neither is ready for SMARTpred
 integration before independent simulation and real-data validation. The
-implementation behaviour is pinned by `tests/test_ancestry.py` (34 tests),
+implementation behaviour is pinned by `tests/test_ancestry.py` (43 tests),
 not thereby scientifically validated.
 
 Run: `python experiments/ancestry_ld_study.py [--reps 24 --il-reps 12]`.
