@@ -1,0 +1,11 @@
+# The test suite imports checkout-only drivers (scripts/, experiments/) via
+# the root conftest.py, registry tests read results/, and one CLI test runs
+# examples/mini/. All ship in the sdist so the distributed tests run; the
+# wheel still installs only the src/ ppb package (see
+# [tool.setuptools.packages.find] in pyproject.toml).
+graft scripts
+graft experiments
+graft results
+graft examples
+include conftest.py
+global-exclude __pycache__ *.pyc *.pyo

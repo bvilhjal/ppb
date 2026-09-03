@@ -144,7 +144,35 @@ resolves to the **free-threaded** build (`*_cp314t`), under which numpy/MKL matm
 hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out of
 `njit`.
 
-## Current state (2026-08-16)
+## Current state (2026-09-03; supersedes the 2026-08-16 snapshot below)
+
+Reviewed at `036e6a3` (REVIEW-2026-09-02: 3 Critical · 19 Major · 46 Minor ·
+16 Nit), remediated in `cceb245`, re-reviewed over `70e8d2d..cceb245`
+(51 files) with five P0 findings plus artifact drift, remediated in the
+working tree (uncommitted):
+
+- Core estimator (`r2`, `mse`), LD backends (dense, block-diagonal D8 square
+  or packed, float low-rank), harmonization, CLI, bundles/shards,
+  jackknife + sign-flip diagnostics, overlap detection/labeling, and score
+  distributions: validated in simulation; within-ancestry anchor on real data.
+- Fail-closed since this round: simplex frequency solver (centred/SVD, direct
+  residual), `proportions: null` on every rejected frequency fit (raw kept as
+  `proportions_raw`), per-block PSD refusal in `r2()`/`mse()`/`evaluate()`
+  matching the diagnostics path, one scale interpretation (`s₀ = 1−h² ≤ 1`),
+  tiled correlation validation, read-only panels, validate-before-seen
+  duplicates, self-contained sdist.
+- Experimental ancestry channels (A1 frequency, A2 LD-moment) are stress tests
+  on real GWAS, not release claims: the Yengo snapshots in
+  `results/ancestry-frequency/` and `results/ancestry-ld/` are labelled
+  historical with migration records (inputs unavailable in this checkout),
+  and the ancestry report is revised and rebuilt with `tectonic`
+  (drift-gated in CI; tagged PDF needs a newer toolchain).
+- Still open (unchanged): regenerating the 2026-07-22 EUR pack (needs local
+  GWAS + HM3+ files absent here), the first real cross-ancestry run
+  (`cross_ancestry_eval.py` exits 2 without `(z_B, D_B)`), the Witteveen
+  8-trait golden result, liability (M6), assortative-mating correction (P3).
+
+## Current state (2026-08-16) — historical
 
 **The installable package is the estimator path.** CI targets Python 3.11/3.12.
 

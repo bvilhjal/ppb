@@ -257,9 +257,10 @@ def test_channel_agreement_note_threshold():
 
 
 def test_scale_above_one_is_flagged_not_interpreted(large):
-    # M4: for z = beta/se-like inputs the fitted linear scale carries a
-    # sqrt(N) factor; a scale above one must be annotated as such rather
-    # than read as 1 - h^2. pi itself is invariant to the global rescale.
+    # Under the calibrated working model the fitted linear scale is
+    # 1 - h^2 <= 1; rescaling z by c rescales the scale by c^2, so a scale
+    # above one is a model-incompatibility diagnostic rather than a
+    # sample-size effect. pi itself is invariant to the global rescale.
     _, blocksB, _, RBB = large
     z0 = simulate_admixture_mvn(RBB, PI, 0.0, 1000, np.random.default_rng(31))
     r = estimate_pair_products(3.0 * z0, RBB, blocks=blocksB)

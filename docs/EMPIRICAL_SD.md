@@ -23,7 +23,10 @@ admixed targets)" in the v0.1 definition. This note designs that extension.
 ## 2. Where the SD enters — and where it does not
 
 - **Enters, V3 gauge conversion (X2):** dosage→standardized weight conversion
-  divides by the target-ancestry genotype SD.
+  multiplies by the target-ancestry genotype SD
+  (`w_std = w_dosage · sd`, since `w_dosage = w_std / sd`; [`METHOD.md`](METHOD.md)
+  §V3 and `evaluate.py` implement the multiply — an earlier revision of this
+  note said "divides" here, which was wrong).
 - **Enters, (P1)–(P2):** the phenotype-free score mean and variance consume
   the panel's SDs.
 - **Enters at panel-build time:** the D8 LD matrices are correlations of
@@ -89,6 +92,18 @@ map on the intersected variant set (keeps EUR and non-EUR evaluations on one
 block grid; simpler jackknife comparability) or re-derive per population
 (`optimal_ld_blocks`, Privé 2022, is the ldpred3-family precedent). Decision
 §6.
+
+## 4a. Proposed versus implemented (read this before quoting §3)
+
+- **Implemented today:** `evaluate(..., weight_scale="dosage"/"frozen",
+  genotype_sd=...)` multiplies dosage weights by caller-supplied per-variant
+  SDs (`evaluate.py`, step V3); `genotype_sd_source` records which table
+  carried them. The gauge validation E4 exercises this path end to end.
+- **Proposed, not implemented:** the `sd` / `sd_source` shard fields, the
+  `sd_source="hwe"` legacy fallback, the registry refusal of empirical-less
+  cross-ancestry packs, and the converter/loader/CLI changes of §5–§6.
+  Until those land, no LD-reference shard carries SDs and every empirical-SD
+  run passes them explicitly through the current API.
 
 ## 5. Implementation steps
 

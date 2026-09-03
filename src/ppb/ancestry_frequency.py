@@ -265,6 +265,10 @@ def load_frequency_panel(path, *, expected_sha256=None) -> FrequencyPanel:
             raise ValueError(
                 f"ancestry panel {path} does not match its externally "
                 "registered sha256; refuse to use a replaced panel")
+    # The content hash pins the panel at load; the arrays are made read-only
+    # so a later in-place mutation cannot silently void that pin.
+    for array in (ids, chrom, pos, counted, other, af, n_samples):
+        array.flags.writeable = False
     return FrequencyPanel(
         ids=ids, chrom=chrom, pos=pos, counted_allele=counted,
         other_allele=other, pops=pops, af=af, n_samples=n_samples,
@@ -329,7 +333,6 @@ def match_effect_allele_frequencies(
         if pid in seen:
             n_dupe += 1
             continue
-        seen.add(pid)
         if (ea, oa) in _AMBIGUOUS:
             n_ambiguous += 1
             continue
@@ -346,6 +349,10 @@ def match_effect_allele_frequencies(
         else:
             n_mismatch += 1
             continue
+        # Only accepted rows mark the identifier: an invalid first
+        # occurrence (palindromic, absent, mismatched) must not poison a
+        # valid later one, and duplicates are decided on valid rows only.
+        seen.add(pid)
         rows.append(row)
         freqs.append(1.0 - value if flip else value)
 
@@ -368,11 +375,18 @@ def match_effect_allele_frequencies(
 
 
 def _simplex_least_squares(P, f):
-    """Exactly minimize ‖f − Pπ‖² over π ≥ 0 and Σπ = 1.
+    """Minimize ‖f − Pπ‖² over π ≥ 0 and Σπ = 1 by face enumeration.
 
     Population panels have small ``K`` (five for 1000 Genomes), so enumerating
     every non-empty simplex face is simpler and safer than approximating the
-    equality constraint with a large penalty row.
+    equality constraint with a large penalty row. Each face solve is a
+    centred least-squares problem -- the equality constraint is removed by
+    parametrising the face around the feasible point ``1/q`` along
+    sum-zero directions, and the system is solved by SVD (``lstsq``) on the
+    centred design, never via the squared-condition Gram normal equations.
+    The face loss is the residual norm evaluated directly; the expanded
+    Gram form ``f² − 2fᵀPw + wᵀGw`` cancels catastrophically for near-exact
+    mixtures and can elect a materially wrong face.
     """
     P = np.asarray(P, dtype=np.float64)
     f = np.asarray(f, dtype=np.float64)
@@ -381,23 +395,27 @@ def _simplex_least_squares(P, f):
     K = P.shape[1]
     if K > 15:
         raise ValueError("simplex face enumeration supports at most 15 populations")
-    gram_full = P.T @ P
-    rhs_full = P.T @ f
-    f_squared = float(f @ f)
     best = None
     best_loss = np.inf
     tolerance = 1e-10
     for mask in range(1, 1 << K):
         active = np.array([i for i in range(K) if mask & (1 << i)])
         q = len(active)
-        gram = gram_full[np.ix_(active, active)]
-        kkt = np.block([
-            [gram, np.ones((q, 1))],
-            [np.ones((1, q)), np.zeros((1, 1))],
-        ])
-        rhs = np.concatenate([rhs_full[active], [1.0]])
-        candidate, *_ = np.linalg.lstsq(kkt, rhs, rcond=None)
-        weights = candidate[:q]
+        A = P[:, active]
+        if q == 1:
+            weights = np.ones(1)
+        else:
+            particular = np.full(q, 1.0 / q)
+            # Sum-zero directions: column j is e_j − e_{q−1}, so A @ Z is the
+            # design centred on its last active column.
+            null = np.zeros((q, q - 1))
+            for j in range(q - 1):
+                null[j, j] = 1.0
+                null[q - 1, j] = -1.0
+            centred = A @ null
+            target = f - A @ particular
+            step, *_ = np.linalg.lstsq(centred, target, rcond=None)
+            weights = particular + null @ step
         if abs(float(weights.sum()) - 1.0) > tolerance:
             continue
         if np.any(weights < -tolerance):
@@ -406,8 +424,7 @@ def _simplex_least_squares(P, f):
         weights /= weights.sum()
         full = np.zeros(K)
         full[active] = weights
-        loss = float(
-            f_squared - 2.0 * full @ rhs_full + full @ gram_full @ full)
+        loss = float(np.sum((f - P @ full) ** 2))
         if loss < best_loss:
             best, best_loss = full, loss
     if best is None:  # Every simplex vertex is feasible, barring non-finite data.
@@ -458,7 +475,13 @@ def _contrast_rank_condition_from_gram(gram, n_rows, n_populations):
 
 def estimate_frequency_composition(
         matched: MatchedFrequencies, panel: FrequencyPanel) -> dict:
-    """Fit proportions, jackknife SEs, and diagnostics for one matched set."""
+    """Fit proportions, jackknife SEs, and diagnostics for one matched set.
+
+    Public contract: ``proportions`` and ``proportions_se`` are published
+    only when ``status == "estimated"``. Every other status sets both to
+    ``None``; the optimizer output is retained as ``proportions_raw`` for
+    inspection and must not be read as a composition.
+    """
     from collections import defaultdict
 
     pops = panel.pops
@@ -474,6 +497,7 @@ def estimate_frequency_composition(
         "n_used": n,
         "proportions": None,
         "proportions_se": None,
+        "proportions_raw": None,
         "af_corr": None,
         "residual_rms": None,
         "residual_max_abs": None,
@@ -523,6 +547,7 @@ def estimate_frequency_composition(
     result["residual_rms"] = float(np.sqrt(np.mean(residual ** 2)))
     result["residual_max_abs"] = float(np.max(np.abs(residual)))
     result["proportions"] = [float(value) for value in pi]
+    result["proportions_raw"] = [float(value) for value in pi]
     reference_variance = np.sum(
         pi[None, :] ** 2 * P * (1.0 - P)
         / (2.0 * panel.n_samples[None, :]), axis=1)
@@ -701,6 +726,11 @@ def estimate_frequency_composition(
             "a single population absorbs the whole composition; with a poor "
             "fit this can mean the dataset's ancestry is outside the "
             "panel, not a pure single-origin result")
+    if result["status"] != "estimated":
+        # A rejected fit publishes no composition: the optimizer output
+        # stays available as proportions_raw, never as proportions.
+        result["proportions"] = None
+        result["proportions_se"] = None
     return result
 
 

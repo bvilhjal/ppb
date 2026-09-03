@@ -311,6 +311,41 @@ class BlockDiagonalLD(LDBackend):
         return out
 
 
+_PSD_BLOCK_REL_TOL = 1e-9
+
+
+def require_psd_block_quads(v, w) -> None:
+    """Refuse per-block quadratic forms that are materially negative.
+
+    ``block_quads`` itself only warns and reports (the int8 write-time gate
+    admits eigenvalues down to -0.1, so a low-level refusal would also refuse
+    LDpred2-family weights on reference blocks ppb itself certified). Any
+    estimator that publishes a single number from the summed denominator
+    must call this first: a negative block understates ``wᵀDw`` and so
+    inflates R² silently in the one direction this project fails closed on.
+    Negatives within ``1e-9 * wᵀw`` are float rounding on a genuinely PSD
+    block and pass; anything larger names the worst block and raises, with
+    a pointer to PSD-by-construction representations.
+    """
+    v = np.asarray(v, dtype=np.float64)
+    w = np.asarray(w, dtype=np.float64)
+    if v.ndim != 1 or w.ndim != 1:
+        raise ValueError(
+            f"block quads and weights must be 1-D; got {v.shape} and {w.shape}")
+    scale = float(w @ w)
+    if not np.isfinite(scale):
+        raise ValueError("weights must contain only finite values")
+    if v.size == 0:
+        return
+    worst = int(np.argmin(v))
+    if v[worst] < -_PSD_BLOCK_REL_TOL * scale:
+        raise ValueError(
+            f"block {worst} has wᵀ D_b w = {v[worst]!r} < 0: the LD block is "
+            "not positive semi-definite in the direction of these weights, "
+            "and summing it would understate wᵀDw (inflating R²). Use a PSD "
+            "representation such as a low-rank factor for this block.")
+
+
 def _int8_row_sq_sums(D8, chunk=512):
     """Row sums of squared dequantised entries, without materialising floats.
 

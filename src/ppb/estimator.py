@@ -16,7 +16,23 @@ import warnings
 
 import numpy as np
 
-from .ld_backend import LDBackend
+from .ld_backend import BlockDiagonalLD, LDBackend, require_psd_block_quads
+
+
+def _quad_fail_closed(ld: LDBackend, w) -> float:
+    """``wᵀDw`` that refuses a denominator corrupted by an indefinite block.
+
+    A single indefinite block can hide inside a comfortably positive total,
+    understating the denominator and inflating R². ``block_quads`` reports
+    such a block with a warning; this gate makes the estimators that publish
+    the ratio fail closed instead, consistent with the per-block refusal in
+    :mod:`ppb.diagnostics`.
+    """
+    if isinstance(ld, BlockDiagonalLD):
+        v = ld.block_quads(w)
+        require_psd_block_quads(v, w)
+        return float(v.sum())
+    return ld.quad(w)
 
 
 def frozen_to_dosage(weights, sd_ref):
@@ -125,11 +141,13 @@ def r2(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
     """Estimated prediction ``R^2`` from summary-level inputs.
 
     Raises ``ValueError`` if ``w^T D w`` is not strictly positive (an undefined
-    or invalid ratio -- e.g. all-zero weights, or a non-PSD ``D``).
+    or invalid ratio -- e.g. all-zero weights, or a non-PSD ``D``), and -- for
+    block-diagonal ``D`` -- if any single block is materially indefinite,
+    even when the summed total stays positive.
     """
     var_y = _var_y(var_y)
     w, num = _wz(weights, z)
-    return _r2_from_quad(num, ld.quad(w), var_y)
+    return _r2_from_quad(num, _quad_fail_closed(ld, w), var_y)
 
 
 def mse(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
@@ -142,4 +160,4 @@ def mse(weights, z, ld: LDBackend, var_y: float = 1.0) -> float:
     """
     var_y = _var_y(var_y)
     w, wz = _wz(weights, z)
-    return _mse_from_quad(wz, ld.quad(w), var_y)
+    return _mse_from_quad(wz, _quad_fail_closed(ld, w), var_y)

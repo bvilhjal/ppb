@@ -31,6 +31,10 @@ jobs:
           pip install ruff
       - name: Lint
         run: ruff check .
+      - name: Report drift
+        # No LaTeX toolchain on the runner; this compares git commit times
+        # so a revised .tex can never silently trail the committed PDF.
+        run: python scripts/check_report_drift.py
       - name: Test
         # The family pins BLAS threads so numerics (and seed-dispersion
         # margins measured against them) are deterministic.

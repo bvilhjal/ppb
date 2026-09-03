@@ -113,9 +113,9 @@ specification above, the specification wins.
   by nothing, and artifacts that predate the code producing them. Also audits the
   2026-08-16 fixes: F4a holds, F1/F3/F7 hold structurally but not quantitatively,
   F4b fails open on its default path.
-  **Resolved 2026-09-03** in the working tree (not yet committed): all three
-  Criticals, all 19 Majors, and the load-bearing Minors/Nits. The FinnGen path now
-  declares `dosage --hwe-genotype-sd`, emits `a1 = alt`, and fails the independence
+  **Resolved 2026-09-03** in commit `cceb245`: all three Criticals, all 19
+  Majors, and the load-bearing Minors/Nits. The FinnGen path now declares
+  `dosage --hwe-genotype-sd`, emits `a1 = alt`, and fails the independence
   screen closed on absent annotation. `_as_ref_blocks` validates the correlation
   matrices the estimator is provably scale-sensitive to; the two LD/PSD gates are
   reconciled (the per-block check now reports an indefinite block instead of
@@ -124,6 +124,30 @@ specification above, the specification wins.
   BLAS threads pinned. The one exception is the published
   `ancestry_report.pdf`, which is stale against the `.tex` and needs a manual
   LaTeX rebuild (no toolchain in the repo).
+- **Follow-up review, 2026-09-03** (uncommitted when received; review of
+  `70e8d2d..cceb245`, 51 files). Withheld release-readiness: five P0
+  correctness/documentation findings plus P1 artifact drift. Remediated in the
+  working tree: the simplex face solver is now centred/SVD with direct residual
+  evaluation (plus an exact-mixture regression test); rejected frequency fits
+  publish `proportions: null` with `proportions_raw` retained (Estimator B's
+  contract, extended to the frequency channel); `r2()`/`mse()`/`evaluate()`
+  refuse a materially indefinite LD block exactly like the diagnostics path
+  (low-level `quad`/`block_quads` still warn-and-report for certified int8
+  references); the Estimator A scale story is one interpretation everywhere
+  (`s₀ = 1−h² ≤ 1`, rescaling `z` by `c` rescales `s` by `c²`); the
+  dosage→standardized multiply is stated correctly with proposed-vs-implemented
+  separated; correlation validation is tiled; panels are read-only after load;
+  duplicate IDs are validated before marking seen; the sdist ships the
+  checkout-only test drivers (22 collection errors → 0). Remaining artifact
+  work: the Yengo snapshots are labelled historical with migration records
+  (inputs unavailable in this checkout) and the ancestry report is revised
+  and rebuilt with `tectonic` (retitle, calibrated abstract, provenance
+  table, operating-characteristics survey, diagnostics-forward display, three
+  generated figures). Tagged PDF remains future work: the available engine
+  (Tectonic 0.17.0, LaTeX format 2021-11-15) predates `\DocumentMetadata`
+  tagging, which is guarded in for newer toolchains. A drift gate
+  (`scripts/check_report_drift.py`, run in CI) fails while the committed PDF
+  trails any source.
 
 ## Conventions in the prose
 

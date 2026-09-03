@@ -175,3 +175,43 @@ def test_empty_inputs_are_refused_rather_than_returning_a_number():
         r2(np.zeros(0), np.zeros(0), empty_ld)
     with pytest.raises(ValueError, match="not positive"):
         corrected_r2(0.0, 0.0, 100.0)
+
+
+def test_r2_refuses_indefinite_block_hidden_in_positive_total():
+    """r2() must fail closed exactly like evaluate()'s diagnostics path.
+
+    A single indefinite block understates w^T D w and inflates R^2 even when
+    the summed total stays comfortably positive, so a total-only check would
+    publish the inflated ratio.
+    """
+    from ppb import BlockDiagonalLD
+    bad = np.array([[1.0, 2.0], [2.0, 1.0]])          # eigenvalues 3 and -1
+    w_bad = np.array([1.0, -1.0])                     # w^T bad w = -2
+    good = np.eye(6)
+    ld = BlockDiagonalLD([(DenseLD(bad), np.array([0, 1])),
+                          (DenseLD(good), np.arange(2, 8))])
+    w = np.concatenate([w_bad, np.ones(6)])
+    z = np.arange(8, dtype=np.float64)
+    with pytest.warns(UserWarning, match=r"block 0 has w\^T D_b w"):
+        with pytest.raises(ValueError, match="not positive semi-definite"):
+            r2(w, z, ld)
+    with pytest.warns(UserWarning, match=r"block 0 has w\^T D_b w"):
+        with pytest.raises(ValueError, match="not positive semi-definite"):
+            mse(w, z, ld)
+
+
+def test_r2_tolerates_float_rounding_dust_on_psd_blocks():
+    """The indefinite-block gate must not fire on genuine PSD arithmetic."""
+    from ppb import BlockDiagonalLD
+    rng = np.random.default_rng(11)
+    blocks = []
+    start = 0
+    for m in (30, 45):
+        A = rng.standard_normal((m, m))
+        D = A @ A.T / m + np.eye(m)
+        blocks.append((DenseLD(D), np.arange(start, start + m)))
+        start += m
+    ld = BlockDiagonalLD(blocks)
+    w = rng.standard_normal(start)
+    z = rng.standard_normal(start)
+    assert np.isfinite(r2(w, z, ld))

@@ -1,3 +1,6 @@
+% Tagged PDF when the engine supports it (LaTeX 2023-11+); older engines
+% skip it silently via the format guard. Verify the tag tree after rebuild.
+\IfFormatAtLeastTF{2023-11-01}{\DocumentMetadata{lang=en,pdfversion=1.7}}{}
 \documentclass[11pt,a4paper]{article}
 
 \usepackage[T1]{fontenc}
@@ -27,9 +30,9 @@
 ]{hyperref}
 
 \hypersetup{
-    pdftitle={Estimating ancestry composition from GWAS summary statistics},
+    pdftitle={Reference-panel projections from GWAS summary statistics},
     pdfauthor={Bjarni J\'ohann Vilhj\'almsson},
-    pdfsubject={Statistical genetics: ancestry estimation from summary statistics},
+    pdfsubject={Statistical genetics: reference-panel projections from summary statistics},
     pdfkeywords={ancestry composition, GWAS summary statistics, LD score, admixture, polygenic scores}
 }
 
@@ -40,7 +43,7 @@
 
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textit{Ancestry composition from GWAS summary statistics}}
+\fancyhead[L]{\small\textit{Reference-panel projections from summary statistics}}
 \fancyhead[R]{\small Vilhj\'almsson}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.3pt}
@@ -52,12 +55,12 @@
 \DeclareMathOperator*{\argmin}{arg\,min}
 
 \title{%
-  Estimating ancestry composition\\[0.15em]
+  Reference-panel projections\\[0.15em]
   from GWAS summary statistics\\[0.45em]
-  {\large Frequency projection and two LD-moment channels}}
+  {\large Frequency-profile and LD-compatibility estimands}}
 \author{Bjarni J\'ohann Vilhj\'almsson\\[0.35em]
   {\small Aarhus University and SMARTbiomed}}
-\date{31 August 2026}
+\date{3 September 2026 \\[0.2em] {\small (first issued 31 August 2026)}}
 
 \begin{document}
 \maketitle
@@ -75,18 +78,19 @@ assumptions do any of these coincide with participant fractions, mean
 local ancestry, or meta-analysis weights.
 
 The frequency channel, implemented in PPB and deployed from SMARTpred,
-recovers a known three-population mixture to within $0.01$ in a unit-test
-panel after random allele swaps, and on a predeclared Yengo et~al.\ (2022)
-height control set it ranks the corresponding 1000~Genomes super-population
-first in all five ancestry-stratified analyses (snapshot
-\texttt{yengo-height-2026-08-30}). The pair-product LD channel recovers
-a known two-population composition under a model-consistent null
-simulation (error of the replicate mean $<0.05$) and ranks the declared
-reference first on the same five real studies, but its normalised
-simplex weights are not validated by a sign-flip diagnostic and every
-real fit sits on the simplex boundary. The bilinear $\chi^2$ channel
-recovers composition when its own moment model is the data-generating
-process, and otherwise declines; it declined on all six real studies.
+passed one seeded construction: a known three-population mixture to within
+$0.01$ in a synthetic panel after a $30\%$ random allele swap the matcher
+must reverse. On a repository-declared Yengo et~al.\ (2022) height control
+set it ranks the corresponding 1000~Genomes super-population first in all
+five ancestry-stratified analyses from one publication (snapshot
+\texttt{yengo-height-2026-08-30}). The pair-product LD channel, across
+eight fixed replicates of a model-consistent null simulation, has error
+of the replicate mean $<0.05$, and ranks the declared reference first on
+the same five analyses, but its normalised simplex weights are not
+validated by a sign-flip diagnostic and every real fit sits on the simplex
+boundary. The bilinear $\chi^2$ channel passed one seeded construction
+when its own moment model is the data-generating process, and otherwise
+declines; it declined on all six real studies.
 
 These results support the frequency channel as a deployed EAF-profile
 diagnostic. They do not license wiring either LD estimator into a
@@ -94,6 +98,7 @@ production web service, nor reading any of the weights as a census of
 study participants.
 \end{abstract}
 
+\newpage
 \tableofcontents
 \newpage
 
@@ -160,7 +165,56 @@ LD-moment estimators. Sections~\ref{sec:uncertainty}
 modes; Section~\ref{sec:prior} positions the estimators against prior
 work. Section~\ref{sec:implementation} maps them onto the code bases.
 Sections~\ref{sec:simulation} and~\ref{sec:realdata} report simulation
-and real-data benchmarks.
+and real-data benchmarks. Table~\ref{tab:provenance} records the full
+artifact provenance behind every number in those two sections.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Artifact provenance for the evidence in
+Sections~\ref{sec:simulation}--\ref{sec:realdata}. The Yengo snapshots
+are historical archives (code semantics moved on afterward); the
+simulations were re-run from the current tree for this revision.}
+\label{tab:provenance}
+\begin{tabularx}{\textwidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Artifact & Provenance \\
+\midrule
+Frequency snapshot &
+\url{results/ancestry-frequency/yengo-height-2026-08-30.json} \\
+Produced by & \texttt{ppb} commit \texttt{67fa915} (30~Aug~2026),
+\texttt{ppb} 0.0.1.dev2, Python 3.14.6, numpy 2.4.6 \\
+Frequency inputs & six Yengo et~al.\ height GWAS (Table~\ref{tab:yengo-af}),
+mode \texttt{verified\_cache}; per-study
+\texttt{normalized\_content\_sha256} in the snapshot;
+\texttt{raw\_source\_sha256\_verified\_this\_run: false} \\
+Frequency panel & 1000~Genomes phase-3 super-population ALT frequencies,
+$1{,}054{,}330$ variants,
+semantic SHA-256 \texttt{c91b6652$\ldots$b7291186} \\
+LD snapshot &
+\url{results/ancestry-ld/yengo-height-2026-08-30.json} \\
+Produced by & \texttt{ppb} commit \texttt{5dca2f8} (30~Aug~2026),
+\texttt{ppb} 0.0.1.dev2, Python 3.11.15, numpy 2.4.6 \\
+LD design & $21{,}892$ variants / $44{,}250$ pairs / $177$ blocks,
+semantic SHA-256 \texttt{7c332f45$\ldots$679297c}
+(file SHA-256 \texttt{1ce09d4c$\ldots$b93114e}) \\
+Fixed thresholds & contrast condition $\le 1000$; frequency gates
+$1000$ variants / $10$ autosomes / $25\%$ chromosome share /
+residual RMS $0.05$ / residual-to-contrast $0.50$;
+channel-agreement warn at $0.10$ \\
+Acceptance status & frequency $5/5$, Estimator~A $5/5$ ranking controls;
+Estimator~B declined $6/6$ \\
+Simulation study & \texttt{experiments/ancestry\_ld\_study.py},
+re-run for this revision (16 MVN + 8 individual-level replicates per
+arm); Figure~\ref{fig:operating} \\
+Reproducibility & historical: regeneration needs the gitignored
+\texttt{.work/} input cache (absent) or \texttt{--fetch} (LDpred3 pin
+drifted); migration records are in the snapshot READMEs \\
+Environment & BLAS threads pinned to one
+(\texttt{OPENBLAS/OMP/MKL\_NUM\_THREADS=1}), as in CI \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \section{Setting and notation}\label{sec:setting}
 
@@ -726,12 +780,71 @@ validated design.
 
 \section{Simulation experiments}\label{sec:simulation}
 
-The numerical claims below are the encoded simulation gates in
+The paragraphs below are the encoded simulation gates in
 \texttt{tests/test\_ancestry\_frequency.py} and
-\texttt{tests/test\_ancestry.py}. They are not a Monte Carlo survey of
-operating characteristics. A fuller LD-moment grid lives in
-\texttt{experiments/ancestry\_ld\_study.py}; that script is a study
-harness, not a results registry.
+\texttt{tests/test\_ancestry.py}. Table~\ref{tab:operating} and
+Figure~\ref{fig:operating} go one step further: a fixed-seed operating
+survey from \texttt{experiments/ancestry\_ld\_study.py} (re-run for this
+revision; 16 model-consistent multivariate-normal replicates and 8
+individual-level mosaic replicates per arm), reporting bias and dispersion
+of the replicate mean, accept/decline/boundary behaviour, and empirical
+versus jackknife standard errors. What it does not cover is stated after
+the table: source imbalance, participant-pool mixtures, out-of-panel
+references, and LD divergence beyond the mosaic-versus-MVN contrast all
+remain open operating-characteristic work.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Estimator~A operating characteristics over 16 fixed MVN
+replicates (truth $(0.65,0.35)$ except the K=4 arm) and 8 mosaic
+individual-level replicates. ``Err'' is max~$|\text{mean}-\text{truth}|$;
+``SD'' the empirical replicate SD; ``SE'' the mean delete-group jackknife
+SE (withheld on individual-level arms); ``Decl'' declined replicates.
+Figure~\ref{fig:operating} plots the MVN arms.}
+\label{tab:operating}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l l r r r r@{}}
+\toprule
+Arm & Replicate mean & Err & SD & SE & Decl \\
+\midrule
+A null, raw & $(0.657, 0.343)$ & $0.007$ & $0.065$ & $0.082$ & $0/16$ \\
+A null, absorbed & $(0.650, 0.350)$ & $0.000$ & $0.098$ & $0.114$ & $0/16$ \\
+A $nh^2/m=0.025$, raw & $(0.720, 0.280)$ & $0.070$ & $0.075$ & $0.092$ & $0/16$ \\
+A $nh^2/m=0.025$, absorbed & $(0.710, 0.290)$ & $0.060$ & $0.133$ & $0.166$ & $0/16$ \\
+A $nh^2/m=0.1$, raw & $(0.861, 0.139)$ & $0.211$ & $0.095$ & $0.098$ & $0/16$ \\
+A $nh^2/m=0.1$, absorbed & $(0.826, 0.174)$ & $0.176$ & $0.241$ & $0.276$ & $0/16$ \\
+A $nh^2/m=0.5$, raw & $(0.998, 0.002)$ & $0.348$ & $0.009$ & $0.056$ & $0/16$ \\
+A $nh^2/m=0.5$, absorbed & $(0.639, 0.360)$ & $0.011$ & $0.422$ & $0.566$ & $3/16$ \\
+A K=4 null & $(0.410, 0.340, 0.168, 0.082)$ & $0.040$ & $0.063$--$0.110$ & $0.101$--$0.128$ & $0/16$ \\
+A confusable null & $(0.685, 0.315)$ & $0.035$ & $0.074$ & $0.118$ & $0/16$ \\
+A mosaic $F_{\mathrm{ST}}=0.05$ & $(0.665, 0.335)$ & $0.015$ & $0.144$ & --- & $0/8$ \\
+A mosaic $F_{\mathrm{ST}}=0.2$ & $(0.667, 0.333)$ & $0.017$ & $0.214$ & --- & $0/8$ \\
+A mosaic, $n_{\mathrm{ref}}=500$ & $(0.753, 0.247)$ & $0.103$ & $0.122$ & --- & $0/8$ \\
+A mosaic, $n_{\mathrm{ref}}=8000$ & $(0.780, 0.220)$ & $0.130$ & $0.192$ & --- & $0/8$ \\
+\bottomrule
+\end{tabular}}
+\\[0.4em]
+{\footnotesize Truth is $(0.65,0.35)$ except K=4, whose truth is
+$(0.4,0.3,0.2,0.1)$. The raw $nh^2/m=0.5$ arm collapses every replicate
+onto the same vertex (SD $0.009$ at error $0.348$): the boundary
+pathology that motivates withholding zero-dispersion jackknife SEs.
+Estimator~B declined $10$--$12/16$ MVN replicates (rank-one,
+positive-semidefinite, and held-out-signal screens), $16/16$ at K=4,
+and $8/8$ on the mosaic $h^2=0.5$ arm.}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{fig1_operating_characteristics}
+\caption{Simulation bias, dispersion, and decline rates from the fixed-seed
+study (\texttt{experiments/ancestry\_ld\_study.py}, re-run for this
+revision). (a)~Max absolute error of the replicate mean against the
+tagging load $nh^2/m$, raw versus absorber-retained fits (dashed: the
+$0.05$ null gate). (b)~Empirical replicate SD beside the mean jackknife
+SE. (c)~Estimator~B decline counts per arm.}
+\label{fig:operating}
+\end{figure}
 
 \paragraph{Frequency channel.}
 On a synthetic three-population panel of $m=3000$ variants, a known
@@ -796,9 +909,11 @@ The real-data record is the pair of versioned snapshots of
 the ancestry-stratified height GWAS of Yengo et~al.\
 \citep{yengo2022height}: five super-population-labelled analyses
 plus a pooled meta-analysis, all of the same trait and publication.
-The five labelled analyses are predeclared qualitative controls.
-The pooled analysis is descriptive and is excluded from the
-verdict. Numeric acceptance gates were not tuned on these files.
+The five labelled analyses are repository-declared qualitative controls:
+declared in the benchmark code and snapshot verdict rules before the runs,
+not by dated external pre-registration. The pooled analysis is descriptive
+and is excluded from the verdict. Numeric acceptance gates were not tuned
+on these files.
 
 The frequency panel is the hash-pinned 1000~Genomes phase-3
 super-population ALT-frequency panel at HapMap~3 sites
@@ -814,37 +929,48 @@ errors-in-variables uncertainty are absent from the chromosome
 jackknife.
 
 \paragraph{Frequency channel.}
-Table~\ref{tab:yengo-af} reports the EAF-projection weights. All
-five controls returned status \texttt{estimated} and ranked the
-predeclared 1000~Genomes super-population first ($5/5$). Matched
-variant counts are about $1.04$ million. Observed-versus-fitted
-frequency correlations are $0.993$--$0.999$. Residual RMS values
-lie between $0.012$ and $0.033$, below the engineering gate of
-$0.05$. The Hispanic/Latin American analysis is a predeclared
-imperfect proxy for 1000~Genomes AMR; it still ranked AMR first,
-with weight $0.819$. The European analysis is nearly a vertex
-($0.989$ EUR). The African analysis retains a non-negligible EUR
-component ($0.132$), which is a statement about deposited EAF
-relative to this five-population basis, not a census of
-participants. The pooled meta-analysis is EUR-dominant ($0.766$)
+Table~\ref{tab:yengo-af} reports the EAF-projection weights beside the
+diagnostics that govern their interpretation
+(Figure~\ref{fig:weights} plots both channels' weights with boundary
+markers). All five controls returned
+status \texttt{estimated} and ranked the repository-declared
+1000~Genomes super-population first ($5/5$). Matched variant counts are
+about $1.04$ million. The governing fit diagnostic is the
+residual-to-contrast RMS ratio ($0.11$--$0.30$ against the $0.50$
+engineering gate), not the observed-versus-fitted correlation
+($0.993$--$0.999$), which is superficially impressive whenever the panel
+spans the allele-frequency range. Residual RMS values lie between $0.012$
+and $0.033$, below the engineering gate of $0.05$. The Hispanic/Latin
+American analysis is a repository-declared imperfect proxy for
+1000~Genomes AMR; it still ranked AMR first, with weight $0.819$. The
+European analysis is nearly a vertex ($0.989$ EUR). The African analysis
+retains a non-negligible EUR component ($0.132$), which is a statement
+about deposited EAF relative to this five-population basis, not a census
+of participants. The pooled meta-analysis is EUR-dominant ($0.766$)
 with a visible EAS component ($0.112$), as expected from the
 sample-size mix, and is not a control.
 
 \paragraph{Pair-product channel.}
 Table~\ref{tab:yengo-ld} repeats the Estimator~A weights from the
-LD snapshot. The declared reference ranked first in all five
+LD snapshot beside the diagnostics that govern them: the fitted scale,
+the boundary status, and the sign-flip fit rate per study.
+Figure~\ref{fig:ld-diagnostics} plots scale against its working-model
+bound, linear-channel collinearity, channel agreement, and the null fit
+rate. The declared reference ranked first in all five
 controls ($5/5$). AMR sat at a vertex. Every fit, including the
 pooled analysis, touched a simplex boundary, so ordinary symmetric
 jackknife intervals are not a valid confidence statement; AMR's
-reported zero SE is a boundary artifact. A scaled sign-flip
-diagnostic of the form
+reported zero SE is a boundary artifact. The sign-flip calculation is
+descriptive, not a calibrated randomization test: independent per-block
+sign flips destroy the LD covariance the estimator reads, and only
+112--132 of the 200 null replicates per study fitted at all. With that
+caveat, a scaled contrast of the form
 $s(\pi_{\mathrm{expected}}-\max_{k\neq\mathrm{expected}}\pi_k)$
-was never exceeded by any of $200$ sign-flip replicates per study
-(plus-one $p=1/201=0.0050$ on the permissive reading that treats a
-declined replicate as a non-exceedance). The corresponding
-normalised-weight contrasts did not clear $p\le 0.05$. Scaled
-correct-reference direction is therefore supported; normalised
-mixture magnitudes are not.
+was never exceeded by any fitted replicate (plus-one $p=1/201=0.0050$
+on the permissive reading that treats a declined replicate as a
+non-exceedance). The corresponding normalised-weight contrasts did not
+clear $p\le 0.05$. Scaled correct-reference direction is therefore
+supported; normalised mixture magnitudes are not.
 The fitted linear scales are not $1-h^2$. Under the working model
 $s_0=1-h^2\le 1$; the recorded scales are AFR $2.03$, AMR $1.88$,
 EAS $3.19$, EUR $25.29$, SAS $1.26$, Pooled $27.46$, and EUR and
@@ -859,19 +985,33 @@ for insufficient reproducible LD-dependent $\chi^2$ signal. Sparse
 marker pruning also omits genome-wide tagging paths, so this is
 not a fair genome-scale verdict on~B.
 
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{fig2_projection_weights}
+\caption{Projection weights with boundary markers ($\times$) and
+conditional delete-one-chromosome jackknife intervals, from the
+historical snapshots of Table~\ref{tab:provenance}. (a)~Frequency
+projection. (b)~LD pair-product weights. Symmetric intervals at a
+boundary weight are invalid; the markers show where that caveat bites.
+Figure~\ref{fig:ld-diagnostics} carries the diagnostics that govern
+these weights.}
+\label{fig:weights}
+\end{figure}
+
 \begin{table}[htbp]
 \centering
-\footnotesize
+\small
 \caption{EAF-projection weights on the Yengo et~al.\ (2022) height
 analyses. Entries are $\hat\pi^{\mathrm{AF}}$ (delete-one-chromosome
-jackknife SE). The five labelled studies are predeclared controls;
-the pooled analysis is excluded from the $5/5$ verdict. Snapshot
-\texttt{yengo-height-2026-08-30}.}
+jackknife SE). The five labelled studies are repository-declared
+controls; the pooled analysis is excluded from the $5/5$ verdict.
+Historical snapshot \texttt{yengo-height-2026-08-30}
+(Table~\ref{tab:provenance}).}
 \label{tab:yengo-af}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}l r r r r r r r@{}}
 \toprule
-Study & $N$ & AFR & AMR & EAS & EUR & SAS & $r$ \\
+Study & $N$ & AFR & AMR & EAS & EUR & SAS & $e$ \\
 \midrule
 AFR & 168\,193
   & $0.835$ $(0.001)$
@@ -879,72 +1019,91 @@ AFR & 168\,193
   & $0.007$ $(0.000)$
   & $0.132$ $(0.001)$
   & $0.009$ $(0.001)$
-  & $0.999$ \\
+  & $0.11$ \\
 AMR & 58\,709
   & $0.040$ $(0.001)$
   & $0.819$ $(0.004)$
   & $0.025$ $(0.001)$
   & $0.103$ $(0.003)$
   & $0.014$ $(0.001)$
-  & $0.997$ \\
+  & $0.18$ \\
 EAS & 363\,856
   & $0.000$ $(0.000)$
   & $0.030$ $(0.001)$
   & $0.970$ $(0.001)$
   & $0.000$ $(0.000)$
   & $0.000$ $(0.000)$
-  & $0.994$ \\
+  & $0.30$ \\
 EUR & 1\,597\,374
   & $0.000$ $(0.000)$
   & $0.008$ $(0.001)$
   & $0.000$ $(0.000)$
   & $0.989$ $(0.001)$
   & $0.004$ $(0.001)$
-  & $0.998$ \\
+  & $0.16$ \\
 SAS & 60\,939
   & $0.000$ $(0.000)$
   & $0.023$ $(0.001)$
   & $0.000$ $(0.000)$
   & $0.176$ $(0.001)$
   & $0.801$ $(0.001)$
-  & $0.998$ \\
+  & $0.16$ \\
 Pooled$^*$ & 2\,200\,007
   & $0.046$ $(0.001)$
   & $0.047$ $(0.001)$
   & $0.112$ $(0.002)$
   & $0.766$ $(0.002)$
   & $0.030$ $(0.001)$
-  & $0.998$ \\
+  & $0.13$ \\
 \bottomrule
 \end{tabular}}\\[0.4em]
-{\footnotesize $N$ is the reported GWAS sample size. $r$ is the
-observed-versus-fitted EAF correlation. $^*$Descriptive; not a
+{\footnotesize $N$ is the reported GWAS sample size. $e$ is the
+residual-to-contrast RMS ratio (engineering gate $0.50$); the
+observed-versus-fitted correlations ($0.993$--$0.999$) are omitted as
+non-governing. $^*$Descriptive; not a
 control. Jackknife SEs condition on the fixed panel. Exact $0.000$
 SEs are boundary artifacts of a vertex weight, not certainty.}
 \end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{fig3_ld_diagnostics}
+\caption{LD-channel diagnostics that govern Table~\ref{tab:yengo-ld},
+from the historical snapshot of Table~\ref{tab:provenance}.
+(a)~Fitted scale against the working-model bound $s_0 = 1-h^2 \le 1$
+(dashed). (b)~Maximum absolute linear-channel design correlation.
+(c)~Linear/quadratic channel agreement (warn above $0.10$, dashed).
+(d)~Sign-flip null fit rate: fitted replicates out of 200, a
+descriptive calculation, not a calibrated test.}
+\label{fig:ld-diagnostics}
+\end{figure}
 
 \begin{table}[htbp]
 \centering
 \small
 \caption{Estimator~A LD-mixture weights on the same Yengo analyses.
 All five controls ranked the declared reference first. Every fit
-is on the simplex boundary. Snapshot
-\texttt{yengo-height-2026-08-30}.}
+is on the simplex boundary. Historical snapshot
+\texttt{yengo-height-2026-08-30} (Table~\ref{tab:provenance}).}
 \label{tab:yengo-ld}
-\begin{tabular}{@{}l r r r r r c@{}}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}l r r r r r c r r@{}}
 \toprule
-Study & AFR & AMR & EAS & EUR & SAS & Boundary \\
+Study & AFR & AMR & EAS & EUR & SAS & Boundary & $s$ & Null fit \\
 \midrule
-AFR & $0.702$ & $0.170$ & $0.000$ & $0.113$ & $0.014$ & yes \\
-AMR & $0.000$ & $1.000$ & $0.000$ & $0.000$ & $0.000$ & yes \\
-EAS & $0.000$ & $0.000$ & $0.961$ & $0.021$ & $0.017$ & yes \\
-EUR & $0.000$ & $0.045$ & $0.000$ & $0.955$ & $0.000$ & yes \\
-SAS & $0.000$ & $0.004$ & $0.000$ & $0.110$ & $0.887$ & yes \\
-Pooled$^*$ & $0.000$ & $0.102$ & $0.000$ & $0.898$ & $0.000$ & yes \\
+AFR & $0.702$ & $0.170$ & $0.000$ & $0.113$ & $0.014$ & yes & $2.03$ & $117/200$ \\
+AMR & $0.000$ & $1.000$ & $0.000$ & $0.000$ & $0.000$ & yes & $1.88$ & $112/200$ \\
+EAS & $0.000$ & $0.000$ & $0.961$ & $0.021$ & $0.017$ & yes & $3.19$ & $132/200$ \\
+EUR & $0.000$ & $0.045$ & $0.000$ & $0.955$ & $0.000$ & yes & $25.29$ & $130/200$ \\
+SAS & $0.000$ & $0.004$ & $0.000$ & $0.110$ & $0.887$ & yes & $1.26$ & $119/200$ \\
+Pooled$^*$ & $0.000$ & $0.102$ & $0.000$ & $0.898$ & $0.000$ & yes & $27.46$ & $120/200$ \\
 \bottomrule
-\end{tabular}\\[0.4em]
-{\footnotesize $^*$Descriptive; not a control. Estimator~B declined
-on all six studies.}
+\end{tabular}}\\[0.4em]
+{\footnotesize $s$ is the fitted linear scale (working model:
+$s_0 = 1-h^2 \le 1$); values above one are model-incompatibility
+diagnostics. Null fit is fitted sign-flip replicates out of 200.
+$^*$Descriptive; not a control. Estimator~B declined
+on all six studies for insufficient reproducible signal.}
 \end{table}
 
 What would change this reading is a well-calibrated out-of-panel
@@ -959,10 +1118,13 @@ The derivations in Sections~\ref{sec:moments}--\ref{sec:bilinear} were
 worked out in discussion of the SMARTpred ancestry mode; the frequency
 channel's implementation there served as the numerical template. The
 simulation gates are those of \texttt{tests/test\_ancestry.py} and
-\texttt{tests/test\_ancestry\_frequency.py}. The real-data numbers are
-the committed snapshots of 30~August~2026. All
-citations were verified against the published records; any error in them
-is ours.
+\texttt{tests/test\_ancestry\_frequency.py}; the operating survey is
+\url{experiments/ancestry_ld_study.py} with figures from
+\url{docs/ancestry_report/make_figures.py}. The real-data numbers are
+the committed snapshots of 30~August~2026 (Table~\ref{tab:provenance}),
+read as historical archives. References give DOIs or stable URLs; no
+citation-verification manifest is claimed (a manifest is future work),
+and any error in them is ours.
 
 \begin{thebibliography}{15}
 \providecommand{\natexlab}[1]{#1}

@@ -139,28 +139,46 @@ def _check_correlation_matrix(R, *, where):
         raise ValueError(f"{where} contains non-finite entries")
     if R.size == 0:
         return
-    asymmetry = float(np.max(np.abs(R - R.T)))
+    # Tiled throughout: R - R.T materialises a second full matrix, a full
+    # boolean identity mask plus the off-diagonal copy materialise two more,
+    # and multi-gigabyte temporaries have no business in a validation gate.
+    # Square tiles bound the peak temporary to chunk^2 entries (~32 MB).
+    n = R.shape[0]
+    chunk = 2048
+    asymmetry = 0.0
+    for si in range(0, n, chunk):
+        for sj in range(0, n, chunk):
+            tile = R[si:si + chunk, sj:sj + chunk]
+            diff = np.abs(tile - R[sj:sj + chunk, si:si + chunk].T)
+            current = float(np.max(diff)) if diff.size else 0.0
+            if current > asymmetry:
+                asymmetry = current
     if asymmetry > _CORR_TOL:
         raise ValueError(
             f"{where} is not symmetric (max|R - R^T| = {asymmetry:.3g}); "
             "references must be correlation matrices"
         )
-    diag_error = float(np.max(np.abs(np.diag(R) - 1.0)))
+    diag = np.asarray(np.diag(R))
+    diag_error = float(np.max(np.abs(diag - 1.0))) if diag.size else 0.0
     if diag_error > _CORR_TOL:
         raise ValueError(
             f"{where} does not have a unit diagonal "
             f"(max|diag(R) - 1| = {diag_error:.3g}); a covariance or "
             "otherwise rescaled reference would be silently reweighted"
         )
-    offdiag = R[~np.eye(R.shape[0], dtype=bool)]
-    if offdiag.size:
-        magnitude = float(np.max(np.abs(offdiag)))
-        if magnitude > 1.0 + _CORR_TOL:
-            raise ValueError(
-                f"{where} has an entry magnitude above one "
-                f"(max|R_ij| = {magnitude:.3g}); references must be "
-                "correlation matrices"
-            )
+    magnitude = 0.0
+    for si in range(0, n, chunk):
+        for sj in range(0, n, chunk):
+            tile = R[si:si + chunk, sj:sj + chunk]
+            current = float(np.max(np.abs(tile))) if tile.size else 0.0
+            if current > magnitude:
+                magnitude = current
+    if magnitude > 1.0 + _CORR_TOL:
+        raise ValueError(
+            f"{where} has an entry magnitude above one "
+            f"(max|R_ij| = {magnitude:.3g}); references must be "
+            "correlation matrices"
+        )
 
 
 def _as_ref_blocks(refs, blocks):
@@ -445,9 +463,13 @@ def estimate_pair_products_from_design(
     Returns a dict with ``proportions``, ``proportions_se`` (delete-one-group
     jackknife, eq. (21); withheld when the leave-group replicates are all the
     same simplex vertex, where a zero SE would be a boundary artefact rather
-    than certainty), the fitted linear ``scale`` -- **not** an estimate of
-    ``1 - h^2``: for ``z = beta/se`` inputs the scale carries a factor of
-    order ``sqrt(N)`` and the real fits range 1.26--27.5, so it is recorded
+    than certainty), the fitted linear ``scale`` -- under the calibrated
+    working model its expectation is ``1 - h^2 <= 1`` (eq. (12) of the
+    report: ``z = beta/se`` is already on the ``x'y/sqrt(n)`` scale, so no
+    ``sqrt(N)`` factor enters; rescaling ``z`` by ``c`` rescales the fitted
+    scale by ``c^2``). The real fits range 1.26--27.5, which is a
+    model-incompatibility diagnostic (tagging leakage, uncalibrated ``z``,
+    or both), not a benign sample-size effect, so the scale is recorded
     with a note whenever it exceeds one -- the signal
     absorber coefficient total (0 means the absorber was not retained), pair
     counts, the maximum
@@ -659,9 +681,10 @@ def estimate_pair_products_from_design(
         "channel_agreement_note": _channel_agreement_note(agreement),
         "scale_note": (
             None if s <= 1.0 else
-            f"fitted linear scale = {s:.3g} > 1: for z = beta/se inputs the "
-            "scale carries a factor of order sqrt(N), so it is not an "
-            "estimate of 1 - h^2 and is not bounded by one"),
+            f"fitted linear scale = {s:.3g} > 1: under the calibrated "
+            "working model the scale is 1 - h^2 <= 1, so this is a "
+            "model-incompatibility diagnostic (rescaling z by c rescales "
+            "the fitted scale by c^2), not an estimate of 1 - h^2"),
     }
 
 

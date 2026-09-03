@@ -13,6 +13,7 @@ from ppb import (
     match_effect_allele_frequencies,
     write_frequency_panel,
 )
+from ppb.ancestry_frequency import _simplex_least_squares
 
 
 def _panel(tmp_path, *, m=1500, pops=("AFR", "EUR", "EAS"), seed=5):
@@ -310,3 +311,68 @@ def test_builder_orients_info_alt_frequency(tmp_path):
     built = builder.build_panel(ldref, [vcf], samples, ("AFR", "EUR"))
     assert built["counted_allele"].tolist() == ["C"]
     assert np.allclose(built["af"], [[0.2, 0.7]])
+
+
+def test_simplex_recovers_exact_mixture_with_near_collinear_columns():
+    """Face enumeration must not elect a wrong face on an exact mixture.
+
+    With two near-collinear panel columns the Gram normal equations are
+    squared-condition and the expanded loss ``f2 - 2f'Pw + w'Gw`` cancels;
+    the old solver returned [0, 0.95, 0.05] for truth [0.9, 0.05, 0.05].
+    """
+    rng = np.random.default_rng(1)
+    m = 3000
+    base = rng.uniform(0.1, 0.9, m)
+    P = np.column_stack(
+        [base, base + 1e-8 * rng.normal(size=m), 1.0 - base])
+    P = np.clip(P, 0.01, 0.99)
+    truth = np.array([0.9, 0.05, 0.05])
+    f = P @ truth
+    fitted = _simplex_least_squares(P, f)
+    assert np.abs(fitted - truth).max() < 1e-6
+    assert float(np.sqrt(np.mean((f - P @ fitted) ** 2))) < 1e-12
+
+
+def test_rejected_fit_publishes_no_proportions(tmp_path):
+    """Identical reference columns are nonidentifiable: no composition."""
+    rng = np.random.default_rng(4)
+    m = 2000
+    base = rng.uniform(0.1, 0.9, m)
+    af = np.column_stack([base, base])
+    ids = np.array([f"rs-dup-{i}" for i in range(m)])
+    path = write_frequency_panel(
+        tmp_path / "identical.npz", ids=ids,
+        chrom=np.array([str(i % 10 + 1) for i in range(m)]),
+        pos=np.arange(m, dtype=np.int64) + 1,
+        counted_allele=np.full(m, "A"), other_allele=np.full(m, "C"),
+        pops=["P1", "P2"], af=af, n_samples=[200, 200],
+        source="identical-columns test")
+    panel = load_frequency_panel(path)
+    result = decompose_effect_allele_frequencies(
+        ids, np.full(m, "A"), np.full(m, "C"), base, panel)
+    assert result["panel_confusability"]["contrast_rank"] == 0
+    assert result["status"] == "nonidentifiable"
+    assert result["proportions"] is None
+    assert result["proportions_se"] is None
+    assert result["proportions_raw"] is not None
+
+
+def test_loaded_panel_arrays_are_read_only(tmp_path):
+    """The content hash pins the panel; post-load mutation must fail."""
+    panel, _af, _ids, _counted, _other = _panel(tmp_path)
+    for field in ("ids", "chrom", "pos", "counted_allele", "other_allele",
+                  "af", "n_samples"):
+        assert getattr(panel, field).flags.writeable is False
+
+
+def test_invalid_first_duplicate_does_not_poison_valid_later_row(tmp_path):
+    """Only accepted rows mark an ID seen; validity is decided first."""
+    panel, _af, _ids, _counted, _other = _panel(tmp_path)
+    ids = np.concatenate([panel.ids[:5], panel.ids[:6]])
+    ea = np.array(["A"] * 5 + ["A"] * 6)
+    oa = np.array(["T"] * 5 + ["C"] * 6)  # first occurrences palindromic
+    eaf = np.full(11, 0.4)
+    matched = match_effect_allele_frequencies(ids, ea, oa, eaf, panel)
+    assert matched.counts["n_dropped_palindromic"] == 5
+    assert matched.counts["n_matched"] == 6
+    assert matched.counts["n_dropped_duplicate"] == 0

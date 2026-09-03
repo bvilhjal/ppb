@@ -44,7 +44,9 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from .harmonize import VariantTable, _harmonize_to_details
-from .ld_backend import BlockDiagonalLD, LDBackend
+from .ld_backend import (
+    BlockDiagonalLD, LDBackend, require_psd_block_quads,
+)
 
 _erfc = np.vectorize(math.erfc, otypes=[np.float64])
 
@@ -153,6 +155,7 @@ def score_distribution(ld: LDBackend, ld_variants: VariantTable,
     n_blocks = max_share = None
     if isinstance(ld, BlockDiagonalLD):
         per_block = ld.block_quads(w_std)
+        require_psd_block_quads(per_block, w_std)
         variance = float(per_block.sum())
         n_blocks = int(per_block.size)
         if variance > 0.0:

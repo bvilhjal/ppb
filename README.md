@@ -31,9 +31,12 @@ the validation anchor.
   Witteveen et al., *Publicly Available Privacy-preserving Benchmarks for Polygenic
   Prediction* (bioRxiv 2022,
   [doi:10.1101/2022.10.10.510645](https://doi.org/10.1101/2022.10.10.510645)).
-  The cross-ancestry direction is this project's — that paper is European-only —
-  and its novelty against the cross-population tuning literature is still to be
-  checked. This repository attempts to finish Witteveen's unfinished project
+  The cross-ancestry direction is this project's — that paper is European-only.
+  The algebra is prior art (Mak et al. 2017; Pattee & Pan 2020; PUMAS; and,
+  for target-ancestry computation, Cho & Lee 2025 and Xu et al. 2026 — see
+  [`docs/NOVELTY.md`](docs/NOVELTY.md)): the contribution this project claims
+  is the *measurement* framing, the explicit error theory, and the fail-closed
+  provenance infrastructure. This repository attempts to finish Witteveen's unfinished project
   after he left science; preserving that provenance does not imply his
   endorsement or involvement.
 
@@ -55,6 +58,19 @@ which are binding, and where to start. [`docs/NOTATION.md`](docs/NOTATION.md)
 defines every symbol once and indexes every numbered result — (M2), (X1), (O4),
 (G2) and the rest — to the module that implements it and the test that pins it.
 
+## Stability map
+
+| Group | Exports | Status |
+|---|---|---|
+| Core estimators | `r2`, `mse`, `corrected_r2`, `evaluate`, `frozen_to_dosage` | Stable: simulation-validated, fail-closed signatures |
+| LD backends | `DenseLD`, `BlockDiagonalLD`, `DenseLDInt8`, `PackedDenseLDInt8`, `LowRankLD`, `lowrank_ld`, `LDBackend` | Stable, except int8 blocks carry no PSD certificate ([`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)) |
+| Harmonization + IO | `VariantTable`, `harmonize_to`, `read_ldref`, `write_ldref`, `read_bundle`, `write_bundle`, `read_sumstats`, `read_weights`, `evaluate_ldrefs`, `convert_ldpred3_cache`, `standardized_marginal`, `ppb evaluate` | Stable file formats are versioned; converters are best-effort |
+| Diagnostics | `r2_block_jackknife`, `sign_flip_null`, `block_diagnostics`, `OverlapBasis` | Stable outputs; overlap correction stays experimental |
+| Ancestry projections | `estimate_pair_products[_from_design]`, `estimate_bilinear[_from_design]`, `decompose_effect_allele_frequencies`, `load_frequency_panel`, and siblings | **Experimental**: stress-tested on real GWAS, not release claims — see [`docs/ancestry_report/ancestry_report.pdf`](docs/ancestry_report/ancestry_report.pdf) and the historical snapshots in [`results/ancestry-frequency/`](results/ancestry-frequency/README.md), [`results/ancestry-ld/`](results/ancestry-ld/README.md) |
+| Score distribution | `score_distribution` | Experimental |
+
+Changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Install
 
 ```bash
@@ -68,12 +84,64 @@ numba; no scipy is required.
 
 ## Usage
 
-```python
-from ppb import r2, DenseLD
+One runnable path first — a tracked 8-variant bundle with standardized weights
+(`examples/mini/`, built by `make_mini.py`; `test_cli_mini_example` pins these
+numbers):
 
-# Cross-ancestry: z_B, D_B from the TARGET ancestry B; w harmonized to B's variants.
-acc_B = r2(w, z_B, DenseLD(D_B))     # predictive R² of w in ancestry B
+```bash
+ppb evaluate --weights examples/mini/weights.tsv \
+  --bundle examples/mini/bundle.npz --weight-scale standardized
 ```
+
+```json
+{
+  "r2": 0.2853745222880067,
+  "mse": 6.398720247378035,
+  "n_reference": 8,
+  "n_variants_scored": 8,
+  "weight_scale": "standardized",
+  "mse_interpretable": true,
+  "weights_report": {
+    "n_reference": 8,
+    "n_target": 8,
+    "n_matched": 8,
+    "n_sign_flipped": 0,
+    "n_strand_flipped": 0,
+    "n_ambiguous_removed": 0,
+    "n_mismatch": 0,
+    "n_unmatched": 0,
+    "n_ambiguous_indel_removed": 0
+  },
+  "sumstats_report": {
+    "n_reference": 8,
+    "n_target": 8,
+    "n_matched": 8,
+    "n_sign_flipped": 0,
+    "n_strand_flipped": 0,
+    "n_ambiguous_removed": 0,
+    "n_mismatch": 0,
+    "n_unmatched": 0,
+    "n_ambiguous_indel_removed": 0
+  },
+  "genotype_sd_source": "not_used",
+  "jackknife": null,
+  "jackknife_chromosome": null,
+  "per_chromosome": null,
+  "sign_flip_null": null,
+  "diagnostics_unavailable": "LD backend is not block-diagonal; jackknife and sign-flip need per-block products",
+  "n_eff": null,
+  "r2_corrected": null,
+  "r2_se_finite_sample": null
+}
+```
+
+Reading it: all 8 weights matched 8 reference variants with no strand or
+allele problems, so `R² = 0.285` is the summary-statistic accuracy of these
+weights on this toy target. The block jackknife and sign-flip null are absent
+because the toy LD is one dense block — genome-scale block-diagonal references
+report them from the same sweep. Cross-ancestry is the same command with
+target-ancestry inputs: `z_B` and `D_B` from ancestry B with `w` harmonized to
+B's variants.
 
 The estimator is ancestry-agnostic in form — within-ancestry is `z`/`D` from the
 same population. It needs only `wᵀz` and `wᵀDw`. Small exact problems may use an
@@ -243,11 +311,11 @@ result = decompose_effect_allele_frequencies(
 
 | Status | Interpretation |
 |---|---|
-| `estimated` | Projection passed the implemented match, rank, condition, and heuristic fit gates |
-| `insufficient` | Fewer than 1,000 aligned variants, fewer than 10 autosomes, or one chromosome supplies more than 25%; weights are returned but quarantined |
-| `nonidentifiable` | Full or leave-one-chromosome population contrasts are rank deficient or have condition number above 1,000 |
-| `poor_fit` | The chosen panel does not adequately represent the observed EAF profile under fixed heuristic thresholds |
-| `invalid_input` / `unavailable` | Invalid EAF values were found, or no variants matched |
+| `estimated` | Projection passed the implemented match, rank, condition, and heuristic fit gates; `proportions` and `proportions_se` are published |
+| `insufficient` | Fewer than 1,000 aligned variants, fewer than 10 autosomes, or one chromosome supplies more than 25%; no composition is published (`proportions: null`, optimizer output kept as `proportions_raw`) |
+| `nonidentifiable` | Full or leave-one-chromosome population contrasts are rank deficient or have condition number above 1,000; no composition is published |
+| `poor_fit` | The chosen panel does not adequately represent the observed EAF profile under fixed heuristic thresholds; no composition is published |
+| `invalid_input` / `unavailable` | Invalid EAF values were found, or no variants matched; no composition is published |
 
 `reference_sampling_rms` quantifies the binomial reference-panel frequency
 noise expected at the fitted weights. It is a diagnostic, not an
@@ -261,45 +329,16 @@ with the original SMARTpred panel format.
 ### Real GWAS Catalog benchmark
 
 `scripts/ancestry_frequency_gwas_benchmark.py` evaluates a matched family of
-ancestry-stratified height GWAS from Yengo et al. (Nature 2022,
-[doi:10.1038/s41586-022-05275-y](https://doi.org/10.1038/s41586-022-05275-y)).
-Using one phenotype and publication avoids confusing phenotype differences
-with ancestry differences. The five ancestry-specific analyses are
-predeclared qualitative controls: the corresponding 1000 Genomes
-superpopulation must rank first and the core estimator must return
-`estimated`. The pooled analysis is descriptive and excluded from the verdict.
-
-**Table 3. Fixed real-data benchmark cohort.**
-
-| Key | GWAS Catalog accession | Reported sample | N | Predeclared top component |
-|---|---|---|---:|---|
-| AFR | `GCST90245989` | African ancestry | 168,193 | AFR |
-| AMR | `GCST90245993` | Hispanic or Latin American | 58,709 | AMR (imperfect label proxy) |
-| EAS | `GCST90245991` | East Asian ancestry | 363,856 | EAS |
-| EUR | `GCST90245992` | European ancestry | 1,597,374 | EUR |
-| SAS | `GCST90245994` | South Asian ancestry | 60,939 | SAS |
-| POOLED | `GCST90245990` | five-ancestry pooled meta-analysis | 2,200,007 | descriptive only |
-
-The optional acquisition path loads LDpred3's GWAS Catalog harvester from an
-exact source revision, verifies each official compressed-file SHA-256, filters
-to the panel variants, and pins the decompressed normalized content. Cached
-benchmark runs require neither LDpred3 nor network access:
-
-```bash
-# Either fetch from the Catalog, or normalize already downloaded official files.
-python scripts/ancestry_frequency_gwas_benchmark.py --fetch
-python scripts/ancestry_frequency_gwas_benchmark.py --raw-dir <download-dir>
-
-# Re-run only from verified cached inputs and write a strict JSON snapshot.
-python scripts/ancestry_frequency_gwas_benchmark.py \
-  --out results/ancestry-frequency/yengo-height-<date>.json
-```
-
-The target is the deposited **EAF profile**, not literal participant fractions.
-Variant-specific meta-analysis weights, missingness, ascertainment, drift, or
-reference-derived rather than cohort-derived deposited EAFs can change the
-projection. A refusal remains a benchmark result; the fixed estimator gates
-are not retuned on this cohort.
+ancestry-stratified height GWAS from Yengo et al. (Nature 2022). Using one
+phenotype and publication avoids confusing phenotype differences with ancestry
+differences. The five ancestry-specific analyses are predeclared qualitative
+controls: the corresponding 1000 Genomes superpopulation must rank first and
+the core estimator must return `estimated`; the pooled analysis is descriptive
+and excluded. The target is the deposited **EAF profile**, not literal
+participant fractions, and a refusal remains a benchmark result — the fixed
+estimator gates are not retuned on this cohort. Cohort accessions, acquisition
+(`--fetch` / `--raw-dir`), and the snapshot archive live in
+[`results/ancestry-frequency/`](results/ancestry-frequency/README.md).
 
 ## LD-moment ancestry compatibility
 
@@ -321,27 +360,10 @@ moment. `estimate_pair_products_from_design` and
 `estimate_bilinear_from_design` consume compact sufficient statistics, so a
 builder can discard each dense genotype-LD block immediately.
 
-**Table 4. Fixed sparse 1000G LD design.**
-
-| Quantity | Fixed value |
-|---|---:|
-| Full-panel common rule | MAF >=5% in each AFR/AMR/EAS/EUR/SAS AF panel |
-| Common HM3 variants before pruning | 714,078 |
-| Minimum edge-to-edge retained-block gap | 5 Mb |
-| Retained blocks / variants / pairs | 177 / 21,892 / 44,250 |
-| Maximum variants / selected pairs per block | 128 / 250 |
-| Pair-selection rule | the 250 pairs per block with the largest `max_k |r_k|` over the five reference panels; the recorded `ld_floor` (0.05) is not binding — the weakest retained pair is ~3.7× it |
-| LD samples, AFR/AMR/EAS/EUR/SAS | 652 / 347 / 504 / 503 / 484 |
-
-The compact 4.7 MB design is tracked and hash-pinned. Rebuild it from the
-checksum-pinned 1000G PLINK archive and pinned LDpred3 block geometry, then run
-the six-study benchmark:
-
-```bash
-python scripts/build_ancestry_ld_design.py
-python scripts/ancestry_ld_gwas_benchmark.py --fetch \
-  --out results/ancestry-ld/yengo-height-<date>.json
-```
+The compact 4.7 MB design (177 distant blocks, 21,892 variants, 44,250 pairs;
+full specification in [`results/ancestry-ld/`](results/ancestry-ld/README.md)
+Table 4) is tracked and hash-pinned; the six-study benchmark and its
+interpretation tables live there too.
 
 **Table 5. Interpretation of the real Yengo LD benchmark.**
 

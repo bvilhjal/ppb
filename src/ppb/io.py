@@ -34,7 +34,9 @@ from .harmonize import (
     _harmonize_to_details,
     harmonize_to,
 )
-from .ld_backend import DenseLD, LowRankLD, _require_symmetric
+from .ld_backend import (
+    DenseLD, LowRankLD, _require_symmetric, require_psd_block_quads,
+)
 from .ldref import read_ldref
 from .sumstats import standardized_marginal
 
@@ -610,6 +612,7 @@ def evaluate_ldrefs(
         ld = ref["ld"]
         if hasattr(ld, "block_quads") and hasattr(ld, "blocks"):
             v_chr = ld.block_quads(w_aligned)
+            require_psd_block_quads(v_chr, w_aligned)
             u_chr = np.empty(len(ld.blocks), dtype=np.float64)
             for b, (_backend, idx) in enumerate(ld.blocks):
                 u_chr[b] = float(w_aligned[idx] @ z_aligned[idx])

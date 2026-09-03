@@ -20,7 +20,9 @@ from .harmonize import (
     HarmonizeReport, VariantTable, _harmonize_to_details, harmonize_to,
     same_variants,
 )
-from .ld_backend import BlockDiagonalLD, LDBackend
+from .ld_backend import (
+    BlockDiagonalLD, LDBackend, require_psd_block_quads,
+)
 
 WEIGHT_SCALES = ("standardized", "dosage", "frozen")
 
@@ -75,7 +77,12 @@ def _require_weight_scale(weight_scale: str) -> str:
 
 
 def _block_products(ld: LDBackend, w, z):
-    """Per-block ``u_b = w_bᵀ z_b`` and ``v_b = w_bᵀ D_b w_b``, or None."""
+    """Per-block ``u_b = w_bᵀ z_b`` and ``v_b = w_bᵀ D_b w_b``, or None.
+
+    Refuses a materially indefinite block before any ratio is formed, so
+    even a single-block evaluation (where the block jackknife is
+    unavailable) fails closed exactly like the multi-block diagnostics path.
+    """
     if not isinstance(ld, BlockDiagonalLD):
         return None
     w = np.asarray(w, dtype=np.float64)
@@ -83,7 +90,9 @@ def _block_products(ld: LDBackend, w, z):
     u = np.empty(len(ld.blocks), dtype=np.float64)
     for b, (_backend, idx) in enumerate(ld.blocks):
         u[b] = float(w[idx] @ z[idx])
-    return u, ld.block_quads(w)
+    v = ld.block_quads(w)
+    require_psd_block_quads(v, w)
+    return u, v
 
 
 def _apply_finite_sample(result: EvaluationResult, num, den, n_eff, var_y):

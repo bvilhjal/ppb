@@ -104,17 +104,35 @@ python scripts/ancestry_ld_gwas_benchmark.py \
   --out results/ancestry-ld/yengo-height-<today>.json
 ```
 
-**Provenance caveat.** The committed snapshot records `ppb_commit: 5dca2f8`,
-three commits before the code at HEAD: `e12d78e` and `036e6a3` changed
-`src/ppb/ancestry.py` and the benchmark's verdict aggregation. No scientific
-number changes (the verdict changes cannot alter a study whose Estimator A did
-not decline and whose normalized p is not None, and `_simplex_least_squares` is
-untouched), but HEAD's `contrast_rank` is capped at K−1 = 4 by the new
-drop-smallest rule, so a fresh run will record `contrast_rank: 4` where the
-archive records 5. The cached normalized inputs live in the gitignored `.work/`
-and `--fetch` currently fails its own LDpred3 pin (the sibling checkout has
-drifted), so the snapshot cannot be regenerated in this checkout today.
+**Provenance (absolute, not relative to HEAD).** The committed snapshot was
+produced by commit `5dca2f8` (2026-08-30). Compatibility last checked at
+commit `cceb245` (2026-09-03): the estimator semantics have since changed, so
+this archive is **historical** — do not read it as output of current code.
 
-Use `--fetch` to acquire the six pinned GWAS Catalog inputs through LDpred3's
-pinned harvester. The snapshot records all 1,200 null replicates, input hashes,
-selection settings, software revision, and the full estimator diagnostics.
+Semantic changes after `5dca2f8` that a fresh run would reflect:
+
+- the fitted linear `scale` above one is a model-incompatibility diagnostic
+  (`s₀ = 1−h² ≤ 1` under the calibrated working model; rescaling `z` by `c`
+  rescales the scale by `c²`), not a sample-size effect;
+- reference correlation validation is tiled (no multi-gigabyte temporaries);
+- `r2()`/`mse()`/`evaluate()` refuse a materially indefinite LD block even
+  when the summed denominator stays positive (previously only the multi-block
+  diagnostics path refused).
+
+**Migration record.** Regeneration is blocked in this checkout: the cached
+normalized inputs live in gitignored `.work/` (absent) and `--fetch` fails
+its own LDpred3 pin (the sibling checkout has drifted). To supersede this
+archive, restore either path and write to a **fresh dated path** — never
+overwrite this file:
+
+```bash
+python scripts/ancestry_ld_gwas_benchmark.py \
+  --out results/ancestry-ld/yengo-height-<today>.json
+```
+
+A superseding snapshot must record the producing commit, input hashes, the
+tracked design hash, the corrected scale interpretation, and the per-block
+PSD gate above; the qualitative rules (declared reference ranks first, the
+permissive/strict sign-flip readings) are unchanged. The snapshot records all
+1,200 null replicates, input hashes, selection settings, software revision,
+and the full estimator diagnostics.

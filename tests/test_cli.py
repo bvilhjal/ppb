@@ -3,6 +3,7 @@
 import gc
 import json
 import weakref
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -725,3 +726,18 @@ def test_cli_beta_se_n_without_n_column_requires_n_eff(tmp_path, capsys):
     assert result["r2"] == pytest.approx(expected)
     # The same N that converted the statistics enters the (X3) correction.
     assert result["r2_corrected"] == pytest.approx(expected - 1.0 / 5000.0)
+
+
+def test_cli_mini_example_matches_recorded_output(capsys):
+    """The README's worked example runs on tracked files with pinned numbers."""
+    root = Path(__file__).resolve().parent.parent / "examples" / "mini"
+    rc = main(["evaluate", "--weights", str(root / "weights.tsv"),
+               "--bundle", str(root / "bundle.npz"),
+               "--weight-scale", "standardized"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["r2"] == pytest.approx(0.2853745222880067, abs=1e-12)
+    assert out["mse"] == pytest.approx(6.398720247378035, abs=1e-9)
+    assert out["n_reference"] == 8
+    assert out["n_variants_scored"] == 8
+    assert out["weights_report"]["n_matched"] == 8

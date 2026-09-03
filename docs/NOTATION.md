@@ -89,7 +89,7 @@ All of these are on standardized scales unless stated otherwise (§3).
 | `p_ik` | reference frequency of variant `i` in population `k` (the (A1) panel) |
 | `u_k = s·π_k` | unnormalized linear pair-product coefficient on population `k` in (A2) |
 | `R^(k)_ij` | reference LD correlation of variants `i`,`j` in population `k` |
-| `s` | the fitted linear (noise) `scale` of (A2) — not `1−h²`; for `z = beta/se` inputs it carries a factor of order √N |
+| `s` | the fitted linear (noise) `scale` of (A2) — under the calibrated working model `s₀ = 1−h² ≤ 1`; rescaling `z` by `c` rescales `s` by `c²`, so fitted values above one are a model-incompatibility diagnostic, not a sample-size effect |
 
 **Table 4. LD blocks and their storage.**
 
