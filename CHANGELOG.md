@@ -7,6 +7,16 @@ single-sourced from `ppb.__version__`; the package is pre-release
 
 ## [Unreleased]
 
+### Added
+
+- Refreshed ancestry benchmark snapshots under current code: new dated runs
+  `results/ancestry-frequency/yengo-height-2026-09-03.json` and
+  `results/ancestry-ld/yengo-height-2026-09-03.json` (both 5/5 controls
+  passed; LD weights reproduce the 2026-08-30 archive exactly). Inputs were
+  re-fetched from the GWAS Catalog with the pinned LDpred3 harvester supplied
+  via a detached worktree; both channel READMEs now document that regeneration
+  path and record the new snapshots.
+
 ### Fixed
 
 - Frequency simplex solver: each face is now a centred least-squares solve by

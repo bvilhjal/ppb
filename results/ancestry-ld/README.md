@@ -8,6 +8,7 @@ literal fraction of participants or meta-analysis weight.
 
 | Snapshot | Cohort | Positive controls | Qualitative rule |
 |---|---|---:|---|
+| `yengo-height-2026-09-03.json` | Yengo 2022 ancestry-stratified height | 5 | 5/5 declared references ranked first |
 | `yengo-height-2026-08-30.json` | Yengo 2022 ancestry-stratified height | 5 | 5/5 declared references ranked first |
 
 **Table 2. Estimator A weights and repeated sign-flip diagnostics.**
@@ -20,6 +21,10 @@ literal fraction of participants or meta-analysis weight.
 | EUR | .000 | .045 | .000 | .955 | .000 | 1 | 130/200 | .0050 | .1443 |
 | SAS | .000 | .004 | .000 | .110 | .887 | 1 | 119/200 | .0050 | .0647 |
 | Pooled | .000 | .102 | .000 | .898 | .000 | descriptive | 120/200 | - | - |
+
+The 2026-09-03 rerun (commit `0ed294a`) reproduced every Table 2 value
+exactly — weights, null-fit counts, and both p-values — so the numbers below
+describe both committed snapshots.
 
 The scaled statistic is
 
@@ -50,15 +55,21 @@ exact value is convention-dependent.
 | Study | A scale | Signal absorber | Declared-component jackknife SE | Boundary | B signal z | B result |
 |---|---:|---|---:|---|---:|---|
 | AFR | 2.031 | no | .050 | yes | 1.598 | declined |
-| AMR | 1.877 | no | .000 | yes | 2.069 | declined |
+| AMR | 1.877 | no | null | yes | 2.069 | declined |
 | EAS | 3.186 | no | .117 | yes | .921 | declined |
 | EUR | 25.286 | no | .109 | yes | 2.164 | declined |
 | SAS | 1.257 | yes | .231 | yes | 1.475 | declined |
 | Pooled | 27.460 | no | - | yes | 2.178 | declined |
 
-AMR's zero symmetric SE is a boundary artifact, not certainty. All six fits
-touch a simplex boundary, so ordinary symmetric intervals are invalid. The
-SAS quadratic absorber was retained by an explicitly uncalibrated heuristic.
+AMR publishes no symmetric SE (`proportions_se: null`): its fit sits exactly
+on a simplex vertex, so a symmetric interval would be a boundary artifact, not
+certainty — the 2026-08-30 snapshot recorded the same situation as a spurious
+`.000`. All six fits touch a simplex boundary, so ordinary symmetric intervals
+are invalid. The SAS quadratic absorber was retained by an explicitly
+uncalibrated heuristic, and the 2026-09-03 snapshot additionally records
+`channel_agreement: 0.500` for SAS (linear and quadratic compositions differ
+by more than the 0.10 specification threshold): read SAS weights as a
+misspecification signal, not calibrated mixture fractions.
 
 The fitted linear scales are not interpretable as \(1-h^2\). Under Estimator
 A's working model the linear scale is \(s_0=1-h^2\le 1\); every recorded
@@ -104,12 +115,13 @@ python scripts/ancestry_ld_gwas_benchmark.py \
   --out results/ancestry-ld/yengo-height-<today>.json
 ```
 
-**Provenance (absolute, not relative to HEAD).** The committed snapshot was
-produced by commit `5dca2f8` (2026-08-30). Compatibility last checked at
-commit `cceb245` (2026-09-03): the estimator semantics have since changed, so
-this archive is **historical** — do not read it as output of current code.
+**Provenance (absolute, not relative to HEAD).** The 2026-08-30 snapshot was
+produced by commit `5dca2f8`; the 2026-09-03 snapshot by commit `0ed294a`,
+reusing the hash-verified inputs re-fetched that day for the
+ancestry-frequency channel. The 2026-08-30 archive is **historical** — do not
+read it as output of current code.
 
-Semantic changes after `5dca2f8` that a fresh run would reflect:
+Semantic changes after `5dca2f8` that the 2026-09-03 run reflects:
 
 - the fitted linear `scale` above one is a model-incompatibility diagnostic
   (`s₀ = 1−h² ≤ 1` under the calibrated working model; rescaling `z` by `c`
@@ -117,18 +129,25 @@ Semantic changes after `5dca2f8` that a fresh run would reflect:
 - reference correlation validation is tiled (no multi-gigabyte temporaries);
 - `r2()`/`mse()`/`evaluate()` refuse a materially indefinite LD block even
   when the summed denominator stays positive (previously only the multi-block
-  diagnostics path refused).
+  diagnostics path refused);
+- boundary fits publish `proportions_se: null` instead of a spurious zero
+  (AMR above), and a new `channel_agreement` diagnostic flags SAS's linear /
+  quadratic composition disagreement.
 
-**Migration record.** Regeneration is blocked in this checkout: the cached
-normalized inputs live in gitignored `.work/` (absent) and `--fetch` fails
-its own LDpred3 pin (the sibling checkout has drifted). To supersede this
-archive, restore either path and write to a **fresh dated path** — never
-overwrite this file:
+**Regeneration.** The normalized inputs now cached under gitignored
+`.work/ancestry-frequency-gwas/` are re-verified by content hash on each run;
+write to a **fresh dated path** — never overwrite a committed snapshot:
 
 ```bash
 python scripts/ancestry_ld_gwas_benchmark.py \
   --out results/ancestry-ld/yengo-height-<today>.json
 ```
+
+If the cache is absent, add `--fetch` (or `--raw-dir`). `--fetch` loads
+LDpred3's harvester only from the pinned revision `621a2c4`; when the sibling
+checkout has drifted, satisfy the pin without moving it by pointing
+`--ldpred3-repo` at a detached worktree:
+`git -C ../ldpred3 worktree add --detach .work/ldpred3-621a2c4 621a2c4`.
 
 A superseding snapshot must record the producing commit, input hashes, the
 tracked design hash, the corrected scale interpretation, and the per-block

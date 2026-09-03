@@ -9,6 +9,7 @@ identity, software revisions, and the predeclared-control verdict.
 
 | Snapshot | Cohort | Controls | Verdict |
 |---|---|---:|---|
+| `yengo-height-2026-09-03.json` | Yengo 2022 ancestry-stratified height | 5 | 5/5 passed |
 | `yengo-height-2026-08-30.json` | Yengo 2022 ancestry-stratified height | 5 | 5/5 passed |
 
 The five controls require `status=estimated` and the corresponding 1000
@@ -38,13 +39,14 @@ python scripts/ancestry_frequency_gwas_benchmark.py --fetch
 python scripts/ancestry_frequency_gwas_benchmark.py --raw-dir <download-dir>
 ```
 
-Leave-one-chromosome `contrast_rank` values in this snapshot can read `5`
-against `expected_contrast_rank: 4` for a five-population panel. That was a
+Leave-one-chromosome `contrast_rank` values in the 2026-08-30 snapshot can read
+`5` against `expected_contrast_rank: 4` for a five-population panel. That was a
 rounding artifact of the Gram diagnostic (the 1-vector null lifted above
 tolerance). The rank half of the identifiability gate did not fire; the
 condition half did the work. Current code counts rank in the \(K-1\)
-contrast subspace. Do not re-read those recorded ranks as \(K\) independent
-frequency axes.
+contrast subspace; the 2026-09-03 snapshot records `contrast_rank: 4` =
+`expected_contrast_rank: 4` on every chromosome of every study. Do not re-read
+the recorded 2026-08-30 ranks as \(K\) independent frequency axes.
 
 Reproduce from the locally cached, hash-verified normalized inputs.
 The snapshot's acquisition mode is `verified_cache`: raw source bytes were
@@ -58,31 +60,39 @@ python scripts/ancestry_frequency_gwas_benchmark.py \
   --out results/ancestry-frequency/yengo-height-<today>.json
 ```
 
-**Provenance (absolute, not relative to HEAD).** The committed snapshot was
-produced by commit `67fa915` (2026-08-30). Compatibility last checked at
-commit `cceb245` (2026-09-03): the estimator semantics have since changed, so
-this archive is **historical** — do not read it as output of current code.
+**Provenance (absolute, not relative to HEAD).** The 2026-08-30 snapshot was
+produced by commit `67fa915`; the 2026-09-03 snapshot by commit `0ed294a`,
+with all six inputs re-acquired from the Catalog (`ldpred3_stream_filter`,
+source SHA-256 verified per file) because the gitignored `.work/` cache was
+absent in this checkout. The 2026-08-30 archive is **historical** — do not
+read it as output of current code.
 
-Semantic changes after `67fa915` that a fresh run would reflect:
+Semantic changes after `67fa915` that the 2026-09-03 run reflects (all five
+controls still pass):
 
 - contrast rank is counted in the K−1 subspace (`contrast_rank: 4`, not 5);
 - rejected fits publish `proportions: null` with the optimizer output kept as
-  `proportions_raw` (this archive publishes weights on every status);
+  `proportions_raw` (the old archive publishes weights on every status);
 - the simplex face solver is centred/SVD with direct residual evaluation
   (the archived solver could elect a wrong face on near-exact mixtures);
 - loaded panels are read-only; duplicate GWAS IDs are validated before they
   mark an identifier seen.
 
-**Migration record.** To supersede this archive: restore the cached normalized
-inputs (downloaded/normalized files live under gitignored `.work/`, not
-committed; absent in this checkout) or re-acquire them, then write to a
-**fresh dated path** — never overwrite this file:
+**Regeneration.** The normalized inputs now cached under gitignored
+`.work/ancestry-frequency-gwas/` are re-verified by content hash on each run,
+so a routine rerun needs only a **fresh dated path** — never overwrite a
+committed snapshot:
 
 ```bash
 python scripts/ancestry_frequency_gwas_benchmark.py \
   --out results/ancestry-frequency/yengo-height-<today>.json
 ```
 
+If the cache is absent, add `--fetch` (or `--raw-dir` with the official
+`<accession>.h.tsv.gz` files). `--fetch` loads LDpred3's harvester only from
+the pinned revision `621a2c4`; when the sibling checkout has drifted, satisfy
+the pin without moving it by pointing `--ldpred3-repo` at a detached worktree:
+`git -C ../ldpred3 worktree add --detach .work/ldpred3-621a2c4 621a2c4`.
 A superseding snapshot must record the producing commit, input hashes,
 `contrast_rank` in the K−1 subspace, and the `proportions: null` rejection
 contract above; the 5/5 verdict rule is unchanged.
