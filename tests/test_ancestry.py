@@ -192,6 +192,85 @@ def test_reference_validation():
         estimate_pair_products(np.zeros(sum(sizes) + 1), RB, blocks=blocks)
 
 
+def test_references_must_be_correlation_matrices():
+    # M1: u = s*pi cannot distinguish a reference's scale from its
+    # proportion (scaling one reference by c rescales its weight by 1/c),
+    # and the condition-number gate normalizes columns first -- so a
+    # covariance, a non-symmetric matrix, or an out-of-range entry must be
+    # refused at the input boundary, in both estimators.
+    sizes, blocks, _, RB = _landscape(3, 6)
+    z = np.zeros(sum(sizes))
+    scaled = [[2.0 * Rb for Rb in RB[0]], RB[1]]       # diag = 4: covariance
+    with pytest.raises(ValueError, match="unit diagonal"):
+        estimate_pair_products(z, scaled, blocks=blocks)
+    with pytest.raises(ValueError, match="unit diagonal"):
+        estimate_bilinear(z, scaled, blocks=blocks)
+    skewed = [list(RB[1]), list(RB[0])]
+    skewed[0][0] = skewed[0][0].copy()
+    skewed[0][0][0, 1] += 0.3
+    with pytest.raises(ValueError, match="not symmetric"):
+        estimate_pair_products(z, skewed, blocks=blocks)
+    with pytest.raises(ValueError, match="not symmetric"):
+        pair_design(skewed, blocks)
+    bloated = [list(RB[0]), list(RB[1])]
+    bloated[0][0] = bloated[0][0].copy()
+    bloated[0][0][0, 1] = bloated[0][0][1, 0] = 1.5
+    with pytest.raises(ValueError, match="above one"):
+        pair_design(bloated, blocks)
+
+
+def test_vertex_pinned_jackknife_withholds_se():
+    # M5: when every leave-group replicate is the same simplex vertex the
+    # delete-group jackknife has zero dispersion; an exact-zero SE would be
+    # a boundary artefact reported as certainty, so the SE is withheld and
+    # flagged instead (mirroring Estimator B's policy).
+    rng = np.random.default_rng(5)
+    m, n_pairs, n_blocks = 40, 200, 20
+    z = rng.normal(size=m)
+    ii = rng.integers(0, m, n_pairs)
+    jj = (ii + 1 + rng.integers(0, 3, n_pairs)) % m
+    y = z[ii] * z[jj]
+    # design column 1 is negatively proportional to the response column
+    # plus a small generic wiggle, so NNLS pins it to exactly zero in the
+    # full fit and in every leave-group refit.
+    wiggle = 0.01 * rng.normal(size=n_pairs)
+    design = np.stack([y, -0.05 * y + wiggle], axis=1)
+    pair_block = np.arange(n_pairs) % n_blocks
+    result = estimate_pair_products_from_design(
+        z, ii, jj, design, pair_block, absorb_signal=False,
+        n_blocks=n_blocks)
+    assert np.allclose(result["proportions"], [1.0, 0.0])
+    assert result["proportions_se"] is None
+    assert result["symmetric_interval_valid"] is False
+    assert result["boundary_note"] is not None
+    assert "zero dispersion" in result["jackknife_note"]
+    assert (result["jackknife_estimates"] == [1.0, 0.0]).all()
+
+
+def test_channel_agreement_note_threshold():
+    from ppb.ancestry import _MAX_CHANNEL_AGREEMENT, _channel_agreement_note
+    assert _channel_agreement_note(None) is None
+    assert _channel_agreement_note(0.02) is None
+    assert _channel_agreement_note(_MAX_CHANNEL_AGREEMENT) is None
+    note = _channel_agreement_note(0.5)
+    assert note is not None and "disagree" in note and "0.5" in note
+
+
+def test_scale_above_one_is_flagged_not_interpreted(large):
+    # M4: for z = beta/se-like inputs the fitted linear scale carries a
+    # sqrt(N) factor; a scale above one must be annotated as such rather
+    # than read as 1 - h^2. pi itself is invariant to the global rescale.
+    _, blocksB, _, RBB = large
+    z0 = simulate_admixture_mvn(RBB, PI, 0.0, 1000, np.random.default_rng(31))
+    r = estimate_pair_products(3.0 * z0, RBB, blocks=blocksB)
+    plain = estimate_pair_products(z0 / 4.0, RBB, blocks=blocksB)
+    assert r["scale"] > 1.0
+    assert plain["scale"] < 1.0
+    assert "1 - h^2" in r["scale_note"]
+    assert plain["scale_note"] is None
+    assert np.allclose(r["proportions"], plain["proportions"], atol=0.05)
+
+
 def test_pair_product_precomputed_design_matches_reference_wrapper(small):
     _, blocks, _, refs = small
     z = simulate_admixture_mvn(
@@ -251,7 +330,11 @@ def test_bilinear_precomputed_design_matches_reference_wrapper(small):
     relative_n = sample_size / np.median(sample_size)
     coefficients = np.array([PI[0] ** 2,
                              2 * PI[0] * PI[1], PI[1] ** 2])
-    z = np.sqrt(1.0 + 4.0 * relative_n * (design @ coefficients))
+    # Additive noise keeps the held-out-correlation SE finite; without it the
+    # cross-validation statistic is degenerate and the fit is declined.
+    rng = np.random.default_rng(244)
+    z = np.sqrt(10.0 + 8.0 * relative_n * (design @ coefficients)
+                + rng.normal(size=design.shape[0]))
     expected = estimate_bilinear(
         z, refs, blocks=blocks, sample_size=sample_size
     )
@@ -263,7 +346,10 @@ def test_bilinear_precomputed_design_matches_reference_wrapper(small):
             "proportions", "proportions_se", "proportions_raw",
             "coefficient_matrix", "heldout_signal_correlations",
             "jackknife_estimates"):
-        assert np.allclose(observed[key], expected[key], equal_nan=True)
+        if expected[key] is None or observed[key] is None:
+            assert (expected[key] is None) == (observed[key] is None)
+        else:
+            assert np.allclose(observed[key], expected[key], equal_nan=True)
     for key in (
             "signal", "signal_z", "heldout_signal_correlation",
             "intercept", "rank1_distance", "psd_violation",
@@ -401,10 +487,19 @@ def test_bilinear_recovery_strong_signal(large):
 def test_bilinear_boundary_note(small):
     _, blocks, _, RB = small
     Lb, _ = bilinear_ld_scores(RB, blocks)
-    result = estimate_bilinear(
-        np.sqrt(1.0 + 4.0 * Lb[:, 0]), RB, blocks=blocks
-    )
-    assert np.allclose(result["proportions"], [1.0, 0.0])
+    # Noisy model-consistent response with all signal on ancestry 0: on the
+    # draws where the ancestry-1 coefficients hit the NNLS boundary the note
+    # must fire (a deterministic noiseless construction would have zero
+    # between-group correlation dispersion and be declined by the screen).
+    rng = np.random.default_rng(401)
+    for _ in range(60):
+        z = np.sqrt(10.0 + 4.0 * Lb[:, 0] + rng.normal(size=Lb.shape[0]))
+        result = estimate_bilinear(z, RB, blocks=blocks)
+        if result["proportions"] is not None and result["boundary_note"]:
+            break
+    else:
+        raise AssertionError("no accepted boundary draw in 60 replicates")
+    assert (result["proportions"] < 1e-6).any()
     assert "simplex boundary" in result["boundary_note"]
 
 
@@ -469,7 +564,8 @@ def test_bilinear_declines_cross_only_coefficient_matrix(small):
     _, blocks, _, RB = small
     Lb, pairs = bilinear_ld_scores(RB, blocks)
     assert pairs == [(0, 0), (0, 1), (1, 1)]
-    z = np.sqrt(1.0 + 4.0 * Lb[:, 1])
+    z = np.sqrt(10.0 + 4.0 * Lb[:, 1]
+                + 0.25 * np.random.default_rng(467).normal(size=Lb.shape[0]))
     result = estimate_bilinear(z, RB, blocks=blocks)
     assert result["proportions_raw"] is not None
     assert result["proportions"] is None
@@ -486,11 +582,13 @@ def test_bilinear_variable_sample_size_uses_n_times_ld(small):
     coefficients = np.array([PI[0] ** 2,
                              2 * PI[0] * PI[1],
                              PI[1] ** 2])
-    z = np.sqrt(1.0 + 4.0 * relative_n * (Lb @ coefficients))
+    rng = np.random.default_rng(480)
+    z = np.sqrt(10.0 + 40.0 * relative_n * (Lb @ coefficients)
+                + rng.normal(size=m))
     result = estimate_bilinear(
         z, RB, blocks=blocks, sample_size=sample_size
     )
-    assert np.allclose(result["proportions"], PI, atol=1e-8)
+    assert np.allclose(result["proportions"], PI, atol=0.02)
     assert result["sample_size_scale"] == pytest.approx(
         np.median(sample_size)
     )
@@ -594,7 +692,8 @@ def _il_replicates(design, small, reps=8):
         _, t = marginal_stats(X, y)
         r = estimate_pair_products(t, design["refs"], blocks=blocks)
         ests.append(r["proportions"])
-        ses.append(r["proportions_se"])
+        ses.append(np.full_like(r["proportions"], np.nan)
+                   if r["proportions_se"] is None else r["proportions_se"])
         notes.append(r["boundary_note"])
     return np.asarray(ests), np.asarray(ses), notes
 
@@ -602,11 +701,13 @@ def _il_replicates(design, small, reps=8):
 def test_individual_level_null_trait(il_design, small):
     """The mosaic GWAS (not the moment model) drives A; replicate-averaged
     recovery, and boundary estimates (if any) must carry a warning note
-    rather than a confident zero SE."""
+    and no fabricated exact-zero SE."""
     ests, ses, notes = _il_replicates(il_design[0.05], small)
     assert np.abs(ests.mean(axis=0) - PI).max() < 0.15
     boundary = (ests < 1e-6).any(axis=1)
     assert (ses[~boundary] > 0).all()
+    # a vertex-pinned jackknife must not report SE = 0 as if it were measured
+    assert not (ses == 0.0).all(axis=1).any()
     for on_boundary, note in zip(boundary, notes):
         assert (note is not None) == bool(on_boundary)
 
@@ -616,6 +717,55 @@ def test_individual_level_high_fst(il_design, small):
     estimate should still land near the truth on average."""
     ests, _, _ = _il_replicates(il_design[0.2], small)
     assert np.abs(ests.mean(axis=0) - PI).max() < 0.17
+
+
+def test_participant_pool_arm_carries_the_wahlund_term(small):
+    """M11: the default mosaic is panmictic (per-haplotype draws), so a
+    50/50 participant pool must look structurally different: a dominant PC1
+    and an inflated within-block variance -- the between-source (Wahlund)
+    term the per-haplotype draw cannot produce. Estimator A run on the pool
+    arm must still recover pi within tolerance."""
+    from ppb.simulate import simulate_admixture_references
+    sizes, blocks, paths, _ = small
+    sizes = [int(s) for s in sizes]
+    m = sum(sizes)
+    rng = np.random.default_rng(1400)
+    maf = bn_freqs_multi(rng, m, 0.20, 2)          # real frequency contrast
+    refs = simulate_admixture_references(3000, sizes, maf, paths, rng)
+
+    mosaic = simulate_admixed_genotypes(
+        3000, sizes, maf, paths, PI, rng)
+    pool = simulate_admixed_genotypes(
+        3000, sizes, maf, paths, PI, rng, participant_pools=True)
+
+    # A discrete 50/50 participant pool has a dominant between-source axis
+    # (the Wahlund term); the panmictic per-haplotype mosaic has none. The
+    # marginal variance is standardized away by _standardize_cols, so the
+    # signature lives in the PC1 gap, not in var(g).
+    _, s_pool, _ = np.linalg.svd(
+        pool - pool.mean(axis=0), full_matrices=False)
+    _, s_mosaic, _ = np.linalg.svd(
+        mosaic - mosaic.mean(axis=0), full_matrices=False)
+    assert s_pool[0] / s_pool[1] > 1.5
+    assert s_mosaic[0] / s_mosaic[1] < 1.2
+
+    # Estimator A on the pool arm still lands near the truth (a stress test,
+    # not a calibrated interval).
+    from ppb.simulate import (draw_effects, marginal_stats,
+                              simulate_phenotype)
+    ests = []
+    for _ in range(6):
+        X = simulate_admixed_genotypes(
+            3000, sizes, maf, paths, PI, rng, participant_pools=True)
+        y = simulate_phenotype(X, draw_effects(m, 50, rng), 0.0, rng)
+        _, t = marginal_stats(X, y)
+        r = estimate_pair_products(
+            t, [[R[np.ix_(b, b)] for b in blocks] for R in refs],
+            blocks=blocks)
+        if r["proportions"] is not None:
+            ests.append(r["proportions"])
+    assert len(ests) >= 3
+    assert np.abs(np.asarray(ests).mean(axis=0) - PI).max() < 0.25
 
 
 def test_individual_level_bilinear_honesty(small):

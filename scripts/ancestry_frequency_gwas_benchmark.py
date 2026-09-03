@@ -345,6 +345,7 @@ def benchmark_study(study: CatalogStudy, panel, path: Path, acquisition: dict):
         ids, effect, other, eaf, panel)
     expected = study.expected_superpopulation
     expected_rank = expected_weight = expected_top = None
+    n_tied_at_top = None
     if expected is not None and decomposition["proportions"] is not None:
         weights = dict(zip(
             decomposition["populations"], decomposition["proportions"],
@@ -352,10 +353,15 @@ def benchmark_study(study: CatalogStudy, panel, path: Path, acquisition: dict):
         expected_weight = weights[expected]
         expected_rank = 1 + sum(
             value > expected_weight + 1e-12 for value in weights.values())
-        expected_top = expected_rank == 1
+        n_tied_at_top = sum(
+            abs(value - expected_weight) <= 1e-12
+            for value in weights.values())
+        # "Rank first" means a unique argmax: an exact tie at the top is not
+        # a passed control.
+        expected_top = expected_rank == 1 and n_tied_at_top == 1
     control_passed = (
-        expected is None
-        or (decomposition["status"] == "estimated" and expected_top is True)
+        None if expected is None
+        else (decomposition["status"] == "estimated" and expected_top is True)
     )
     return {
         "study": {
@@ -378,7 +384,10 @@ def benchmark_study(study: CatalogStudy, panel, path: Path, acquisition: dict):
             "expected_top_population": expected,
             "expected_weight": expected_weight,
             "expected_rank": expected_rank,
-            "passed": bool(control_passed),
+            "n_tied_at_top": n_tied_at_top,
+            # None (not True) for the descriptive-only studies: no control
+            # was evaluated, so the field must not assert a pass.
+            "passed": control_passed,
         },
     }
 
@@ -444,7 +453,10 @@ def run_benchmark(studies, panel, inputs):
             "n_controls": len(controls),
             "n_passed": len(controls) - len(failures),
             "failed_accessions": failures,
-            "passed": not failures,
+            # A control-free selection must not report a vacuous PASS with
+            # exit code 0 (e.g. --studies POOLED, which is descriptive-only
+            # by construction and can never be a control).
+            "passed": bool(controls) and not failures,
         },
     }
 
@@ -539,6 +551,9 @@ def main(argv=None) -> int:
         "--raw-dir", type=Path,
         help="normalize pinned <accession>.h.tsv.gz files already in this directory")
     parser.add_argument("--out", type=Path, help="write a strict JSON snapshot")
+    parser.add_argument(
+        "--allow-partial-verdict", action="store_true",
+        help="let a snapshot record fewer than five predeclared controls")
     parser.add_argument("--list", action="store_true", help="list the fixed cohort and exit")
     args = parser.parse_args(argv)
 
@@ -549,10 +564,13 @@ def main(argv=None) -> int:
             print("| Key | Accession | Reported sample | N | Expected |")
             print("|---|---|---|---:|---|")
             for study in studies:
+                expected = study.expected_superpopulation or "descriptive"
+                if "imperfectly" in study.expectation_basis:
+                    expected += " (imperfect label proxy)"
                 print(
                     f"| {study.key} | {study.accession} | "
                     f"{study.reported_sample} | {study.reported_n:,} | "
-                    f"{study.expected_superpopulation or 'descriptive'} |")
+                    f"{expected} |")
             return 0
 
         panel = load_frequency_panel(
@@ -575,6 +593,12 @@ def main(argv=None) -> int:
         result = run_benchmark(studies, panel, inputs)
         print_table(result)
         if args.out:
+            n_controls = result["verdict"]["n_controls"]
+            if n_controls < 5 and not args.allow_partial_verdict:
+                raise ValueError(
+                    f"refusing to write a snapshot with only {n_controls} "
+                    "predeclared controls selected (need 5); rerun with "
+                    "--allow-partial-verdict to record a partial verdict")
             _write_json_atomic(args.out, result)
             print(f"\nSnapshot: {args.out}")
         return 0 if result["verdict"]["passed"] else 1

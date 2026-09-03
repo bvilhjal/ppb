@@ -24,6 +24,7 @@ label is stable when a document grows and unambiguous when cited from elsewhere:
 | **G** | [`REAL_DATA.md`](REAL_DATA.md) | genome-wide accumulation and block diagnostics |
 | **R** | [`../results/schema.md`](../results/schema.md) | the results registry |
 | **E** | [`../experiments/README.md`](../experiments/README.md) | simulation demonstrations |
+| **A** | [`../README.md`](../README.md) §"Allele-frequency ancestry decomposition" and [`../results/ancestry-ld/README.md`](../results/ancestry-ld/README.md) | the two ancestry-composition channels (A1)–(A3) |
 
 So (M2) is the core identity wherever it appears, and (O4) is the stochastic
 overlap basis whether you meet it in `OVERLAP.md` or in a docstring. Tables and
@@ -77,6 +78,18 @@ All of these are on standardized scales unless stated otherwise (§3).
 | `r_g` | cross-population genetic correlation of causal effects |
 | `F_ST` | population differentiation between A and B |
 | `f_j`, `sd_j` | allele frequency and genotype standard deviation of variant `j` |
+
+**Table 3a. Ancestry-composition channels (A1)–(A3)** (the two channels of
+`ppb.ancestry_frequency` and `ppb.ancestry`).
+
+| symbol | meaning |
+|---|---|
+| `K` | number of reference populations (1000G superpopulations) |
+| `π_k` | fitted weight on reference population `k` (a projection weight, not a participant fraction) |
+| `p_ik` | reference frequency of variant `i` in population `k` (the (A1) panel) |
+| `u_k = s·π_k` | unnormalized linear pair-product coefficient on population `k` in (A2) |
+| `R^(k)_ij` | reference LD correlation of variants `i`,`j` in population `k` |
+| `s` | the fitted linear (noise) `scale` of (A2) — not `1−h²`; for `z = beta/se` inputs it carries a factor of order √N |
 
 **Table 4. LD blocks and their storage.**
 
@@ -142,7 +155,7 @@ three failing.
 
 ## 4. Where a symbol is overloaded
 
-Five collisions survive, because the alternative is renaming a public interface
+Nine collisions survive, because the alternative is renaming a public interface
 for the sake of a table. They are scoped, and they do not co-occur.
 
 | symbol | meaning 1 | meaning 2 | how to tell |
@@ -152,6 +165,10 @@ for the sake of a table. They are scoped, and they do not co-occur.
 | `r` | marginal correlation of one variant | retained rank of a low-rank factor | context: `r_j` is per-variant, `r` alone is a rank |
 | `n` | per-variant sample size `n_j` | number of blocks, `n_blocks` | `n_blocks` is always spelled out |
 | `max_variance_share` | largest group's share of the **jackknife** variance (G2), on `BlockJackknife` | largest block's share of the **score** variance (P2), on `ScoreDistribution` | the owning object: a jackknife answers "is one region carrying the estimate?", a score distribution "is one block carrying the tail?". Equal contributions give `1/K` in the first sense and `1/n_blocks` in the second, so the two are not even on a common scale |
+| `u` | block numerator `u_b = w_bᵀ z_b` (Table 4) | per-population coefficient `u_k = s·π_k` of (A2) (Table 3a) | the jackknife's is per-block and capital-indexed `u_b`; the ancestry one is per-population and sits next to `π` |
+| `s` | latent genuine block signal `s_b` (Table 5) | the fitted linear `scale` of (A2) (Table 3a) | the overlap `s_b` is indexed by block; the ancestry `scale` is a bare scalar and is not `1−h²` |
+| `A` | the discovery ancestry (Table 3) | "the analysed population" in `ancestry_report.tex` | the report's `A` is a specific population under study, not a training/target role |
+| `R` | the estimand `R²` (Table 1) | the per-population reference LD matrices `R^(k)` of (A2) (Table 3a); what the rest of the package calls `D` | `R²` is always squared; `R^(k)` always carries its superscript |
 
 The block-coherence statistic in particular is a poor name — in a genomics
 package `z` means a GWAS z-statistic — and it is called `z` only because the
@@ -188,7 +205,7 @@ it to account.
 | (O6) | corrected signed numerator (experimental; not a registry contract) | `experiments/overlap_detection.py` (`correct_overlap_numerator`) | `tests/test_overlap.py` |
 | (P1) | score mean from allele frequencies | `ppb.score_distribution` | `tests/test_score_distribution.py` |
 | (P2) | score variance from frequencies and LD | `ppb.score_distribution` | `tests/test_score_distribution.py` |
-| (P3) | assortative-mating variance correction | *specified, not implemented* | `tests/test_assortative_mating.py` |
+| (P3) | assortative-mating variance correction | `experiments/assortative_mating.py` | `tests/test_assortative_mating.py` |
 | (C1) | LD score `l_j = Σ_k D_jk²` | `LDBackend.ld_scores` | `tests/test_ldscore.py` |
 | (C2) | LD-score regression | `experiments/z_calibration.py` (`ldscore_regression`) | `tests/test_ldscore.py` |
 | (C3) | implied `z` scale from the intercept | `experiments/z_calibration.py` (`ldscore_regression`) | `tests/test_ldscore.py` |

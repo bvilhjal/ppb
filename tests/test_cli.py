@@ -572,6 +572,29 @@ def test_read_bundle_rejects_asymmetric_D(tmp_path):
         read_bundle(path)
 
 
+def test_evaluate_counts_and_applies_allele_swaps(tmp_path):
+    """Minor 31 / C3: every historical CLI fixture declared a1 == the ldref's
+    effect allele, so n_sign_flipped was 0 in all of them and a global z sign
+    error would pass unseen. Here the sumstats carry a1 == a2 (the OTHER
+    allele), so the harmonizer must flip the z sign and the result must equal
+    the correctly oriented one."""
+    _, paths, variants, weights, z = _ldref_fixture(tmp_path)
+    swapped = VariantTable(variants.chrom, variants.pos,
+                           variants.a2, variants.a1)
+    result = evaluate_ldrefs(
+        paths, variants, weights, swapped, z,
+        genotype_sd=np.ones(variants.n))
+    assert result.sumstats_report["n_sign_flipped"] == variants.n
+    correct = evaluate_ldrefs(
+        paths, variants, weights, variants, z,
+        genotype_sd=np.ones(variants.n))
+    # w is unchanged and D is fixed, so the flip is an exact global negation
+    # of z: R^2 survives, mse moves by 4|w^T z|.
+    assert result.r2 == pytest.approx(correct.r2)
+    numerator = float(weights @ z)
+    assert result.mse == pytest.approx(correct.mse + 4.0 * abs(numerator))
+
+
 def test_read_sumstats_converts_beta_se_n(tmp_path):
     path = tmp_path / "sumstats.tsv"
     path.write_text(

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from ppb import (
-    DenseLDInt8, VariantTable, convert_ldpred3_cache, read_ldref,
+    DenseLDInt8, convert_ldpred3_cache, read_ldref,
 )
 
 

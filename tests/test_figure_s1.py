@@ -6,7 +6,6 @@ independent LD reference is unbiased.
 """
 
 import numpy as np
-import pytest
 
 from ppb.simulate import (
     marginal_stats,

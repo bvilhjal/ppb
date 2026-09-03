@@ -245,11 +245,16 @@ the `1/0.648 − 1 = +54.4%` you get from the ratio of the means; see
 [`../docs/CROSS_ANCESTRY.md`](../docs/CROSS_ANCESTRY.md).
 
 **Read the mismatch row as conditional on the simulated LD.** Both ancestries
-above share one LD architecture: Balding-Nichols differs their allele
-frequencies, but `ppb.simulate` draws haplotypes with the same latent
-correlation `rho**|i-j|` for both. That is why portability is 0.998 at
-r_g = 1.0 — F_ST has no LD channel, so all loss in Table 6 comes from `r_g`.
-`run()` takes `rho_b` / `block_size_b` to give B its own LD:
+above share one *latent* LD architecture: `ppb.simulate` draws haplotypes with
+the same latent correlation `rho**|i-j|` for both. At the shipped `rho=0.5`
+that is why portability is 0.998 at r_g = 1.0 — F_ST changes allele
+frequencies but not that latent matrix, so at that rho the loss comes from
+`r_g`. The claim is narrower than it first reads: dichotomization attenuation
+is MAF-dependent, so different allele frequencies give different *realized*
+dosage correlations even when the latent matrix is shared — at `rho=0.9`
+F_ST alone (fst=0.25, zero latent-LD divergence) costs ~10% of portability
+(measured 0.90). `run()` takes `rho_b` / `block_size_b` to give B its own
+latent LD, a stronger divergence than the F_ST channel:
 
 ```bash
 python experiments/cross_ancestry.py --ld-divergence
@@ -446,14 +451,15 @@ weights `b_j = w_A,j / sd_A,j`, evaluated in B through `ppb.evaluate` on a
 shuffled submission with `z_B`, an independent B LD panel and per-variant B
 SDs; truth is `corr(X_Bstd (b·sd_B), y_B)²` on the individuals.
 
-With empirical B SDs the evaluation recovers truth (mean −0.8%, worst seed
-3.7% — independent-panel noise, not gauge error); the HWE SD costs +0.03%
-paired in a homogeneous B; the discovery (A) SD is biased +15% to +34% every
-seed. On an admixed B (two subpopulations 0.1 apart) single draws scatter to
-|14|% because the panel denominator dominates — quote a block jackknife — and
-the paired HWE-vs-empirical residual is +0.9% (SE 0.7%): real, second-order at
-that structure, unbounded only in the worst case. Pinned by
-`tests/test_gauge.py` (4 tests, 5 seeds each).
+With empirical B SDs the evaluation recovers truth (cross-seed mean +0.1%,
+SE 0.3%, worst seed 3.7% — independent-panel noise, not gauge error); the HWE
+SD costs +0.04% (SE 0.06%) paired in a homogeneous B; the discovery (A) SD is
+biased upward systematically (mean +42.5%, SE 11.4%; per-seed range is wide,
++5.4% to +230%). On an admixed B (two subpopulations 0.1 apart) single draws
+scatter to |27|% because the panel denominator dominates — quote a block
+jackknife — and the paired HWE-vs-empirical residual is +0.19% (SE 0.42%):
+consistent with zero at that structure. Pinned by
+`tests/test_gauge.py` (4 tests, 20 seeds each, measured 2026-09-03).
 
 Run: `python experiments/gauge_validation.py --seed 0 [--sub-fst 0.1]`.
 

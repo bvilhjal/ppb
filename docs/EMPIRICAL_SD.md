@@ -35,12 +35,14 @@ admixed targets)" in the v0.1 definition. This note designs that extension.
 The empirical path is already validated:
 [`../experiments/gauge_validation.py`](../experiments/gauge_validation.py)
 (E4) shows that with empirical B SDs the full evaluation path recovers
-individual-level truth (mean −0.8%, worst seed 3.7%, the residual being
-independent-panel noise); that discovery-side (A) SDs are biased **+15% to
-+34% every seed**; that on an admixed B (two subpopulations, F_ST 0.1)
-single-draw estimates scatter to |14|% so a block jackknife must be quoted;
-and that the paired HWE-vs-empirical residual there is +0.9% (SE 0.7%) —
-real, second-order at that structure, unbounded in the worst case.
+individual-level truth (cross-seed mean +0.1%, SE 0.3%, worst seed 3.7%, the
+residual being independent-panel noise); that discovery-side (A) SDs are
+biased systematically upward (mean +42.5%, SE 11.4%; wide per-seed range
++5.4% to +230%); that on an admixed B (two subpopulations, F_ST 0.1)
+single-draw estimates scatter to |27|% so a block jackknife must be quoted;
+and that the paired HWE-vs-empirical residual there is +0.19% (SE 0.42%) —
+consistent with zero at that structure (measured over seeds 0–19,
+2026-09-03).
 
 ## 3. Schema proposal
 

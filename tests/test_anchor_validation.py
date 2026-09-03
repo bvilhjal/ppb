@@ -47,7 +47,7 @@ def test_published_accuracy_reads_every_ancestry_group():
 
 
 def test_comparison_selects_the_european_group_not_the_last_one():
-    """All nine published groups are UK Biobank with ancestry_country == 'UK';
+    """All eight published groups are UK Biobank with ancestry_country == 'UK';
     only ancestry_additional distinguishes them. Selecting on country alone
     silently compares against whichever group happens to come last."""
     rows, curves = av.compare([_record()], opener=lambda url: _payload(GROUPS))

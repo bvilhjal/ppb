@@ -76,7 +76,7 @@ numbered result to its module and its test, then the module.
 | [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2), controls (G3–G4), and the external check against published individual-level accuracy (G5) |
 | [`LIMITATIONS.md`](LIMITATIONS.md) | scope | what PPB does and does not establish; every known failure mode |
 | [`TRANSFERABILITY.md`](TRANSFERABILITY.md) | scope | a negative result: why PPB measures portability but does not construct scores |
-| [`ancestry_report/ancestry_report.pdf`](ancestry_report/ancestry_report.pdf) | record | technical report: estimating the ancestry composition of a GWAS from summary statistics — frequency projection and two LD-moment channels, with derivations, encoded simulation gates, and the Yengo 2022 height snapshots; LaTeX source alongside |
+| [`ancestry_report/ancestry_report.pdf`](ancestry_report/ancestry_report.pdf) | record | technical report: estimating the ancestry composition of a GWAS from summary statistics — frequency projection and two LD-moment channels, with derivations, encoded simulation gates, and the Yengo 2022 height snapshots; LaTeX source alongside. **Stale:** the committed PDF is a build of the `.tex` as it stood before commit `036e6a3` (it states the wrong error statistic and omits the fitted-scale caveat); the `.tex` is current, and the PDF needs a manual rebuild with a LaTeX toolchain, which nothing in the repo automates |
 | [`../results/schema.md`](../results/schema.md) | specification | the result-pack format (R1) and the rules CI enforces |
 | [`../experiments/README.md`](../experiments/README.md) | record | each simulation, what it demonstrates, and the numbers it produces |
 | [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md) | intent | objective, gates, delivery plan, claims discipline |
@@ -101,6 +101,29 @@ specification above, the specification wins.
   the first real cross-ancestry run. (The two novelty leads were closed by the
   2026-08-23 follow-up sweep recorded in [`NOVELTY.md`](NOVELTY.md); the other
   two remain open.)
+- [`../REVIEW-2026-09-02.md`](../REVIEW-2026-09-02.md) — commit `036e6a3`,
+  2026-09-02. Covers the ~24,400 lines added since `5d2d680`: both ancestry
+  channels and their builders, benchmarks, snapshots and technical report; the
+  FinnGen target path; the simulator expansion. **3 Critical · 19 Major · 46 Minor
+  · 16 Nit, none yet addressed.** All three Criticals are on the FinnGen path
+  (wrong `--weight-scale` in the README's own worked example; the (H2) independence
+  screen failing open on absent cohort annotation; `ref`/`alt` swapped in the
+  emitted table). The estimator algebra re-verified clean to machine precision; the
+  findings are at the perimeter — undeclared scales, diagnostics computed but gated
+  by nothing, and artifacts that predate the code producing them. Also audits the
+  2026-08-16 fixes: F4a holds, F1/F3/F7 hold structurally but not quantitatively,
+  F4b fails open on its default path.
+  **Resolved 2026-09-03** in the working tree (not yet committed): all three
+  Criticals, all 19 Majors, and the load-bearing Minors/Nits. The FinnGen path now
+  declares `dosage --hwe-genotype-sd`, emits `a1 = alt`, and fails the independence
+  screen closed on absent annotation. `_as_ref_blocks` validates the correlation
+  matrices the estimator is provably scale-sensitive to; the two LD/PSD gates are
+  reconciled (the per-block check now reports an indefinite block instead of
+  disagreeing with the write gate by 10¹¹); the gauge remap is exercised, not
+  tautological; `test_gauge.py` is cross-seed mean±SE; and CI runs `ruff` with the
+  BLAS threads pinned. The one exception is the published
+  `ancestry_report.pdf`, which is stale against the `.tex` and needs a manual
+  LaTeX rebuild (no toolchain in the repo).
 
 ## Conventions in the prose
 

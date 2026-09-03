@@ -95,12 +95,25 @@ the chromosome jackknife.
 Reproduce from the tracked design and hash-verified cached summary statistics.
 The snapshot's acquisition mode is `verified_cache`: raw source bytes were
 verified at first download; each recorded run re-verifies the normalized-content
-hash (`raw_source_sha256_verified_this_run: false`).
+hash (`raw_source_sha256_verified_this_run: false`). Write to a **fresh dated
+path** — the committed file is a dated archive of the run that produced it, and
+overwriting it would replace that archive with a different one:
 
 ```bash
 python scripts/ancestry_ld_gwas_benchmark.py \
-  --out results/ancestry-ld/yengo-height-2026-08-30.json
+  --out results/ancestry-ld/yengo-height-<today>.json
 ```
+
+**Provenance caveat.** The committed snapshot records `ppb_commit: 5dca2f8`,
+three commits before the code at HEAD: `e12d78e` and `036e6a3` changed
+`src/ppb/ancestry.py` and the benchmark's verdict aggregation. No scientific
+number changes (the verdict changes cannot alter a study whose Estimator A did
+not decline and whose normalized p is not None, and `_simplex_least_squares` is
+untouched), but HEAD's `contrast_rank` is capped at K−1 = 4 by the new
+drop-smallest rule, so a fresh run will record `contrast_rank: 4` where the
+archive records 5. The cached normalized inputs live in the gitignored `.work/`
+and `--fetch` currently fails its own LDpred3 pin (the sibling checkout has
+drifted), so the snapshot cannot be regenerated in this checkout today.
 
 Use `--fetch` to acquire the six pinned GWAS Catalog inputs through LDpred3's
 pinned harvester. The snapshot records all 1,200 null replicates, input hashes,

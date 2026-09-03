@@ -26,15 +26,18 @@ With ``sub_fst > 0`` B is instead a 50/50 pool of two subpopulations that far
 apart, so the HWE SD at the pooled frequencies departs from the empirical
 pooled SD -- the structured-target case the (X2) rule exists for.
 
-Measured (seeds 0-4, defaults, 2026-08-16). Homogeneous B: the empirical-SD
-evaluation recovers truth with mean error -0.8% (worst seed 3.7%, which is
-independent-LD-panel noise, not gauge error); the HWE SD is within +0.03% of
-the empirical one (paired, shared noise cancelled); the discovery SD is
-biased +15% to +34% every seed. Admixed B at ``sub_fst = 0.1``: single-draw
-error scatters to |14|% because the panel denominator dominates at these n --
-quote a block jackknife in this regime -- while the paired HWE-vs-empirical
-residual is +0.9% (SE 0.7%): real, second-order at this fst, and unbounded
-only in the worst case. At ``sub_fst = 0.2`` the panel noise swamps
+Measured (seeds 0-19, defaults, 2026-09-03). Homogeneous B: the empirical-SD
+evaluation recovers truth with cross-seed mean error +0.1% (SE 0.3%, worst
+seed 3.7%, which is independent-LD-panel noise, not gauge error); the HWE SD
+is within +0.04% (SE 0.06%) of the empirical one (paired, shared noise
+cancelled); the discovery SD is biased upward systematically, mean +42.5%
+(SE 11.4%), with a wide per-seed range (+5.4% to +230%) -- the old "+15% to
++34% every seed" did not survive 20 seeds. Admixed B at ``sub_fst = 0.1``:
+single-draw error scatters to |27|% because the panel denominator dominates
+at these n -- quote a block jackknife in this regime -- while the paired
+HWE-vs-empirical residual is +0.19% (SE 0.42%): consistent with zero at this
+fst (the old "+0.9% (SE 0.7%): real" did not survive seeds either). At
+``sub_fst = 0.2`` the panel noise swamps
 everything; the gauge comparison needs either a larger panel or paired
 differences, not bigger structure.
 
@@ -168,13 +171,20 @@ def run(m=400, block_size=40, n_train=10000, n_test=15000, n_panel=6000,
     sub = VariantTable(chrom=ref.chrom[order], pos=ref.pos[order],
                        a1=ref.a1[order], a2=ref.a2[order])
 
-    def _eval(sds, frame="reference"):
-        return evaluate(ld, ref, sub, b_dosage[order], ref, z_B,
-                        weight_scale="dosage", genotype_sd=sds,
+    def _eval(sds, frame="sumstats"):
+        # The summary statistics arrive shuffled on the submission order,
+        # like a real deposited file; the remap through the harmonizer is
+        # the point, so the SD must ride on that same order (frame
+        # "sumstats"), not on the reference order -- which would make
+        # evaluate() take its same-variants shortcut and never remap.
+        sds = np.asarray(sds, dtype=np.float64)
+        assert sds.shape == (m_kept,)
+        return evaluate(ld, ref, sub, b_dosage[order], sub, z_B[order],
+                        weight_scale="dosage", genotype_sd=sds[order],
                         genotype_sd_frame=frame).r2
 
     r2_emp = _eval(sd_B)
-    r2_sumstats_frame = _eval(sd_B, frame="sumstats")
+    r2_sumstats_frame = _eval(sd_B)
     r2_hwe = _eval(np.sqrt(2.0 * f_B_kept * (1.0 - f_B_kept)))
     r2_A_sd = _eval(sd_A)
 

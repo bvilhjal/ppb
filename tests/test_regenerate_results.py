@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 
 from ppb.harmonize import VariantTable
-from scripts import consortium_prep
 from scripts import regenerate_results as regenerate
 
 

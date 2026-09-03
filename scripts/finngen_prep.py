@@ -13,11 +13,21 @@ Joining and positions. FinnGen summary statistics are GRCh38; the shipped ppb
 LD reference and PGS Catalog ``hmPOS`` weight positions are GRCh37. Rather than
 lifting over, this script joins the two tables **on rsID** and takes the
 GRCh37 positions from the weights file, so the output rows are already on the
-reference build. Rows without an rsID, with duplicate rsIDs among the matched
-set, or whose beta/SE are non-finite are skipped and counted. The join is
-rsID-only across builds (position cross-checks are impossible), so a small
-number of misaligned variants is possible; the counts in the sidecar record
-how much the join retained.
+reference build. The join is cross-checked on alleles: a matched row is kept
+only when FinnGen's ref/alt pair equals the weights file's allele pair (in
+either order), so a merged rsID pointing at a different variant is dropped
+and counted as ``allele_mismatch`` rather than silently mis-joined. Rows
+without an rsID, with duplicate rsIDs among the matched set, two rsIDs
+collapsing onto one emitted position, or non-finite beta/SE are likewise
+skipped and counted. The join is rsID-only across builds (position
+cross-checks are impossible), so a small number of misaligned variants
+remains possible; the counts in the sidecar record how much the join
+retained, and the sidecar names its inputs and builds.
+
+Allele orientation. ``a1`` is FinnGen's ``alt`` — the allele ``beta`` belongs
+to — and ``a2`` is ``ref``: ppb's convention is that ``a1`` is the effect
+allele of the value the row carries, so no global sign flip is needed
+downstream.
 
 ``n_eff``. FinnGen GWAS files carry no per-variant ``n``. The endpoint's
 case/control counts come from the release manifest, and
@@ -40,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import difflib
 import gzip
 import io
 import json
@@ -137,13 +148,15 @@ def read_manifest(manifest):
 
 
 def read_weights(weights_source):
-    """``rsid -> (chrom, pos, effect_allele, other_allele)`` from a weights file.
+    """``(rsid -> match, counts)`` from a weights file.
 
-    GRCh37 positions: ``hm_chr``/``hm_pos`` are preferred over
-    ``chr_name``/``chr_position`` so the output table is on the reference build.
-    Duplicate rsIDs keep their first row and are counted.
+    ``match`` is ``(chrom, pos, effect_allele, other_allele)``. GRCh37
+    positions: ``hm_chr``/``hm_pos`` are preferred over ``chr_name``/
+    ``chr_position`` so the output table is on the reference build. Duplicate
+    rsIDs keep their first row; every skipped-row reason is counted so the
+    reconciliation closes.
     """
-    out, duplicates = {}, 0
+    out, duplicates, no_rsid, short_rows = {}, 0, 0, 0
     with _open_text(weights_source) as fh:
         header, rows = _header_and_rows(fh, "weights file",
                                         strip_leading_comments=True)
@@ -151,15 +164,22 @@ def read_weights(weights_source):
         reader = csv.reader(rows, delimiter="\t")
         for r in reader:
             if len(r) <= max(cols.values()):
+                short_rows += 1
                 continue
             rsid = r[cols["rsid"]].strip()
-            if not rsid or rsid in out:
+            if not rsid:
+                no_rsid += 1
+                continue
+            if rsid in out:
                 duplicates += 1
                 continue
             out[rsid] = (r[cols["chrom"]].strip(), int(r[cols["pos"]]),
                          r[cols["ea"]].strip().upper(),
                          r[cols["oa"]].strip().upper())
-    return out, duplicates
+    counts = dict(weights_rows=len(out) + duplicates + no_rsid + short_rows,
+                  weights_parsed=len(out), weights_duplicate_rsids=duplicates,
+                  weights_no_rsid=no_rsid, weights_short_rows=short_rows)
+    return out, counts
 
 
 def n_eff(n_cases, n_controls):
@@ -191,20 +211,25 @@ def prep(endpoint, weights_source, manifest, out_path, *, out_json=None,
     """
     if endpoint_source is None:
         endpoint_source = ENDPOINT_URL.format(endpoint=endpoint)
-    manifest = read_manifest(manifest)
-    if endpoint not in manifest:
+    manifest_map = read_manifest(manifest)
+    if endpoint not in manifest_map:
+        closest = difflib.get_close_matches(endpoint, manifest_map, n=5,
+                                            cutoff=0.6) or sorted(
+            m for m in manifest_map
+            if m.startswith(endpoint.split("_")[0]))[:5]
         raise ValueError(
             f"endpoint {endpoint!r} not in the manifest; closest matches: "
-            f"{sorted(m for m in manifest if m.startswith(endpoint.split('_')[0]))[:5]}")
-    n_cases, n_controls = manifest[endpoint]
+            f"{closest}")
+    n_cases, n_controls = manifest_map[endpoint]
     neff = n_eff(n_cases, n_controls)
-    weights, w_duplicates = read_weights(weights_source)
+    weights, w_counts = read_weights(weights_source)
 
     counts = dict(n_cases=n_cases, n_controls=n_controls, n_eff=round(neff, 1),
-                  weights_parsed=len(weights), weights_duplicate_rsids=w_duplicates,
-                  matched=0, no_rsid=0, not_in_weights=0, bad_se=0,
-                  duplicate_rsid=0)
+                  endpoint_rows=0, short_rows=0, matched=0, no_rsid=0,
+                  not_in_weights=0, bad_se=0, duplicate_rsid=0,
+                  allele_mismatch=0, duplicate_position=0, **w_counts)
     seen = set()
+    emitted = set()
     with _open_text(endpoint_source) as fh, open(
             out_path, "w", encoding="utf-8", newline="") as out_fh:
         header, rows = _header_and_rows(fh, "endpoint file",
@@ -214,7 +239,9 @@ def prep(endpoint, weights_source, manifest, out_path, *, out_json=None,
         writer.writerow(("chrom", "pos", "a1", "a2", "beta", "se"))
         reader = csv.reader(rows, delimiter="\t")
         for r in reader:
+            counts["endpoint_rows"] += 1
             if len(r) <= max(cols.values()):
+                counts["short_rows"] += 1
                 continue
             rsid = r[cols["rsids"]].strip().replace(";", ",").split(",")[0].strip()
             if not rsid:
@@ -237,15 +264,37 @@ def prep(endpoint, weights_source, manifest, out_path, *, out_json=None,
                 counts["bad_se"] += 1
                 continue
             chrom, pos, ea, oa = match
+            ref = r[cols["ref"]].strip().upper()
+            alt = r[cols["alt"]].strip().upper()
+            if {ref, alt} != {ea, oa}:
+                # The rsID join landed on a different variant (merged rsID or
+                # a cross-build collision): the weights-file position would
+                # describe another variant, so drop and count.
+                counts["allele_mismatch"] += 1
+                seen.add(rsid)
+                continue
+            if (chrom, pos) in emitted:
+                counts["duplicate_position"] += 1
+                seen.add(rsid)
+                continue
             seen.add(rsid)
+            emitted.add((chrom, pos))
             counts["matched"] += 1
-            # a1/a2 are FinnGen's ref/alt: the effect is for the alt allele, and
-            # ppb's harmonizer flips the sign against the LD reference's alleles.
-            writer.writerow((chrom, pos, r[cols["ref"]].strip().upper(),
-                             r[cols["alt"]].strip().upper(), beta, se))
+            # a1 is FinnGen's alt -- the allele beta belongs to; a2 is ref.
+            # ppb's convention is that a1 is the effect allele of the value
+            # the row carries, so no downstream sign flip is required.
+            writer.writerow((chrom, pos, alt, ref, beta, se))
     if out_json is not None:
         with open(out_json, "w", encoding="utf-8") as fh:
-            json.dump(dict(endpoint=endpoint, **counts), fh, indent=1)
+            json.dump(dict(
+                endpoint=endpoint,
+                weights_source=str(weights_source),
+                endpoint_source=str(endpoint_source),
+                manifest=str(manifest),
+                genome_build=("output positions are GRCh37 (taken from the "
+                              "weights file's hm_pos); the join is rsID-only "
+                              "across builds (FinnGen itself is GRCh38)"),
+                **counts), fh, indent=1)
     return counts
 
 
@@ -278,9 +327,15 @@ def main(argv=None):
           f"weights); n_eff = {counts['n_eff']} "
           f"({counts['n_cases']} cases / {counts['n_controls']} controls)",
           file=sys.stderr)
-    print(f"\nppb evaluate --weights <score weights> --ldref-dir <ldref> \\\n"
+    print(f"\nppb evaluate --weights <score weights file> --ldref-dir <ldref> \\\n"
           f"  --sumstats {args.out} --sumstats-scale beta-se-n "
-          f"--n-eff {counts['n_eff']} --weight-scale standardized",
+          f"--n-eff {counts['n_eff']} \\\n"
+          f"  --weight-scale dosage --hwe-genotype-sd",
+          file=sys.stderr)
+    print("PGS Catalog per-allele weights are dosage weights, so the scale is\n"
+          "'dosage'; --hwe-genotype-sd supplies the per-variant SD from the LD\n"
+          "reference's af_UKBB, which is an approximation for a Finnish target\n"
+          "(same EUR-for-Finnish approximation as using the EUR LD reference).",
           file=sys.stderr)
     return 0
 

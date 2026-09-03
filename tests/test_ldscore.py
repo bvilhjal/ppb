@@ -141,8 +141,31 @@ def test_deflation_is_not_claimed_when_no_blocks_are_given():
     assert "no standard error" in fit.note
 
 
+def test_inflation_is_flagged_when_no_blocks_are_given():
+    """M6: the F4b guard was conditional on its own diagnostic being
+    available, so the default (blocks=None) call still offered a deflating
+    z_scale for an intercept of ~60 with inflation_detected=False -- the
+    exact mislabelling F4b was written to close."""
+    rng = np.random.default_rng(11)
+    ell = np.exp(rng.normal(1.0, 0.8, size=50_000))
+    chisq = 60.0 + 0.5 * ell + rng.normal(0.0, 1.0, size=50_000)
+    fit = ldscore_regression(chisq, ell, 100_000.0, n_variants=50_000)
+
+    assert fit.intercept_se is None
+    assert fit.intercept > 10.0
+    assert fit.inflation_detected
+    assert fit.z_scale is None and fit.r2_scale is None
+    assert "no standard error" in fit.note
+    # with blocks the same data keeps the SE-based guard
+    blocks = rng.integers(0, 200, size=50_000)
+    fit_se = ldscore_regression(chisq, ell, 100_000.0, n_variants=50_000,
+                                blocks=blocks)
+    assert fit_se.inflation_detected
+    assert fit_se.z_scale is None
+    assert "two standard errors" in fit_se.note
+
+
 def test_the_null_does_not_produce_a_false_positive():
-    rng = np.random.default_rng(7)
     for seed_shift in range(3):
         chisq, ell, n, blocks = _model(
             np.random.default_rng(100 + seed_shift), 200_000, lam=1.0)

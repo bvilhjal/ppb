@@ -330,6 +330,7 @@ builder can discard each dense genotype-LD block immediately.
 | Minimum edge-to-edge retained-block gap | 5 Mb |
 | Retained blocks / variants / pairs | 177 / 21,892 / 44,250 |
 | Maximum variants / selected pairs per block | 128 / 250 |
+| Pair-selection rule | the 250 pairs per block with the largest `max_k |r_k|` over the five reference panels; the recorded `ld_floor` (0.05) is not binding — the weakest retained pair is ~3.7× it |
 | LD samples, AFR/AMR/EAS/EUR/SAS | 652 / 347 / 504 / 503 / 484 |
 
 The compact 4.7 MB design is tracked and hash-pinned. Rebuild it from the
@@ -370,23 +371,31 @@ biobanks; both store nothing themselves (the prep script streams).
   per score (~7,000). `--ids PGS002026 ...` screens a subset.
 - `scripts/finngen_prep.py --endpoint T2D --pgs PGS002026 --out t2d.tsv`
   joins a FinnGen DF13 endpoint (GRCh38) to the score's `hmPOS_GRCh37`
-  scoring file **on rsID**, emits the `chrom, pos, a1, a2, beta, se` table on
-  the reference build, and records the trait-level `n_eff =
-  4/(1/n_cases + 1/n_controls)` from the release manifest. Feed the output to
+  scoring file **on rsID** (allele pairs cross-checked), emits the
+  `chrom, pos, a1, a2, beta, se` table on the reference build with `a1` =
+  FinnGen's `alt` — the allele `beta` belongs to — and records the
+  trait-level `n_eff = 4/(1/n_cases + 1/n_controls)` from the release
+  manifest. Feed the output to
 
   ```bash
   ppb evaluate --weights <score weights> --ldref-dir ldref/ \
     --sumstats t2d.tsv --sumstats-scale beta-se-n --n-eff <n_eff> \
-    --weight-scale standardized
+    --weight-scale dosage --hwe-genotype-sd
   ```
 
-  FinnGen publishes only case/control counts (no per-variant `n`), so binary
-  output is the standardized summary-statistic approximation on the observed
-  scale, not liability-scale R². There is no public Finnish LD panel; using
-  the EUR reference is the documented (H1) LD-mismatch approximation and must
-  be labelled as such. The scripts take `--weights` / `--endpoint-file` /
-  `--manifest` to work from local copies instead of the network (the tests
-  use exactly that).
+  PGS Catalog per-allele weights are **dosage** weights (Table 1), so the
+  declaration is `dosage` with `--hwe-genotype-sd`, never `standardized`:
+  that gauge mismatch is per-variant and does not cancel. FinnGen publishes
+  only case/control counts (no per-variant `n`), so binary output is the
+  standardized summary-statistic approximation on the observed scale, not
+  liability-scale R². There is no public Finnish LD panel; using the EUR
+  reference is the documented (H1) LD-mismatch approximation and must be
+  labelled as such — and because `--hwe-genotype-sd` derives the SD from that
+  same reference's `af_UKBB` frequencies, it is the (H3) approximation for a
+  Finnish target too: both inputs are approximations and the result is
+  labelled `mse_interpretable: false`. The scripts take `--weights` /
+  `--endpoint-file` / `--manifest` to work from local copies instead of the
+  network (the tests use exactly that).
 
 ## Experiments
 

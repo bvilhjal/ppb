@@ -285,7 +285,7 @@ def simulate_admixture_references(n_ref, block_sizes, maf_pops, ld_paths, rng):
 
 
 def simulate_admixed_genotypes(n, block_sizes, maf_pops, ld_paths, pi, rng,
-                               segment_blocks=1):
+                               segment_blocks=1, participant_pools=False):
     """Admixed genomes as ancestry mosaics over LD blocks.
 
     For each of the ``n`` individuals, both haplotypes draw their ancestry
@@ -294,10 +294,17 @@ def simulate_admixed_genotypes(n, block_sizes, maf_pops, ld_paths, pi, rng,
     ancestry's LD landscape and allele frequencies. ``ld_paths[k]`` is
     ancestry ``k``'s landscape (one AR(1) interval path per block, see
     :func:`draw_ld_paths`). With the default ``segment_blocks=1`` there is no
-    between-block admixture LD (old admixture), but the within-block
-    Wahlund/frequency-contrast term of the report's Assumption 1 is present
-    whenever the ancestries' frequencies differ, so the mixture approximation
-    is stressed, not assumed.
+    between-block admixture LD (old admixture), but the haplotype-level
+    frequency-contrast term of the report's Assumption 1 is present whenever
+    the ancestries' frequencies differ, so the mixture approximation is
+    stressed, not assumed. Because each haplotype draws independently, this
+    default is a *panmictic* mosaic at ``f_bar = sum_k pi_k f_k``: it carries
+    no participant-level source label, so the between-source (Wahlund)
+    variance term of the report's total-covariance identity is exactly zero.
+    With ``participant_pools=True`` each *individual* draws one ancestry with
+    probabilities ``pi`` and both haplotypes come from it -- the discrete
+    source-mixture configuration the report's Section 10 caveat describes --
+    which does carry the Wahlund term.
 
     Returns the standardized ``(n, m)`` genotype matrix of the admixed
     population.
@@ -318,12 +325,18 @@ def simulate_admixed_genotypes(n, block_sizes, maf_pops, ld_paths, pi, rng,
                 for s in range(0, len(block_sizes), segment_blocks)]
     G = np.zeros((n, m))
     individuals = np.repeat(np.arange(n), 2)
+    pool_ancestry = (rng.choice(K, size=n, p=pi) if participant_pools
+                     else None)
     for seg in segments:
         seg = list(seg)
         sizes = [block_sizes[b] for b in seg]
         cols = np.concatenate([np.arange(starts[b], starts[b] + block_sizes[b])
                                for b in seg])
-        ancestry = rng.choice(K, size=(n, 2), p=pi)
+        if participant_pools:
+            # one ancestry per individual, both haplotypes from it
+            ancestry = np.repeat(pool_ancestry[:, None], 2, axis=1)
+        else:
+            ancestry = rng.choice(K, size=(n, 2), p=pi)
         for k in range(K):
             mask = ancestry == k
             count = int(mask.sum())
@@ -339,6 +352,7 @@ def simulate_admixed_genotypes(n, block_sizes, maf_pops, ld_paths, pi, rng,
 
 def simulate_admixture_sumstats(n, block_sizes, fst, ld_paths, pi, h2, n_causal,
                                 rng, n_ref=2000, segment_blocks=1,
+                                participant_pools=False,
                                 return_r_admixed=False):
     """End-to-end admixed-GWAS simulation for the ancestry estimators.
 
@@ -349,7 +363,12 @@ def simulate_admixture_sumstats(n, block_sizes, fst, ld_paths, pi, h2, n_causal,
     genotypes, and runs the marginal GWAS. ``ld_paths[k]`` is ancestry ``k``'s
     LD landscape (one AR(1) interval path per block; use
     :func:`draw_ld_paths` for hotspot landscapes or
-    :func:`constant_ld_paths` for plain AR(1) blocks). Returns a dict with
+    :func:`constant_ld_paths` for plain AR(1) blocks). With
+    ``participant_pools=True`` the admixed GWAS is a discrete mixture of
+    source-group participants (both haplotypes per individual from one
+    ancestry), so the between-source Wahlund term is present; the default is
+    the panmictic per-haplotype mosaic, which carries only the
+    frequency-contrast term. Returns a dict with
     the z-statistics ``z``, the reference matrices ``refs``, and the truth
     ``pi``/``maf_pops``; ``R_admixed`` (the realized admixed correlation
     matrix) only when ``return_r_admixed`` is set.
@@ -360,7 +379,8 @@ def simulate_admixture_sumstats(n, block_sizes, fst, ld_paths, pi, h2, n_causal,
     maf_pops = bn_freqs_multi(rng, m, fst, K)
     refs = simulate_admixture_references(n_ref, block_sizes, maf_pops, ld_paths, rng)
     X = simulate_admixed_genotypes(n, block_sizes, maf_pops, ld_paths, pi, rng,
-                                   segment_blocks=segment_blocks)
+                                   segment_blocks=segment_blocks,
+                                   participant_pools=participant_pools)
     beta = draw_effects(m, n_causal, rng)
     y = simulate_phenotype(X, beta, h2, rng)
     _, t = marginal_stats(X, y)

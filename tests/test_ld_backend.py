@@ -1,5 +1,7 @@
 """Tests for the block-diagonal LD backend and the low-rank builder."""
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -191,12 +193,17 @@ def test_lowrank_ld_max_rank_is_a_hard_cap():
         lowrank_ld(np.eye(50), variance=0.99, max_rank=10)
 
 
-def test_block_diagonal_rejects_negative_block_quadratic_form():
-    """A single indefinite block must fail loudly, not be masked by the others.
+def test_block_diagonal_reports_negative_block_quadratic_form():
+    """A single indefinite block must not be masked by the others.
 
     Summing an indefinite block understates w^T D w and so *inflates* R^2, which
     is the one direction the estimator must never fail silently in. The total
     stays comfortably positive here, so a check on the sum alone would miss it.
+    Because the int8 write-time gate admits eigenvalues down to -0.1 and
+    LDpred2-family weights align with exactly those smallest eigenvalues, the
+    per-block check reports the inconsistent block (warning) rather than
+    refusing the run (the read gate and the write gate would otherwise
+    disagree by ~10^11 on inputs ppb itself certified).
     """
     bad = np.array([[1.0, 2.0], [2.0, 1.0]])          # eigenvalues 3 and -1
     w = np.array([1.0, -1.0])                          # w^T bad w = -2
@@ -207,8 +214,42 @@ def test_block_diagonal_rejects_negative_block_quadratic_form():
                           (DenseLD(good), np.arange(2, 8))])
     full = np.concatenate([w, np.ones(6)])
     assert float(full[2:] @ good @ full[2:]) + float(w @ bad @ w) > 0   # sum is positive
-    with pytest.raises(ValueError, match=r"block 0 has w\^T D_b w"):
-        ld.quad(full)
+    with pytest.warns(UserWarning, match=r"block 0 has w\^T D_b w"):
+        per_block = ld.block_quads(full)
+    assert per_block[0] == pytest.approx(-2.0)
+    assert ld.quad(full) == pytest.approx(float(full[2:] @ good @ full[2:]) - 2.0)
+
+
+def test_int8_gate_consistency_at_high_ld():
+    """The write-time and per-block gates must agree on their shared inputs.
+
+    A strongly correlated AR(1) block quantized to int8 can carry a small
+    negative eigenvalue (the write gate admits down to -0.1). Generic weights
+    never notice; LDpred2-style shrunken weights align with the smallest
+    eigenvalue and would hit the old read-time refusal. The reconciled
+    contract: the run completes, and the offending block is named in a
+    warning.
+    """
+    m = 120
+    d = np.arange(m)
+    corr = 0.99 ** np.abs(d[:, None] - d[None, :])
+    backend = DenseLDInt8.from_dense(corr)
+    eigmin = np.linalg.eigvalsh(backend.D8.astype(float) / 127.0)[0]
+    ld = BlockDiagonalLD([(backend, np.arange(m))])
+    rng = np.random.default_rng(0)
+    n_hit = 0
+    for _ in range(5):
+        z = rng.standard_normal(m)
+        w = np.linalg.solve(corr + 1e-3 * np.eye(m), z)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ld.quad(w)
+        n_hit += int(any(r"block 0 has w^T D_b w" in str(c.message)
+                         for c in caught))
+    if eigmin < 0:
+        assert n_hit > 0, "shrunken weights should reach the indefinite tail"
+    else:
+        assert n_hit == 0
 
 
 def test_dense_rejects_asymmetric_matrix():

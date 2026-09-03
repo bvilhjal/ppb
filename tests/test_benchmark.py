@@ -1,7 +1,6 @@
 """Tests for the diploid simulator and the method-benchmark concordance."""
 
 import numpy as np
-import pytest
 
 from ppb.simulate import _norm_ppf, simulate_diploid_genotypes
 

@@ -127,6 +127,43 @@ def test_verdict_counts_only_the_five_predeclared_controls(monkeypatch):
     }
 
 
+def test_control_free_selection_is_not_a_vacuous_pass(monkeypatch):
+    """M10: ``--studies POOLED`` selects no predeclared control at all, so
+    the verdict must be False (not vacuously True with exit code 0) and a
+    snapshot must be refused without --allow-partial-verdict."""
+    pooled = [s for s in benchmark.STUDIES
+              if s.expected_superpopulation is None]
+
+    def fake_benchmark_study(study, panel, path, acquisition):
+        del panel, path, acquisition
+        return {
+            "study": {"accession": study.accession},
+            "predeclared_control": {
+                "included_in_verdict": False,
+                # the real code records None, not True, for a descriptive row
+                "passed": None,
+            },
+        }
+
+    monkeypatch.setattr(benchmark, "benchmark_study", fake_benchmark_study)
+    class Panel:
+        source = "test"
+        source_url = ""
+        genome_build = "GRCh37"
+        panel_sha256 = "a" * 64
+        pops = ["AFR", "AMR", "EAS", "EUR", "SAS"]
+        n_samples = np.ones(5, dtype=int)
+
+        def __len__(self):
+            return 1
+
+    inputs = {study.key: (Path(study.filename), {"mode": "unused"})
+              for study in pooled}
+    result = benchmark.run_benchmark(pooled, Panel(), inputs)
+    assert result["verdict"]["n_controls"] == 0
+    assert result["verdict"]["passed"] is False
+
+
 def test_normalized_reader_preserves_duplicates_and_maps_blank_eaf_to_nan(
         tmp_path):
     path = _write_normalized(tmp_path / "normalized.tsv.gz", [

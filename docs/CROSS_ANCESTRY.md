@@ -377,7 +377,7 @@ panel for `R²_A`.
 **7.** Open, and it is the project's reason for existing. Everything except the
 target GWAS is already in place: the scores, the estimator, and — in Table 4 of
 [`REAL_DATA.md`](REAL_DATA.md) — a published individual-level portability curve
-across nine ancestry groups for these exact scores, which is a validation target
+across eight ancestry groups for these exact scores, which is a validation target
 rather than a simulation. What has to be built alongside the evaluation is a
 B-side LD reference carrying **empirical per-variant genotype SDs** rather than
 allele frequencies, since the current real-data path uses the HWE scale that the

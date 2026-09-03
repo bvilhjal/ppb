@@ -30,8 +30,9 @@ PY
 validate() {
   local path=$1 expected_size=$2 expected_md5=$3 actual_size
   [ -f "$path" ] || return 1
-  actual_size=$(wc -c < "$path")
-  [ "$actual_size" = "$expected_size" ] || return 1
+  # BSD wc pads to width 8, so compare numerically, not as strings.
+  actual_size=$(wc -c < "$path" | tr -d '[:space:]')
+  [ "$actual_size" -eq "$expected_size" ] || return 1
   [ "$(md5_of "$path")" = "$expected_md5" ] || return 1
   gzip -t "$path"
 }

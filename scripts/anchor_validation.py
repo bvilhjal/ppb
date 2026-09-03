@@ -19,7 +19,7 @@ summary-statistic approximation whose scale depends on the supplied effective
 sample size, not an observed-scale partial correlation (`docs/LIMITATIONS.md`).
 They are reported for completeness and excluded from the verdict.
 
-The same query also returns each score's accuracy in **all nine** UKBB ancestry
+The same query also returns each score's accuracy in **all eight** UKBB ancestry
 groups. That is the individual-level portability curve PPB's flagship aims to
 recover from summary statistics alone, for these exact scores -- a ready-made
 validation target for Phase 4 (`FINISHING_PLAN.md`).
@@ -46,7 +46,6 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.regenerate_results import TRAITS  # noqa: E402
 
 API = "https://www.pgscatalog.org/rest/performance/search"
 EUROPEAN_GROUP = "UK (+ Ireland)"

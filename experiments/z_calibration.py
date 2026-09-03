@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import argparse
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 
 import numpy as np
 
@@ -210,6 +210,19 @@ def ldscore_regression(chisq, ld_scores, n, *, n_variants=None, blocks=None,
                 "standard errors above 1: consistent with stratification or "
                 "cryptic relatedness, which a uniform z rescaling does not "
                 "correct -- no scale is offered; adjust covariates/PCs instead")
+    elif intercept_se is None and intercept > 1.0:
+        # Without blocks there is no SE to judge significance, but an
+        # intercept above 1 carries the same stratification signature and
+        # the default call must not be the unsafe one: fail closed rather
+        # than offer a deflating scale for an arbitrarily inflated
+        # intercept (the guard above is conditional on its own diagnostic
+        # being available, and `blocks` is optional).
+        inflated = True
+        note = (f"intercept {intercept:.4g} is above 1 and no blocks were "
+                "supplied, so it carries no standard error: consistent with "
+                "stratification or cryptic relatedness, which a uniform z "
+                "rescaling does not correct -- no scale is offered; pass "
+                "`blocks` and adjust covariates/PCs instead")
     else:
         z_scale = 1.0 / math.sqrt(intercept)
         r2_scale = 1.0 / intercept

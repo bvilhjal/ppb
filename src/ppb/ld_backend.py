@@ -12,6 +12,8 @@ representation) build on these next.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 from ._kernels import (
@@ -288,12 +290,23 @@ class BlockDiagonalLD(LDBackend):
             # tolerance admits float rounding on a genuinely PSD block, whose
             # error is O(eps * m * ||w||^2), and nothing more.
             if qb < 0.0:
-                if qb < -1e-12 * float(wb @ wb):
-                    raise ValueError(
-                        f"block {b} has w^T D_b w = {qb!r} < 0: the LD block is not "
-                        "positive semi-definite, and summing it would understate "
-                        "w^T D w (inflating R^2). Use a PSD representation such as "
-                        "a low-rank factor for this block.")
+                # A hard refusal here would also refuse LDpred2-family
+                # weights on a block the write-time gate admitted: rounding a
+                # PSD correlation matrix to 1/127 steps leaves the smallest
+                # eigenvalue as low as ~-0.1 (the shipped converter's
+                # tolerance), and (D + lambda I)^-1 z weights align with
+                # exactly that direction, so the two gates disagree on real
+                # inputs by many orders of magnitude. Report the inconsistent
+                # block and its contribution instead of blocking the run.
+                warnings.warn(
+                    f"block {b} has w^T D_b w = {qb!r} < 0: the LD block is "
+                    "indefinite in the direction of these weights (the int8 "
+                    "write-time gate admits eigenvalues down to -0.1, and "
+                    "shrunken w aligns with the smallest ones), so the block "
+                    "contribution is reported negative and w^T D w may be "
+                    "understated; use a PSD representation such as a low-rank "
+                    "factor for this block",
+                    stacklevel=2)
             out[b] = qb
         return out
 

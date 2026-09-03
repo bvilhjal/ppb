@@ -295,8 +295,13 @@ def _fit_a(z, ii, jj, design, pair_block, quadratic, n_blocks, groups):
             z, ii, jj, design, pair_block, quadratic_design=quadratic,
             n_blocks=n_blocks, groups=groups)
         return {"status": "estimated", **_jsonable(estimate)}
-    except ValueError as exc:
-        return {"status": "declined", "note": str(exc), "proportions": None}
+    except (ValueError, np.linalg.LinAlgError) as exc:
+        # Keep the estimated-path key skeleton so a consumer written against
+        # a recorded snapshot does not KeyError on a declined study.
+        return {"status": "declined", "note": str(exc), "proportions": None,
+                "proportions_se": None, "proportions_signal": None,
+                "channel_agreement": None, "scale": None, "signal": None,
+                "max_design_correlation": None}
 
 
 def _fit_b(z, bilinear, variant_block, n, n_blocks, groups):
@@ -305,9 +310,20 @@ def _fit_b(z, bilinear, variant_block, n, n_blocks, groups):
             z, bilinear, variant_block, n_blocks=n_blocks, groups=groups,
             sample_size=n)
         status = "estimated" if estimate["proportions"] is not None else "declined"
-        return {"status": status, **_jsonable(estimate)}
-    except ValueError as exc:
-        return {"status": "declined", "signal_note": str(exc), "proportions": None}
+        out = {"status": status, **_jsonable(estimate)}
+        if status == "declined" and out.get("proportions_raw") is not None:
+            # The raw vector failed the acceptance gates; its key must say
+            # so, or the next person grepping the JSON for "proportions"
+            # reads a rejected fit as a result.
+            out["proportions_raw_rejected_by_gates"] = out.pop(
+                "proportions_raw")
+        return out
+    except (ValueError, np.linalg.LinAlgError) as exc:
+        return {"status": "declined", "signal_note": str(exc),
+                "proportions": None, "proportions_se": None,
+                "proportions_raw_rejected_by_gates": None,
+                "signal_z": None, "rank1_distance": None,
+                "psd_violation": None}
 
 
 def _quantiles(values):
@@ -437,11 +453,18 @@ def benchmark_study(study, design, path: Path, acquisition: dict):
 
     expected = study.expected_superpopulation
     expected_rank = None
+    n_tied_at_top = None
     if expected is not None and a["proportions"] is not None:
         weights = dict(zip(design["populations"], a["proportions"], strict=True))
         target = weights[expected]
         expected_rank = 1 + sum(value > target + 1e-12 for value in weights.values())
-    passed = expected is None or (a["status"] == "estimated" and expected_rank == 1)
+        n_tied_at_top = sum(
+            abs(value - target) <= 1e-12 for value in weights.values())
+    # "Rank first" means a unique argmax, and the descriptive-only studies
+    # record no verdict at all (None), not a pass.
+    passed = (None if expected is None else
+              bool(a["status"] == "estimated" and expected_rank == 1
+                   and n_tied_at_top == 1))
     return {
         "study": {
             **asdict(study), "trait": "height", "publication": HEIGHT_PAPER,
@@ -460,7 +483,8 @@ def benchmark_study(study, design, path: Path, acquisition: dict):
             "included_in_verdict": expected is not None,
             "expected_top_population": expected,
             "expected_rank": expected_rank,
-            "passed": bool(passed),
+            "n_tied_at_top": n_tied_at_top,
+            "passed": passed,
         },
     }
 
@@ -531,9 +555,15 @@ def run_benchmark(studies, design, inputs):
             "sample_counts": design["sample_counts"].astype(int).tolist(),
             "selection": _jsonable(design["selection"]),
             "selection_interpretation": (
-                "Common in every reference population, evenly subsampled "
-                "within selected blocks, and restricted to mutually distant "
-                "semi-independent LD blocks."
+                "Common in every reference population (per-panel MAF "
+                "conjunction), evenly subsampled within selected blocks, "
+                "restricted to mutually distant LD blocks; within each block "
+                "the retained pairs are the 250 with the largest "
+                "max_k |r_k| over the reference panels. That cap, not the "
+                "recorded ld_floor, is the binding rule -- the weakest "
+                "retained pair sits well above the floor -- and the pairs "
+                "are both selected and estimated from the same finite 1000G "
+                "samples."
             ),
             "provenance": _jsonable(design["provenance"]),
             "extra_scalars": _jsonable(design["extra_scalars"]),
@@ -560,7 +590,33 @@ def run_benchmark(studies, design, inputs):
         "verdict": {
             "n_controls": len(controls),
             "n_passed": len(controls) - len(failures),
-            "failed_accessions": failures, "passed": not failures,
+            "failed_accessions": failures,
+            # A control-free selection must not report a vacuous PASS.
+            "passed": bool(controls) and not failures,
+        },
+        "specification_warnings": {
+            "interpretation": (
+                "Studies whose linear and quadratic channels disagree by "
+                "more than 0.10 (channel_agreement) passed the label control "
+                "with internally inconsistent compositions; read their "
+                "weights as a misspecification signal, not as calibrated "
+                "mixture fractions."
+            ),
+            "n_channel_disagreement": int(sum(
+                1 for row in rows
+                if row.get("estimator_a", {}).get("channel_agreement_note"))),
+            "channel_disagreement_accessions": [
+                row["study"]["accession"] for row in rows
+                if row.get("estimator_a", {}).get("channel_agreement_note")],
+            "max_design_correlation": (
+                rows[0].get("estimator_a", {}).get("max_design_correlation")
+                if rows else None),
+            "max_design_correlation_note": (
+                "The five reference LD-covariance design columns are almost "
+                "collinear; the ancestry contrast lives in the small "
+                "remaining column variance, which is why 'rank first' is "
+                "the readable claim, not calibrated fractions."
+            ),
         },
         "sign_flip_diagnostic_verdict": {
             "included_in_primary_verdict": False,
@@ -624,6 +680,22 @@ def print_table(result):
         f"{diagnostic['n_normalized_contrast_passed']}/"
         f"{diagnostic['n_controls']} at descriptive p<=0.05."
     )
+    warnings = result["specification_warnings"]
+    correlation = warnings.get("max_design_correlation")
+    if correlation is not None:
+        print(
+            f"Design confusability: max_design_correlation = "
+            f"{correlation:.4f} between the reference LD-covariance columns; "
+            "the ancestry contrast lives in the remaining variance."
+        )
+    n_disagree = warnings.get("n_channel_disagreement", 0)
+    if n_disagree:
+        print(
+            f"WARNING: {n_disagree} study/studies with channel_agreement "
+            "> 0.10 (linear and quadratic compositions disagree): "
+            + ", ".join(warnings["channel_disagreement_accessions"])
+            + "; read their weights as misspecified, not calibrated."
+        )
 
 
 def _selected(tokens):
@@ -666,6 +738,9 @@ def main(argv=None):
     source.add_argument("--fetch", action="store_true")
     source.add_argument("--raw-dir", type=Path)
     parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--allow-partial-verdict", action="store_true",
+        help="let a snapshot record fewer than five predeclared controls")
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -707,6 +782,12 @@ def main(argv=None):
         result = run_benchmark(studies, design, inputs)
         print_table(result)
         if args.out:
+            n_controls = result["verdict"]["n_controls"]
+            if n_controls < 5 and not args.allow_partial_verdict:
+                raise ValueError(
+                    f"refusing to write a snapshot with only {n_controls} "
+                    "predeclared controls selected (need 5); rerun with "
+                    "--allow-partial-verdict to record a partial verdict")
             _write_json_atomic(args.out, result)
             print(f"\nSnapshot: {args.out}")
         return 0 if result["verdict"]["passed"] else 1

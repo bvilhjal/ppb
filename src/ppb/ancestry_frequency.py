@@ -732,16 +732,12 @@ def _panel_confusability(panel: FrequencyPanel, *, rows=None) -> dict:
                     np.corrcoef(a, b)[0, 1])
     expected_rank = max(K - 1, 0)
     centered = P - P.mean(axis=1, keepdims=True) if len(P) else P.copy()
-    singular = np.linalg.svd(centered, compute_uv=False) if len(P) else np.zeros(0)
-    largest = float(singular[0]) if len(singular) else 0.0
-    tolerance = max(centered.shape, default=1) * np.finfo(float).eps * largest
-    rank = int(np.sum(singular > tolerance)) if largest > 0 else 0
-    if expected_rank and rank >= expected_rank:
-        condition = float(singular[0] / singular[expected_rank - 1])
-    elif expected_rank:
-        condition = None
-    else:
-        condition = 1.0
+    # Route the rank/condition through the shared (K-1)-truncation helper so
+    # the panel diagnostic and the leave-one-chromosome gate can never drift
+    # apart on the structural null along the all-ones vector.
+    gram = centered.T @ centered
+    rank, expected_rank, condition = _contrast_rank_condition_from_gram(
+        gram, centered.shape[0], K) if len(P) else (0, expected_rank, 1.0)
     contrast_rms = (float(np.sqrt(np.mean(centered ** 2)))
                     if centered.size else None)
     return {

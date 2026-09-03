@@ -105,12 +105,72 @@ def _validate_blocks(blocks, m, *, label="block"):
     return out
 
 
+_CORR_TOL = 1e-6
+_MAX_CHANNEL_AGREEMENT = 0.10
+
+
+def _channel_agreement_note(agreement):
+    """Warning recorded when the linear and quadratic channels disagree.
+
+    ``channel_agreement`` is the module's own misspecification diagnostic
+    (max |pi_linear - pi_quadratic|); a value above the fixed threshold
+    means the two compositions cannot both be right.
+    """
+    if agreement is None or agreement <= _MAX_CHANNEL_AGREEMENT:
+        return None
+    return (f"the linear and quadratic channels disagree (channel_agreement "
+            f"= {agreement:.3g} > {_MAX_CHANNEL_AGREEMENT}); the two "
+            "compositions cannot both be right, so treat the linear-channel "
+            "weights as misspecified for this study")
+
+
+def _check_correlation_matrix(R, *, where):
+    """Reject a reference block that is not a correlation matrix.
+
+    The estimator reads each reference's scale directly (``u = s * pi``
+    cannot distinguish a reference's scale from its proportion: scaling one
+    reference by ``c`` rescales its fitted weight by ``1/c``), and its
+    condition-number gate normalizes columns first, so a covariance, a
+    mis-oriented block, or a non-symmetric matrix would be silently
+    reweighted rather than caught downstream. Symmetry also fixes which
+    orientation of the matrix the pair/triu indexing reads.
+    """
+    if not np.isfinite(R).all():
+        raise ValueError(f"{where} contains non-finite entries")
+    if R.size == 0:
+        return
+    asymmetry = float(np.max(np.abs(R - R.T)))
+    if asymmetry > _CORR_TOL:
+        raise ValueError(
+            f"{where} is not symmetric (max|R - R^T| = {asymmetry:.3g}); "
+            "references must be correlation matrices"
+        )
+    diag_error = float(np.max(np.abs(np.diag(R) - 1.0)))
+    if diag_error > _CORR_TOL:
+        raise ValueError(
+            f"{where} does not have a unit diagonal "
+            f"(max|diag(R) - 1| = {diag_error:.3g}); a covariance or "
+            "otherwise rescaled reference would be silently reweighted"
+        )
+    offdiag = R[~np.eye(R.shape[0], dtype=bool)]
+    if offdiag.size:
+        magnitude = float(np.max(np.abs(offdiag)))
+        if magnitude > 1.0 + _CORR_TOL:
+            raise ValueError(
+                f"{where} has an entry magnitude above one "
+                f"(max|R_ij| = {magnitude:.3g}); references must be "
+                "correlation matrices"
+            )
+
+
 def _as_ref_blocks(refs, blocks):
     """Canonicalise references to ``ref_blocks[k][b]`` plus block indices.
 
     Accepts, per ancestry, either a dense ``(m, m)`` correlation matrix
     (sliced by ``blocks``) or a list of per-block square matrices (with
-    ``blocks`` defaulting to contiguous tiling of the variant axis).
+    ``blocks`` defaulting to contiguous tiling of the variant axis). Every
+    reference block must be a finite symmetric correlation matrix (unit
+    diagonal, ``|R_ij| <= 1``).
     """
     refs = list(refs)
     if len(refs) < 2:
@@ -123,8 +183,12 @@ def _as_ref_blocks(refs, blocks):
         if blocks is None:
             blocks = [np.arange(m)]
         blocks = _validate_blocks(blocks, m)
-        return [[np.asarray(R, dtype=np.float64)[np.ix_(b, b)]
-                 for b in blocks] for R in refs], blocks
+        ref_blocks = []
+        for k, R in enumerate(refs):
+            R = np.asarray(R, dtype=np.float64)
+            _check_correlation_matrix(R, where=f"reference ancestry {k}")
+            ref_blocks.append([R[np.ix_(b, b)] for b in blocks])
+        return ref_blocks, blocks
     n_blocks = len(first)
     if any(len(R) != n_blocks for R in refs):
         raise ValueError("all references must have the same number of blocks")
@@ -142,8 +206,16 @@ def _as_ref_blocks(refs, blocks):
     blocks = _validate_blocks(blocks, sum(sizes))
     if any(len(blocks[b]) != sizes[b] for b in range(n_blocks)):
         raise ValueError("block indices must match the per-block matrix sizes")
-    return [[np.asarray(R[b], dtype=np.float64) for b in range(n_blocks)]
-            for R in refs], blocks
+    ref_blocks = []
+    for k, R in enumerate(refs):
+        per_block = []
+        for b in range(n_blocks):
+            Rb = np.asarray(R[b], dtype=np.float64)
+            _check_correlation_matrix(
+                Rb, where=f"reference ancestry {k} block {b}")
+            per_block.append(Rb)
+        ref_blocks.append(per_block)
+    return ref_blocks, blocks
 
 
 def _design_diagnostics(X, *, center=False):
@@ -371,13 +443,22 @@ def estimate_pair_products_from_design(
     specification diagnostic.
 
     Returns a dict with ``proportions``, ``proportions_se`` (delete-one-group
-    jackknife, eq. (21)), the noise ``scale`` (``~ 1 - h^2``), the signal
+    jackknife, eq. (21); withheld when the leave-group replicates are all the
+    same simplex vertex, where a zero SE would be a boundary artefact rather
+    than certainty), the fitted linear ``scale`` -- **not** an estimate of
+    ``1 - h^2``: for ``z = beta/se`` inputs the scale carries a factor of
+    order ``sqrt(N)`` and the real fits range 1.26--27.5, so it is recorded
+    with a note whenever it exceeds one -- the signal
     absorber coefficient total (0 means the absorber was not retained), pair
     counts, the maximum
     design correlation between linear ancestry columns (confusability
-    diagnostic), and the residual RMS. A rank-deficient or scale-normalised
-    design condition number above ``max_design_condition`` is refused before
-    fitting; the default limit is 1,000.
+    diagnostic), the residual RMS, and ``channel_agreement`` with a note
+    when the linear and quadratic channels disagree by more than 0.10 (a
+    misspecification warning, not a calibrated test). A rank-deficient or
+    scale-normalised design condition number above ``max_design_condition``
+    is refused before fitting; the default limit is 1,000. The compact
+    statistics carry no variant identifiers, so ``design``/``ii``/``jj``/
+    ``pair_block`` row alignment is the caller's responsibility.
     """
     z = np.asarray(z, dtype=np.float64)
     if z.ndim != 1:
@@ -511,10 +592,30 @@ def estimate_pair_products_from_design(
             return np.full(K, np.nan)
         return np.full(K, np.nan) if out is None else out
 
+    symmetric_interval_valid = True
     if len(grps) < 2:
         se, per_group = None, None
+        jackknife_note = "fewer than two block groups; no jackknife SEs"
     else:
         se, per_group = _delete_one_jackknife(stat, n_blocks, grps)
+        if se is None:
+            jackknife_note = ("a non-identifiable leave-group fit; no "
+                              "jackknife SEs")
+        elif float(np.max(per_group.max(axis=0) - per_group.min(axis=0))) \
+                <= 1e-12:
+            # Every replicate is the same simplex vertex: the jackknife has
+            # zero dispersion, and reporting SE = 0 would dress a boundary
+            # artefact up as infinite confidence (mirrors Estimator B's
+            # policy of withholding SEs rather than emitting degenerate ones).
+            se = None
+            symmetric_interval_valid = False
+            jackknife_note = (
+                "every leave-group replicate is the same simplex vertex, so "
+                "the delete-group jackknife has zero dispersion; SEs are "
+                "withheld rather than reported as exact zeros"
+            )
+        else:
+            jackknife_note = None
     fitted = np.hstack([L, L2]) @ u_full if absorb_signal else s * (L @ pi)
     center = L - L.mean(axis=0)
     denom = np.sqrt((center ** 2).sum(axis=0))
@@ -553,9 +654,14 @@ def estimate_pair_products_from_design(
         "max_design_correlation": float(np.nanmax(np.abs(offdiag))),
         "residual_rms": float(np.sqrt(np.mean((y_all - fitted) ** 2))),
         "jackknife_estimates": per_group,
-        "jackknife_note": (None if se is not None else
-                           "fewer than two block groups or a non-identifiable "
-                           "leave-group fit; no jackknife SEs"),
+        "jackknife_note": jackknife_note,
+        "symmetric_interval_valid": symmetric_interval_valid,
+        "channel_agreement_note": _channel_agreement_note(agreement),
+        "scale_note": (
+            None if s <= 1.0 else
+            f"fitted linear scale = {s:.3g} > 1: for z = beta/se inputs the "
+            "scale carries a factor of order sqrt(N), so it is not an "
+            "estimate of 1 - h^2 and is not bounded by one"),
     }
 
 
@@ -646,7 +752,13 @@ def _block_cross_validated_signal(X, y, variant_block, groups):
     correlations = np.asarray(correlations, dtype=np.float64)
     mean = float(correlations.mean())
     se = float(correlations.std(ddof=1) / np.sqrt(correlations.size))
-    statistic = (np.inf if mean > 0.0 else 0.0) if se <= 1e-15 else mean / se
+    if se <= 1e-15:
+        # Zero between-group dispersion means every held-out correlation is
+        # identical -- a degenerate (e.g. noiseless, exactly linear)
+        # response, not infinitely significant signal. Decline rather than
+        # report inf, so a degenerate input cannot strengthen acceptance.
+        return np.nan, mean, correlations
+    statistic = mean / se
     return float(statistic), mean, correlations
 
 

@@ -170,7 +170,7 @@ the verdict.
 
 ### A ready-made target for the flagship
 
-The same query returns each score's accuracy in **all nine** UKBB ancestry
+The same query returns each score's accuracy in **all eight** UKBB ancestry
 groups — the individual-level portability curve, for these exact scores, that
 the cross-ancestry method aims to recover from summary statistics alone:
 

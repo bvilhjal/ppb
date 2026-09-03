@@ -55,12 +55,16 @@ def run(m=500, block_size=50, rho=0.5, fst=0.25, h2=0.5, n_causal=50,
     ``rho_b`` / ``block_size_b`` give ancestry B its own LD architecture. They
     default to A's, which is the configuration the headline table in
     ``docs/CROSS_ANCESTRY.md`` reports -- and, importantly, a configuration in
-    which the two ancestries differ *only* in allele frequency. Balding-Nichols
-    supplies per-population frequencies, but the latent haplotype correlation
-    in ``ppb.simulate`` is the same matrix for both, so with the defaults
-    F_ST has no LD channel at all and portability at r_g = 1 is ~1.0. Set these
-    to make the populations differ in LD the way real ones do (different
-    recombination history: different decay, different block boundaries).
+    which the two ancestries share one *latent* haplotype correlation matrix.
+    F_ST has no channel to that latent matrix, so at the shipped rho=0.5 the
+    portability at r_g = 1 is ~1.0; set these to make the populations differ
+    in LD the way real ones do (different recombination history: different
+    decay, different block boundaries). Note the narrower claim, not the
+    stronger one: MAF-dependent dichotomization attenuation means different
+    allele frequencies give different *realized* dosage correlations, so
+    F_ST alone already produces an LD divergence (measured portability 0.90
+    at fst=0.25, rho=0.9 -- see the M12 note in the review); it simply does
+    not change the *latent* matrix ``rho_b`` rewrites.
     """
     rng = np.random.default_rng(seed)
     rho_b = rho if rho_b is None else rho_b

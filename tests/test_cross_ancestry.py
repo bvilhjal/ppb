@@ -77,11 +77,15 @@ def test_cross_ancestry_portability_control_rg1():
         [r["R2B_true"].mean() / r["R2A_true"].mean() for r in runs])
     exact_m, exact_se = _mean_se(
         [pct_bias(r["exactB"], r["R2B_true"]) for r in runs])
-    # r_g = 1 with a shared LD architecture: portability is ~1. Balding-Nichols
-    # gives the two ancestries different allele frequencies over the *same*
-    # latent haplotype correlation, so F_ST has no LD channel here and there is
-    # almost nothing left to lose. That is a property of the generator, not of
-    # real ancestries -- see test_ld_divergence_dominates_the_mismatch_bias.
+    # r_g = 1 with a shared latent LD architecture: portability is ~1.
+    # Balding-Nichols gives the two ancestries different allele frequencies
+    # over the *same* latent haplotype correlation, so at the shipped rho=0.5
+    # there is almost nothing left to lose. The claim is the narrow one (no
+    # latent-LD divergence), not "no LD channel": MAF-dependent
+    # dichotomization attenuation already makes the realized dosage
+    # correlations differ (measurable at rho=0.9). That is a property of the
+    # generator, not of real ancestries -- see
+    # test_ld_divergence_dominates_the_mismatch_bias.
     assert port_m - 3 * port_se > 0.9, (
         f"control portability {port_m:.4f} ± {3 * port_se:.4f}")
     assert abs(exact_m) + 3 * exact_se < 0.05, (

@@ -32,6 +32,8 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py311"
+# The archived oracle notebook is kept as a historical record, not linted.
+extend-exclude = ["archive"]
 
 [tool.ruff.lint]
 select = ["F"]

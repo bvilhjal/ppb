@@ -54,10 +54,10 @@ snapshots described below are provenance objects, not packs.)
 | `metrics.w_n_ambiguous_removed`, `metrics.w_n_mismatch`, `metrics.w_n_unmatched` | per-reason weight-harmonization loss counts (from `ppb.harmonize.HarmonizeReport`) |
 | `metrics.z_n_ambiguous_removed`, `metrics.z_n_mismatch`, `metrics.z_n_unmatched` | the same per-reason counts, for the target summary statistics |
 | `metrics.n_variants_scored` | count of non-zero weights on the target-specific joint `w`/`z` support |
-| `metrics.jackknife` | delete-one-**block** jackknife: `se`, `n_blocks`, `n_groups`, `max_variance_share` |
+| `metrics.jackknife` | delete-one-**block** jackknife: `method`, `se`, `n_blocks`, `n_groups`, `max_variance_share` |
 | `metrics.jackknife_chromosome` | the same, deleting whole chromosomes — the more conservative grouping when block sizes are uneven |
 | `metrics.per_chromosome` | `{chrom: [u, v]}` partial sums, so a reader can recompute the chromosome jackknife from the pack alone |
-| `metrics.sign_flip_null` | block-sign-flip negative control: `null_mean`, `z`, `ratio`, `n_blocks`, `z_ceiling` |
+| `metrics.sign_flip_null` | block-sign-flip negative control: `method`, `null_mean`, `z`, `ratio`, `n_blocks`, `z_ceiling` |
 | `metrics.diagnostics_unavailable` | why the block diagnostics were not computed (fewer than 2 LD blocks); mutually exclusive with them |
 | `overlap.role` | `"reference"` (declared non-overlapping) \| `"suspect"` (paired with a reference) \| `"suspect-unpaired"` (upper bound, no reference) |
 | `overlap.method` | current contract: `"scaled_signal_eiv_v1"` |
@@ -186,7 +186,11 @@ status here. See [`../docs/OVERLAP.md`](../docs/OVERLAP.md).
   case/control counts when they are recorded, otherwise a trait-level constant
   explicitly labelled "case/control counts unrecorded" — never as though the
   source GWAS itself had shipped the constant. Those constants scale R²
-  directly (`z = t/√(t²+n−2)`), so the distinction is load-bearing.
+  directly (`z = t/√(t²+n−2)`), so the distinction is load-bearing. The
+  committed `baseline-2026-07.json` predates this label (its three consortium
+  binary rows carry `n_eff_basis: "trait-level constant in the sumstats file"`,
+  a less informative grandfathered wording); it will carry the documented
+  label when the pack is next regenerated.
 - Records dated **2026-08-16 or later** must carry `environment` with
   non-empty `python`, `numpy`, `numba`, and `ppb` versions: a pack that names
   its commit but not its interpreter is not replayable. Packs generated before
