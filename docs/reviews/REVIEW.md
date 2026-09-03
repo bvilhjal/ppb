@@ -9,8 +9,8 @@
 > preceded by [`REVIEW-2026-07-25.md`](REVIEW-2026-07-25.md) (commit `011bdee`)
 > and [`REVIEW-2026-08-16.md`](REVIEW-2026-08-16.md) (commit `5d2d680`), which
 > cover the work that post-dates this one. For current status see
-> [`FINISHING_PLAN.md`](FINISHING_PLAN.md); for current specification see
-> [`docs/METHOD.md`](docs/METHOD.md).
+> [`FINISHING_PLAN.md`](../../FINISHING_PLAN.md); for current specification see
+> [`docs/METHOD.md`](../METHOD.md).
 
 **Date:** 2026-07-18
 **Scope:** full review at commit `bd5d0d9` — the scientific idea (Witteveen

@@ -7,6 +7,20 @@ single-sourced from `ppb.__version__`; the package is pre-release
 
 ## [Unreleased]
 
+### Changed
+
+- The four `REVIEW*.md` files moved from the repository root to
+  `docs/reviews/`, with a new `docs/reviews/README.md` archive index carrying
+  the banner, a commit/date/outcome table and the detail formerly held in
+  `docs/README.md`. ppb was the only repo in the family keeping point-in-time
+  reviews at the root — 3,412 root markdown lines against zero elsewhere — and
+  ldpred3 had already made the same move to `research/reviews/`. `docs/` is the
+  destination here rather than `research/` because ppb has no `research/` tree
+  and `docs/README.md` was already the review index. `FINISHING_PLAN.md` and
+  `PAPER_PLAN.md` stay at the root: they are live planning documents, not
+  archive. `docs/README.md` loses 58 lines and keeps a pointer; every link was
+  re-resolved (0 broken across all 27 markdown files).
+
 ### Added
 
 - Refreshed ancestry benchmark snapshots under current code: new dated runs

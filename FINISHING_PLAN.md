@@ -146,8 +146,8 @@ hard-crashes (exit 127); pin `python=3.14.*=*cp314`, and keep `@`/`np.dot` out o
 
 ## Current state (2026-09-03; supersedes the 2026-08-16 snapshot below)
 
-Reviewed at `036e6a3` (REVIEW-2026-09-02: 3 Critical · 19 Major · 46 Minor ·
-16 Nit), remediated in `cceb245`, re-reviewed over `70e8d2d..cceb245`
+Reviewed at `036e6a3` ([`REVIEW-2026-09-02`](docs/reviews/REVIEW-2026-09-02.md):
+3 Critical · 19 Major · 46 Minor · 16 Nit), remediated in `cceb245`, re-reviewed over `70e8d2d..cceb245`
 (51 files) with five P0 findings plus artifact drift, remediated in `0ed294a`;
 benchmarks rerun in `4ea39fb` and the ancestry report rebuilt in `7272408`:
 

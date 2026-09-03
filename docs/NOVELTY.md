@@ -1,6 +1,6 @@
 # Prior-art sweep: measuring cross-population portability from target-ancestry summary statistics
 
-Status: novelty audit, closing finding F2 of [`../REVIEW-2026-08-16.md`](../REVIEW-2026-08-16.md).
+Status: novelty audit, closing finding F2 of [`reviews/REVIEW-2026-08-16.md`](reviews/REVIEW-2026-08-16.md).
 Sweep executed 2026-08-16 by web search with primary-source verification (journal
 pages, PubMed Central full texts, Europe PMC records). Every citation marked
 "verified" below was seen in a fetched primary or indexing source during this

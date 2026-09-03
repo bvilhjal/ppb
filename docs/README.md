@@ -76,7 +76,7 @@ numbered result to its module and its test, then the module.
 | [`REAL_DATA.md`](REAL_DATA.md) | record | the within-ancestry anchor on real GWAS, its uncertainty (G2), controls (G3–G4), and the external check against published individual-level accuracy (G5) |
 | [`LIMITATIONS.md`](LIMITATIONS.md) | scope | what PPB does and does not establish; every known failure mode |
 | [`TRANSFERABILITY.md`](TRANSFERABILITY.md) | scope | a negative result: why PPB measures portability but does not construct scores |
-| [`ancestry_report/ancestry_report.pdf`](ancestry_report/ancestry_report.pdf) | record | technical report: estimating the ancestry composition of a GWAS from summary statistics — frequency projection and two LD-moment channels, with derivations, encoded simulation gates, and the Yengo 2022 height snapshots; LaTeX source alongside. **Stale:** the committed PDF is a build of the `.tex` as it stood before commit `036e6a3` (it states the wrong error statistic and omits the fitted-scale caveat); the `.tex` is current, and the PDF needs a manual rebuild with a LaTeX toolchain, which nothing in the repo automates |
+| [`ancestry_report/ancestry_report.pdf`](ancestry_report/ancestry_report.pdf) | record | technical report: estimating the ancestry composition of a GWAS from summary statistics — frequency projection and two LD-moment channels, with derivations, encoded simulation gates, and the Yengo 2022 height snapshots; LaTeX source alongside. Revised and rebuilt from the current `.tex` in `7272408`; `scripts/check_report_drift.py` runs in CI and fails while the committed PDF trails any source |
 | [`../results/schema.md`](../results/schema.md) | specification | the result-pack format (R1) and the rules CI enforces |
 | [`../experiments/README.md`](../experiments/README.md) | record | each simulation, what it demonstrates, and the numbers it produces |
 | [`../FINISHING_PLAN.md`](../FINISHING_PLAN.md) | intent | objective, gates, delivery plan, claims discipline |
@@ -89,67 +89,9 @@ Point-in-time assessments, kept because the reasoning behind a change is worth
 more than the change. None is a live document; where one disagrees with a
 specification above, the specification wins.
 
-- [`../REVIEW.md`](../REVIEW.md) — commit `bd5d0d9`, 2026-07-18. All findings resolved.
-- [`../REVIEW-2026-07-25.md`](../REVIEW-2026-07-25.md) — commit `011bdee`. Findings
-  resolved, with one severity corrected in place after the original claim was
-  disproved; two follow-ups (block diagnostics, and the overlap salvage) recorded
-  at the end.
-- [`../REVIEW-2026-08-16.md`](../REVIEW-2026-08-16.md) — commit `5d2d680`, 2026-08-16.
-  Findings addressed the same day (gauge validation, novelty sweep, provenance,
-  multi-seed test rigor); three items remain open as external blockers —
-  regenerating the EUR pack with the new diagnostics, the two novelty leads, and
-  the first real cross-ancestry run. (The two novelty leads were closed by the
-  2026-08-23 follow-up sweep recorded in [`NOVELTY.md`](NOVELTY.md); the other
-  two remain open.)
-- [`../REVIEW-2026-09-02.md`](../REVIEW-2026-09-02.md) — commit `036e6a3`,
-  2026-09-02. Covers the ~24,400 lines added since `5d2d680`: both ancestry
-  channels and their builders, benchmarks, snapshots and technical report; the
-  FinnGen target path; the simulator expansion. **3 Critical · 19 Major · 46 Minor
-  · 16 Nit** (all resolved 2026-09-03; see below). All three Criticals are on
-  the FinnGen path
-  (wrong `--weight-scale` in the README's own worked example; the (H2) independence
-  screen failing open on absent cohort annotation; `ref`/`alt` swapped in the
-  emitted table). The estimator algebra re-verified clean to machine precision; the
-  findings are at the perimeter — undeclared scales, diagnostics computed but gated
-  by nothing, and artifacts that predate the code producing them. Also audits the
-  2026-08-16 fixes: F4a holds, F1/F3/F7 hold structurally but not quantitatively,
-  F4b fails open on its default path.
-  **Resolved 2026-09-03** in commit `cceb245`: all three Criticals, all 19
-  Majors, and the load-bearing Minors/Nits. The FinnGen path now declares
-  `dosage --hwe-genotype-sd`, emits `a1 = alt`, and fails the independence
-  screen closed on absent annotation. `_as_ref_blocks` validates the correlation
-  matrices the estimator is provably scale-sensitive to; the two LD/PSD gates are
-  reconciled (the per-block check now reports an indefinite block instead of
-  disagreeing with the write gate by 10¹¹); the gauge remap is exercised, not
-  tautological; `test_gauge.py` is cross-seed mean±SE; and CI runs `ruff` with the
-  BLAS threads pinned. The one exception at the time was the published
-  `ancestry_report.pdf`, then stale against its `.tex`; it was rebuilt in
-  `7272408` (see the follow-up entry below).
-- **Follow-up review, 2026-09-03** (review of `70e8d2d..cceb245`, 51 files;
-  uncommitted when received, remediated in `0ed294a`). Withheld
-  release-readiness: five P0 correctness/documentation findings plus P1 artifact
-  drift. The simplex face solver is now centred/SVD with direct residual
-  evaluation (plus an exact-mixture regression test); rejected frequency fits
-  publish `proportions: null` with `proportions_raw` retained (Estimator B's
-  contract, extended to the frequency channel); `r2()`/`mse()`/`evaluate()`
-  refuse a materially indefinite LD block exactly like the diagnostics path
-  (low-level `quad`/`block_quads` still warn-and-report for certified int8
-  references); the Estimator A scale story is one interpretation everywhere
-  (`s₀ = 1−h² ≤ 1`, rescaling `z` by `c` rescales `s` by `c²`); the
-  dosage→standardized multiply is stated correctly with proposed-vs-implemented
-  separated; correlation validation is tiled; panels are read-only after load;
-  duplicate IDs are validated before marking seen; the sdist ships the
-  checkout-only test drivers (22 collection errors → 0). Artifact status:
-  the Yengo snapshots were regenerated on 2026-09-03 from current code
-  (inputs re-fetched and hash-verified; the 2026-08-30 files remain as
-  history) and the ancestry report is revised
-  and rebuilt with `tectonic` (retitle, calibrated abstract, provenance
-  table, operating-characteristics survey, diagnostics-forward display, three
-  generated figures). Tagged PDF remains future work: the available engine
-  (Tectonic 0.17.0, LaTeX format 2021-11-15) predates `\DocumentMetadata`
-  tagging, which is guarded in for newer toolchains. A drift gate
-  (`scripts/check_report_drift.py`, run in CI) fails while the committed PDF
-  trails any source.
+They live in [`reviews/`](reviews/), whose
+[README](reviews/README.md) indexes all four with their commit, date and
+outcome, and carries the detail behind each.
 
 ## Conventions in the prose
 
