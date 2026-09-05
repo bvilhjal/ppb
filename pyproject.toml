@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ppb"
-version = "0.0.1.dev2"
+dynamic = ["version"]
 description = "Measure polygenic-score accuracy in a target ancestry from summary statistics alone"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,6 +26,9 @@ ppb = "ppb.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ppb.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

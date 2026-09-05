@@ -78,4 +78,4 @@ __all__ = [
     "match_effect_allele_frequencies", "estimate_frequency_composition",
     "decompose_effect_allele_frequencies",
 ]
-__version__ = "0.0.1.dev2"
+__version__ = "0.0.1.dev3"

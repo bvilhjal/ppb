@@ -27,6 +27,46 @@ PI = np.array([0.65, 0.35])
 RANGES_K2 = [(0.50, 0.90), (0.10, 0.50)]  # synthetic high-/low-LD landscapes
 
 
+def test_selected_quadratics_match_dense_noncommuting_reference_products():
+    rng = np.random.default_rng(701)
+    refs = []
+    for _ in range(3):
+        x = rng.normal(size=(13, 17))
+        x /= np.linalg.norm(x, axis=1)[:, None]
+        refs.append(x @ x.T)
+    assert not np.allclose(refs[0] @ refs[1], refs[1] @ refs[0])
+    ii, jj, linear, _, quadratic = pair_design(refs, floor=.1, cap=19, quadratic=True)
+    ti, tj = np.triu_indices(13, 1)
+    entries = np.stack(refs)[:, ti, tj]
+    strength = np.max(np.abs(entries), axis=0)
+    keep = np.flatnonzero(strength >= .1)
+    keep = keep[np.argsort(strength[keep])[::-1][:19]]
+    np.testing.assert_array_equal(ii, ti[keep])
+    np.testing.assert_array_equal(jj, tj[keep])
+    np.testing.assert_array_equal(linear, entries[:, keep].T)
+    expected = []
+    for k in range(3):
+        for kp in range(k, 3):
+            product = (refs[k] @ refs[kp] + refs[kp] @ refs[k]) / 2
+            expected.append(product[ii, jj])
+    np.testing.assert_allclose(quadratic, np.column_stack(expected), atol=1e-14, rtol=1e-13)
+
+
+def test_selected_product_bounds_total_live_gathers():
+    import tracemalloc
+    from ppb.ancestry import _selected_product
+    matrix = np.eye(2048)
+    ii, jj = np.arange(400), np.arange(400)
+    tracemalloc.start()
+    try:
+        result = _selected_product(matrix, matrix, ii, jj)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    np.testing.assert_array_equal(result, 1)
+    assert peak < 9 * 1024 ** 2
+
+
 def _landscape(seed, n_blocks, ranges=RANGES_K2):
     """Reference blocks for ancestries with distinct hotspot LD landscapes."""
     rng = np.random.default_rng(seed)

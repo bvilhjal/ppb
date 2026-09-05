@@ -3,11 +3,19 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 single-sourced from `ppb.__version__`; the package is pre-release
-(`0.0.1.dev2`) and the API/schema may still change.
+(`0.0.1.dev3`) and the API/schema may still change.
 
 ## [Unreleased]
 
 ### Changed
+
+- Build metadata now reads `ppb.__version__`, keeping wheel and import versions
+  aligned rather than maintaining a second version literal.
+
+- The LD-moment ancestry design computes only selected quadratic-product
+  entries with bounded gathers. Pair strengths are reduced one reference at
+  a time, eliminating the full reference stack and all-reference pair matrix.
+  Pair selection is unchanged; dot-product rounding may differ from GEMM.
 
 - The four `REVIEW*.md` files moved from the repository root to
   `docs/reviews/`, with a new `docs/reviews/README.md` archive index carrying

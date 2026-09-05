@@ -314,6 +314,19 @@ def ld_scores(ref, blocks=None):
     return L[:, 1]
 
 
+def _selected_product(left, right, ii, jj):
+    """Selected entries with an 8 MiB gather target (one pair minimum)."""
+    out = np.empty(len(ii), dtype=np.float64)
+    batch = max(1, (8 * 1024 ** 2) // (16 * left.shape[1]))
+    for start in range(0, len(ii), batch):
+        stop = start + batch
+        rows = left[ii[start:stop]]
+        columns = right[:, jj[start:stop]].T
+        out[start:stop] = np.einsum("ij,ij->i", rows, columns)
+        del rows, columns
+    return out
+
+
 def pair_design(refs, blocks=None, *, floor=0.05, cap=250, quadratic=False):
     """Pair set P and design matrix for Estimator A, eqs. (12)--(15).
 
@@ -337,10 +350,15 @@ def pair_design(refs, blocks=None, *, floor=0.05, cap=250, quadratic=False):
     ii_parts, jj_parts, L_parts, L2_parts, blk_parts = [], [], [], [], []
     for b, block in enumerate(blocks):
         block = np.asarray(block)
-        stack = np.stack([ref_blocks[k][b] for k in range(K)])
         ti, tj = np.triu_indices(block.size, k=1)
-        entries = stack[:, ti, tj]
-        strength = np.max(np.abs(entries), axis=0)
+        # Only strengths are needed before selection. Do not retain K dense
+        # reference copies and K complete upper triangles for a capped output.
+        strength = np.zeros(ti.size, dtype=np.float64)
+        for k in range(K):
+            entries = ref_blocks[k][b][ti, tj]
+            np.abs(entries, out=entries)
+            np.maximum(strength, entries, out=strength)
+            del entries
         keep = np.flatnonzero(strength >= floor)
         if keep.size > cap:
             keep = keep[np.argsort(strength[keep])[::-1][:cap]]
@@ -348,16 +366,20 @@ def pair_design(refs, blocks=None, *, floor=0.05, cap=250, quadratic=False):
             continue
         ii_parts.append(block[ti[keep]])
         jj_parts.append(block[tj[keep]])
-        L_parts.append(entries[:, keep].T)
+        selected_i, selected_j = ti[keep], tj[keep]
+        L_parts.append(np.column_stack([
+            ref_blocks[k][b][selected_i, selected_j] for k in range(K)]))
         blk_parts.append(np.full(keep.size, b, dtype=int))
         if quadratic:
             quadratic_columns = []
             for k, kp in pairs:
-                product = ref_blocks[k][b] @ ref_blocks[kp][b]
+                product = _selected_product(
+                    ref_blocks[k][b], ref_blocks[kp][b], selected_i, selected_j)
                 if k != kp:
-                    reverse = ref_blocks[kp][b] @ ref_blocks[k][b]
+                    reverse = _selected_product(
+                        ref_blocks[kp][b], ref_blocks[k][b], selected_i, selected_j)
                     product = 0.5 * (product + reverse)
-                quadratic_columns.append(product[ti[keep], tj[keep]])
+                quadratic_columns.append(product)
             L2_parts.append(np.stack(quadratic_columns, axis=1))
     if not ii_parts:
         raise ValueError("no pairs pass the LD floor; check the references")
